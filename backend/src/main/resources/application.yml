@@ -1,0 +1,65 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: mandisaathi-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:default}
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mandisaathi}
+    username: ${DB_USER:mandisaathi}
+    password: ${DB_PASSWORD:mandisaathi_secret}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+app:
+  version: 0.1.0-phase1
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+gnani:
+  enabled: ${GNANI_ENABLED:false}
+  api-key: ${GNANI_API_KEY:}
+  stt-url: ${GNANI_STT_URL:https://api.gnani.ai/v2.5/stt}
+  tts-url: ${GNANI_TTS_URL:https://api.gnani.ai/v2.5/tts}
+  timeout-ms: ${GNANI_TIMEOUT_MS:10000}
+
+logging:
+  level:
+    root: INFO
+    com.mandisaathi: DEBUG
+    org.springframework.web: INFO
+    org.flywaydb: INFO
+

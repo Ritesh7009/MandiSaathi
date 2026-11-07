@@ -1,0 +1,39 @@
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDE and Editors
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Backend (Java / Maven)
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/*.log
+backend/logs/
+
+# Frontend (Node / Vite / React)
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/*.local
+frontend/.npm/
+frontend/*.tsbuildinfo
+
+# Database & Docker
+postgres_data/
+docker-compose.override.yml
+
