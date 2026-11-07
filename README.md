@@ -1,19 +1,22 @@
 # MandiSaathi (मंडी साथी / ਮੰਡੀ ਸਾਥੀ)
 
-> **Phase 1: Project Foundation**  
-> Multilingual, voice-first agricultural intelligence platform engineered for Indian farmers.
+> **Phase 2: Product UI/UX Implementation Verified**  
+> Multilingual, voice-first agricultural market intelligence platform engineered for Indian farmers.
 
 ---
 
 ## 🌾 Project Overview
 
-MandiSaathi empowers Indian farmers with accessible, trustworthy market intelligence. By prioritizing regional dialects (Hindi, Punjabi, English) and voice interactions, it bridges the digital divide in rural agricultural ecosystems.
+MandiSaathi empowers Indian farmers with accessible, trustworthy market intelligence. By prioritizing regional dialects (Hindi, Punjabi, English) and natural voice interactions, it bridges the digital divide in rural agricultural ecosystems.
 
-Phase 1 establishes the production-grade foundation:
-* **Frontend**: React 19, TypeScript (strict mode), Vite, Tailwind CSS, TanStack Query, React Router, Lucide React, Recharts.
-* **Backend**: Java 21, Spring Boot 3.3, Maven, Spring Web, Spring Data JPA, Spring Validation, Spring Security, PostgreSQL 16, Flyway migrations.
-* **Voice Integration**: Clean abstraction contracts for Gnani Prisma v2.5 (STT) and Gnani Timbre v2.5 (TTS).
-* **Infrastructure**: Docker, Docker Compose, automated verification scripts.
+### Core Capabilities (Phase 2):
+1. **Screen 1: Farmer Home Dashboard**: Time-of-day vernacular greetings, prominent microphone CTA, suggested query chips, monitored APMC mandis, and recent conversation history.
+2. **Screen 2: Voice Assistant**: Audio-reactive waveform visualizer, full state machine (`idle`, `recording`, `listening`, `processing`, `answered`, `error`), audio playback with Web Speech fallback, and transparent Gnani AI v2.5 integration boundary.
+3. **Screen 3: Mandi Price Intelligence**: Multi-dimensional filtering by commodity, state, district, and APMC mandi yard, aggregate market statistics (Cult UI MetricTiles), and verified daily arrival and modal rates.
+4. **Screen 4: Mandi Comparison**: Multi-mandi cross-market arbitrage comparison, best modal rate indicator, inter-mandi price spread analysis, and Recharts multi-mandi modal/min/max comparison chart.
+5. **Screen 5: Government Schemes**: Searchable scheme directory (PM-KISAN, PMFBY, Soil Health Card, e-NAM, Kisan Credit Card) with accessible accordion disclosures (Motion Primitives), eligibility, documents, application instructions, and official links.
+6. **Screen 6: Complaint Registration**: 2-step grievance recording workflow (Input -> Review -> Confirmation) issuing unique reference numbers (`MS-2026-XXXXX`) for transparency and collective farmer advocacy with statutory legal disclaimer.
+7. **Screen 7: Language & Accessibility**: Complete interface localization across English, Hindi (हिन्दी), and Punjabi (ਪੰਜਾਬੀ), high-visibility font sizing toggle (`normal` vs `large`), and Indic language expansion roadmap.
 
 ---
 
