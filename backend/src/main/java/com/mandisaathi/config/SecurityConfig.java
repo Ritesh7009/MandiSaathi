@@ -30,12 +30,15 @@ public class SecurityConfig {
                                 "/api/v1/health/**",
                                 "/actuator/health/**",
                                 "/api/v1/commodities/**",
-                                "/api/v1/mandis/**"
+                                "/api/v1/mandis/**",
+                                "/api/v1/prices/**",
+                                "/api/v1/schemes/**",
+                                "/api/v1/complaints/**",
+                                "/api/v1/voice/**"
                         ).permitAll()
-                        .anyRequest().permitAll() // Phase 1: All read endpoints open; auth hooks configured for future phases
+                        .anyRequest().permitAll()
                 );
 
         return http.build();
     }
 }
-

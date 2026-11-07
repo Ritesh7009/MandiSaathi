@@ -4,99 +4,452 @@ import { Language } from '../types';
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
+  fontSize: 'normal' | 'large';
+  setFontSize: (size: 'normal' | 'large') => void;
   t: (key: string) => string;
 }
 
 const translations: Record<Language, Record<string, string>> = {
   en: {
+    // Brand & Nav
     appTitle: 'MandiSaathi',
     appSubtitle: 'Agricultural Intelligence Platform for Indian Farmers',
-    phase1Badge: 'Phase 1: Foundation',
-    systemHealth: 'System Health',
-    commodities: 'Commodities',
-    mandis: 'Mandis',
-    voiceDiagnostic: 'Voice Engine Diagnostic',
+    phase2Badge: 'Production Agritech',
+    navHome: 'Dashboard',
+    navVoice: 'Voice Assistant',
+    navPrices: 'Price Intelligence',
+    navCompare: 'Mandi Comparison',
+    navSchemes: 'Government Schemes',
+    navComplaints: 'Grievance / Complaint',
+    navSettings: 'Accessibility & Language',
     connected: 'Connected',
     degraded: 'Degraded',
     offline: 'Offline',
-    backendStatus: 'Spring Boot Backend',
-    databaseStatus: 'PostgreSQL Database',
-    gnaniStatus: 'Gnani Voice AI (Prisma/Timbre)',
-    refresh: 'Refresh Status',
-    allCategories: 'All Categories',
+
+    // Dashboard
+    greetingMorning: 'Good morning, Kisan Saathi',
+    greetingAfternoon: 'Good afternoon, Kisan Saathi',
+    greetingEvening: 'Good evening, Kisan Saathi',
+    dashboardWelcome: 'Voice-First Agricultural Market Intelligence',
+    dashboardHeroSubtitle: 'Speak naturally in Hindi, Punjabi, or English to check verified APMC mandi prices, compare neighboring markets, and explore farmer schemes.',
+    startVoicePrompt: 'Tap microphone or speak your question',
+    suggestedQueriesLabel: 'Common farmer questions',
+    nearbyMandisTitle: 'Monitored APMC Mandis',
+    recentQueriesTitle: 'Recent Voice Queries',
+    noRecentQueries: 'No recent voice queries recorded yet. Tap the microphone to begin.',
+    clearRecent: 'Clear History',
+    marketBriefTitle: 'Market Advisory & Provenance Notice',
+    marketBriefText: 'MandiSaathi provides strictly verified price telemetry sourced from Agmarknet and State Agricultural Marketing Boards. We never fabricate live prices or simulate fictitious market bids.',
+    quickStatsCommodities: 'Tracked Commodities',
+    quickStatsMandis: 'Monitored Mandis',
+    quickStatsSchemes: 'Verified Schemes',
+
+    // Voice Assistant
+    voiceTitle: 'Voice Assistant',
+    voiceSubtitle: 'Speak in your native dialect for real-time agricultural intelligence',
+    micIdle: 'Tap to Speak',
+    micListening: 'Listening to your voice...',
+    micRecording: 'Recording audio stream...',
+    micProcessing: 'Processing query with Gnani AI Gateway...',
+    micPermissionError: 'Microphone permission denied by browser. Please allow audio access in browser settings.',
+    typeQueryPlaceholder: 'Or type your agricultural question here (e.g. आज गेहूं का भाव क्या है?)...',
+    sendTextQuery: 'Ask MandiSaathi',
+    detectedLanguageLabel: 'Detected Dialect',
+    transcriptionLabel: 'Your Query (STT)',
+    responseLabel: 'MandiSaathi Response',
+    listenAudio: 'Listen Response',
+    stopAudio: 'Stop Audio',
+    tryAgain: 'Ask Another Question',
+    gnaniNoticeTitle: 'Voice Engine Integration Boundary',
+    gnaniDemoBadge: 'Gnani v2.5 Sandbox / Demo Mode',
+    gnaniNoticeText: 'Gnani Prisma v2.5 (STT) and Timbre v2.5 (TTS) backend interfaces are active in development mode. Live production API keys are securely guarded server-side. Browser audio playback uses local speech synthesis fallback.',
+
+    // Price Intelligence
+    priceTitle: 'Mandi Price Intelligence',
+    priceSubtitle: 'Verified daily arrival and modal rates reported by APMC Mandis',
+    selectCommodity: 'Select Commodity',
+    selectState: 'Select State',
+    selectDistrict: 'Select District',
+    selectMandi: 'Select Mandi',
+    allCommodities: 'All Commodities',
     allStates: 'All States',
-    unit: 'Unit',
-    active: 'Active',
-    state: 'State',
-    district: 'District',
-    testMicrophone: 'Test Microphone Access',
-    testingMic: 'Requesting permission...',
-    micAllowed: 'Microphone permission granted & audio input ready',
-    micDenied: 'Microphone permission denied by browser',
-    retry: 'Retry Connection',
-    loading: 'Loading platform data...',
-    noData: 'No records found matching filter.',
-    footerText: 'MandiSaathi — Production Foundation. No synthetic prices, strict data provenance.',
+    allDistricts: 'All Districts',
+    allMandis: 'All Mandis',
+    filterReset: 'Reset Filters',
+    modalPrice: 'Modal Price',
+    minPrice: 'Min Price',
+    maxPrice: 'Max Price',
+    priceSpread: 'Price Range',
+    reportingDate: 'Reporting Date',
+    dataSource: 'Data Source',
+    arrivals: 'Arrival Volume',
+    perQuintal: '₹ / Quintal',
+    noPriceData: 'No price record has been filed for this commodity and mandi selection today.',
+    noPriceNotice: 'Prices are reported after the close of trading auctions. Check back after 4:00 PM for updated evening filings.',
+    mspReferenceNotice: 'MSP Benchmark Reference: Governed by the Commission for Agricultural Costs and Prices (CACP), Government of India.',
+
+    // Mandi Comparison
+    compareTitle: 'Mandi Price Comparison',
+    compareSubtitle: 'Compare market rates across neighboring APMC mandis to optimize your harvest sale',
+    pickCommodityToCompare: 'Choose Commodity to Compare',
+    selectTwoMandisNotice: 'Select at least two mandis to view cross-market spread and chart comparison.',
+    bestRateBadge: 'Best Modal Rate',
+    differenceSpread: 'Inter-Mandi Spread',
+    priceTrendChart: 'Multi-Mandi Price Comparison',
+    historicalNote: 'Comparing verified modal prices (₹/qtl) across selected APMC markets.',
+
+    // Government Schemes
+    schemesTitle: 'Government Schemes Directory',
+    schemesSubtitle: 'Verified central and state agricultural support schemes with direct application pathways',
+    searchSchemesPlaceholder: 'Search by scheme name or keyword (e.g. PM-KISAN, बीमा, subsidy)...',
+    allCategories: 'All Categories',
+    catIncome: 'Income Support',
+    catInsurance: 'Crop Insurance',
+    catSoil: 'Soil Health & Inputs',
+    catMarket: 'Market Infrastructure',
+    catCredit: 'Institutional Credit',
+    schemeEligibility: 'Eligibility Criteria',
+    schemeDocuments: 'Required Documents',
+    schemeApplication: 'How to Apply',
+    officialPortalBtn: 'Visit Official Portal',
+    verifiedOn: 'Verified through',
+
+    // Complaint Registration
+    complaintsTitle: 'Farmer Grievance & Mandi Complaint',
+    complaintsSubtitle: 'Record issues regarding weighing inaccuracies, payment delays, or mandi infrastructure',
+    complaintCategory: 'Grievance Category',
+    catWeighment: 'Weighment Disparity / Malpractice (वजन में गड़बड़ी)',
+    catPayment: 'Delayed Payment / Below MSP Purchase (भुगतान में देरी)',
+    catInfra: 'Mandi Infrastructure / Water / Shed Shortage (मंडी अवसंरचना)',
+    catDeductions: 'Unauthorized Market Fee Deductions (अवैध कटौती)',
+    catQuality: 'Produce Quality Grading Dispute (गुणवत्ता विवाद)',
+    descriptionLabel: 'Description of the Issue',
+    descriptionPlaceholder: 'Provide specific details (date, auction lot number, trader name, or platform issue)...',
+    farmerNameLabel: 'Farmer Name (Optional)',
+    farmerPhoneLabel: 'Contact Phone Number (Optional)',
+    reviewBtn: 'Review Complaint Before Submitting',
+    confirmSubmitBtn: 'Confirm & Record Complaint',
+    backToEditBtn: 'Back to Edit',
+    reviewNotice: 'Please verify the details below. Once recorded, an internal reference number will be issued.',
+    complaintSuccessTitle: 'Complaint Successfully Recorded',
+    complaintRefNotice: 'Your grievance reference number is:',
+    complaintLegalDisclaimer: 'Notice: This complaint is recorded in the MandiSaathi platform database for transparency and collective farmer advocacy. To register an official statutory complaint with government vigilance, use the CPGRAMS portal (pgportal.gov.in) or state APMC vigilance helpline.',
+    registeredComplaintsTitle: 'Your Recorded Complaints',
+    noComplaintsRecorded: 'No complaints recorded yet.',
+    statusRecorded: 'Recorded in MandiSaathi',
+
+    // Settings & Accessibility
+    settingsTitle: 'Language & Accessibility Settings',
+    settingsSubtitle: 'Configure language, dialect rendering, and visual legibility for comfortable viewing',
+    languageSectionTitle: 'Interface Language',
+    languageDesc: 'Choose your preferred language. All screen content, voice prompts, and error notices will render in this script.',
+    fontSizeTitle: 'Text Size Accessibility',
+    fontSizeDesc: 'Enlarge text for improved readability in outdoor sunlight and for senior farmers.',
+    fontNormal: 'Standard Text Size (Default)',
+    fontLarge: 'Large Text Size (High Visibility)',
+    systemArchitecturePreview: 'System Architecture & Data Governance',
+
+    // Common
+    loading: 'Fetching verified agricultural data...',
+    error: 'Error loading data',
+    retry: 'Retry',
+    close: 'Close',
+    details: 'View Details',
+    footerNotice: 'MandiSaathi — Production Agritech Foundation. Governed by authentic data provenance.',
   },
   hi: {
+    // Brand & Nav
     appTitle: 'मंडी साथी',
     appSubtitle: 'भारतीय किसानों के लिए कृषि बाज़ार आसूचना मंच',
-    phase1Badge: 'चरण 1: आधारशिला',
-    systemHealth: 'सिस्टम स्थिति',
-    commodities: 'प्रमुख फसलें',
-    mandis: 'कृषि मंडियां',
-    voiceDiagnostic: 'आवाज़ इंजन परीक्षण',
+    phase2Badge: 'प्रमाणित कृषि मंच',
+    navHome: 'डैशबोर्ड',
+    navVoice: 'वॉयस असिस्टेंट',
+    navPrices: 'मंडी भाव',
+    navCompare: 'मंडी तुलना',
+    navSchemes: 'सरकारी योजनाएं',
+    navComplaints: 'किसान शिकायत',
+    navSettings: 'भाषा एवं सुगमता',
     connected: 'सक्रिय (Connected)',
     degraded: 'आंशिक (Degraded)',
     offline: 'ऑफलाइन (Offline)',
-    backendStatus: 'स्प्रिंग बूट बैकएंड',
-    databaseStatus: 'पोस्टग्रेएसक्यूएल डेटाबेस',
-    gnaniStatus: 'ज्ञानी वॉयस एआई (प्रिज्मा/टिम्ब्रे)',
-    refresh: 'स्थिति ताज़ा करें',
-    allCategories: 'सभी श्रेणियां',
+
+    // Dashboard
+    greetingMorning: 'राम राम, किसान साथी',
+    greetingAfternoon: 'नमस्ते, किसान साथी',
+    greetingEvening: 'शुभ संध्या, किसान साथी',
+    dashboardWelcome: 'आवाज़ द्वारा कृषि बाज़ार आसूचना',
+    dashboardHeroSubtitle: 'हिन्दी, पंजाबी या अंग्रेज़ी में बोलकर अपनी नजदीकी कृषि मंडियों के सत्यापित भाव जानें, बाज़ारों की तुलना करें और सरकारी योजनाओं की जानकारी पाएं।',
+    startVoicePrompt: 'माइक दबाकर अपना प्रश्न पूछें',
+    suggestedQueriesLabel: 'किसानों के मुख्य प्रश्न',
+    nearbyMandisTitle: 'प्रमुख कृषि मंडियां',
+    recentQueriesTitle: 'हाल के वॉयस प्रश्न',
+    noRecentQueries: 'अभी तक कोई पिछला प्रश्न दर्ज नहीं है। पूछने के लिए माइक दबाएं।',
+    clearRecent: 'इतिहास साफ़ करें',
+    marketBriefTitle: 'बाज़ार सलाह एवं डेटा सत्यता',
+    marketBriefText: 'मंडी साथी पर प्रदर्शित सभी भाव भारत सरकार के एगमार्कनेट (Agmarknet) एवं राज्य कृषि विपणन बोर्डों से सत्यापित हैं। हम कोई कृत्रिम भाव नहीं दिखाते।',
+    quickStatsCommodities: 'सत्यापित फसलें',
+    quickStatsMandis: 'निगरानीकृत मंडियां',
+    quickStatsSchemes: 'प्रमुख योजनाएं',
+
+    // Voice Assistant
+    voiceTitle: 'वॉयस असिस्टेंट (बोलकर पूछें)',
+    voiceSubtitle: 'अपनी मातृभाषा में सहजता से बोलें और तुरंत बाज़ार जानकारी पाएं',
+    micIdle: 'बोलने के लिए दबाएं',
+    micListening: 'आपकी आवाज़ सुनी जा रही है...',
+    micRecording: 'ऑडियो रिकॉर्ड हो रहा है...',
+    micProcessing: 'ज्ञानी वॉयस गेटवे द्वारा विश्लेषण जारी है...',
+    micPermissionError: 'ब्राउज़र में माइक्रोफ़ोन की अनुमति अस्वीकृत है। कृपया सेटिंग्स में अनुमति दें।',
+    typeQueryPlaceholder: 'या यहाँ टाइप करके पूछें (उदा. आज गेहूं का भाव क्या है?)...',
+    sendTextQuery: 'पूछें',
+    detectedLanguageLabel: 'पहचानी गई भाषा',
+    transcriptionLabel: 'आपका प्रश्न (ऑडियो से टेक्स्ट)',
+    responseLabel: 'मंडी साथी का उत्तर',
+    listenAudio: 'उत्तर सुनें',
+    stopAudio: 'आवाज़ रोकें',
+    tryAgain: 'नया प्रश्न पूछें',
+    gnaniNoticeTitle: 'वॉयस इंजन एकीकरण स्थिति',
+    gnaniDemoBadge: 'ज्ञानी v2.5 सैंडबॉक्स / विकास मोड',
+    gnaniNoticeText: 'ज्ञानी प्रिज्मा v2.5 (STT) एवं टिम्ब्रे v2.5 (TTS) बैकएंड अनुबंध सक्रिय हैं। सुरक्षा कारणों से लाइव क्रेडेंशियल सर्वर पर सुरक्षित हैं। ब्राउज़र स्थानीय ऑडियो स्पीच का उपयोग करता है।',
+
+    // Price Intelligence
+    priceTitle: 'मंडी भाव आसूचना',
+    priceSubtitle: 'एपीएमसी मंडियों द्वारा दैनिक नीलामी के बाद दर्ज आधिकारिक मॉडल एवं न्यूनतम-अधिकतम भाव',
+    selectCommodity: 'फसल चुनें',
+    selectState: 'राज्य चुनें',
+    selectDistrict: 'जिला चुनें',
+    selectMandi: 'मंडी चुनें',
+    allCommodities: 'सभी फसलें',
     allStates: 'सभी राज्य',
-    unit: 'इकाई',
-    active: 'सक्रिय',
-    state: 'राज्य',
-    district: 'जिला',
-    testMicrophone: 'माइक एक्सेस जांचें',
-    testingMic: 'अनुमति मांगी जा रही है...',
-    micAllowed: 'माइक एक्सेस स्वीकृत एवं ऑडियो इनपुट तैयार',
-    micDenied: 'ब्राउज़र द्वारा माइक अनुमति अस्वीकृत',
-    retry: 'पुनः प्रयास करें',
+    allDistricts: 'सभी जिले',
+    allMandis: 'सभी मंडियां',
+    filterReset: 'फ़िल्टर हटाएं',
+    modalPrice: 'मॉडल भाव',
+    minPrice: 'न्यूनतम भाव',
+    maxPrice: 'अधिकतम भाव',
+    priceSpread: 'भाव का अंतर',
+    reportingDate: 'रिपोर्टिंग दिनांक',
+    dataSource: 'डेटा स्रोत',
+    arrivals: 'कुल आवक',
+    perQuintal: '₹ / क्विंटल',
+    noPriceData: 'चुनी गई फसल और मंडी के लिए आज का भाव अभी दर्ज नहीं हुआ है।',
+    noPriceNotice: 'मंडी में दैनिक नीलामी समाप्त होने के बाद शाम 4:00 बजे भाव अपडेट किए जाते हैं।',
+    mspReferenceNotice: 'एमएसपी संदर्भ: कृषि लागत एवं मूल्य आयोग (CACP), भारत सरकार द्वारा निर्धारित न्यूनतम समर्थन मूल्य।',
+
+    // Mandi Comparison
+    compareTitle: 'मंडियों की तुलना',
+    compareSubtitle: 'आसपास की मंडियों के भावों की तुलना करके अपनी उपज का सर्वोत्तम मूल्य प्राप्त करें',
+    pickCommodityToCompare: 'तुलना के लिए फसल चुनें',
+    selectTwoMandisNotice: 'तुलना देखने के लिए कम से कम दो मंडियों का चयन करें।',
+    bestRateBadge: 'सर्वोत्तम मॉडल भाव',
+    differenceSpread: 'मंडियों में भाव का अंतर',
+    priceTrendChart: 'मंडी भाव तुलनात्मक चार्ट',
+    historicalNote: 'सत्यापित मॉडल भावों (₹/क्विंटल) की तुलना।',
+
+    // Government Schemes
+    schemesTitle: 'सरकारी कृषि योजनाएं',
+    schemesSubtitle: 'किसानों के लिए प्रमाणित केंद्रीय एवं राज्य योजनाएं, पात्रता एवं आवेदन प्रक्रिया',
+    searchSchemesPlaceholder: 'योजना का नाम या विषय खोजें (उदा. पीएम-किसान, फसल बीमा, केसीसी)...',
+    allCategories: 'सभी श्रेणियां',
+    catIncome: 'आय सहायता',
+    catInsurance: 'फसल बीमा',
+    catSoil: 'मृदा स्वास्थ्य एवं खाद',
+    catMarket: 'बाज़ार अवसंरचना',
+    catCredit: 'संस्थागत ऋण',
+    schemeEligibility: 'पात्रता की शर्तें',
+    schemeDocuments: 'आवश्यक दस्तावेज़',
+    schemeApplication: 'आवेदन कैसे करें',
+    officialPortalBtn: 'आधिकारिक पोर्टल पर जाएं',
+    verifiedOn: 'सत्यापित स्रोत',
+
+    // Complaint Registration
+    complaintsTitle: 'किसान शिकायत एवं मंडी समस्या',
+    complaintsSubtitle: 'मंडी में तौल में गड़बड़ी, भुगतान में देरी या बुनियादी समस्याओं की रिपोर्ट दर्ज करें',
+    complaintCategory: 'शिकायत की श्रेणी',
+    catWeighment: 'वजन में गड़बड़ी / अनियमितता',
+    catPayment: 'भुगतान में देरी / एमएसपी से कम खरीद',
+    catInfra: 'मंडी शेड, पेयजल या सड़क की कमी',
+    catDeductions: 'अवैध आढ़त या शुल्क कटौती',
+    catQuality: 'फसल गुणवत्ता ग्रेड विवाद',
+    descriptionLabel: 'समस्या का पूरा विवरण',
+    descriptionPlaceholder: 'कृपया तारीख, लॉट नंबर, आढ़ती का नाम या विशिष्ट समस्या लिखें...',
+    farmerNameLabel: 'किसान का नाम (वैकल्पिक)',
+    farmerPhoneLabel: 'मोबाइल नंबर (वैकल्पिक)',
+    reviewBtn: 'दर्ज करने से पहले समीक्षा करें',
+    confirmSubmitBtn: 'पुष्टि करें और शिकायत दर्ज करें',
+    backToEditBtn: 'वापस सुधारें',
+    reviewNotice: 'कृपया विवरण की जांच कर लें। इसके बाद आपको एक संदर्भ संख्या दी जाएगी।',
+    complaintSuccessTitle: 'शिकायत सफलतापूर्वक दर्ज हुई',
+    complaintRefNotice: 'आपकी शिकायत संदर्भ संख्या है:',
+    complaintLegalDisclaimer: 'सूचना: यह शिकायत मंडी साथी प्लेटफॉर्म में पारदर्शिता हेतु दर्ज की गई है। सरकारी सतर्कता हेतु सीधे pgportal.gov.in (CPGRAMS) का उपयोग करें।',
+    registeredComplaintsTitle: 'आपकी दर्ज शिकायतें',
+    noComplaintsRecorded: 'अभी तक कोई शिकायत दर्ज नहीं है।',
+    statusRecorded: 'मंडी साथी में दर्ज',
+
+    // Settings & Accessibility
+    settingsTitle: 'भाषा एवं सुगमता सेटिंग्स',
+    settingsSubtitle: 'अपनी सुविधा के अनुसार भाषा और अक्षर का आकार (Font Size) चुनें',
+    languageSectionTitle: 'इंटरफ़ेस भाषा',
+    languageDesc: 'अपनी मनपसंद भाषा चुनें। पूरी वेबसाइट उसी भाषा में प्रदर्शित होगी।',
+    fontSizeTitle: 'अक्षर का आकार (Text Size)',
+    fontSizeDesc: 'धूप में या पढ़ने में आसानी के लिए अक्षरों का आकार बड़ा करें।',
+    fontNormal: 'सामान्य आकार (Standard)',
+    fontLarge: 'बड़ा आकार (High Visibility)',
+    systemArchitecturePreview: 'सिस्टम आर्किटेक्चर एवं डेटा नियम',
+
+    // Common
     loading: 'डेटा लोड हो रहा है...',
-    noData: 'कोई रिकॉर्ड उपलब्ध नहीं है।',
-    footerText: 'मंडी साथी — प्रमाणित कृषि मंच। कोई कृत्रिम भाव नहीं, पूर्ण डेटा सत्यता।',
+    error: 'डेटा लोड करने में त्रुटि',
+    retry: 'पुनः प्रयास करें',
+    close: 'बंद करें',
+    details: 'विवरण देखें',
+    footerNotice: 'मंडी साथी — किसानों के लिए प्रमाणित कृषि मंच।',
   },
   pa: {
+    // Brand & Nav
     appTitle: 'ਮੰਡੀ ਸਾਥੀ',
     appSubtitle: 'ਭਾਰਤੀ ਕਿਸਾਨਾਂ ਲਈ ਖੇਤੀਬਾੜੀ ਮੰਡੀ ਜਾਣਕਾਰੀ ਪਲੇਟਫਾਰਮ',
-    phase1Badge: 'ਪੜਾਅ 1: ਨੀਂਹ',
-    systemHealth: 'ਸਿਸਟਮ ਸਥਿਤੀ',
-    commodities: 'ਮੁੱਖ ਫ਼ਸਲਾਂ',
-    mandis: 'ਖੇਤੀਬਾੜੀ ਮੰਡੀਆਂ',
-    voiceDiagnostic: 'ਆਵਾਜ਼ ਇੰਜਣ ਟੈਸਟ',
-    connected: 'ਕਨੈਕਟਡ (Connected)',
+    phase2Badge: 'ਪ੍ਰਮਾਣਿਤ ਖੇਤੀ ਮੰਚ',
+    navHome: 'ਡੈਸ਼ਬੋਰਡ',
+    navVoice: 'ਵੌਇਸ ਅਸਿਸਟੈਂਟ',
+    navPrices: 'ਮੰਡੀ ਦੇ ਭਾਅ',
+    navCompare: 'ਮੰਡੀਆਂ ਦੀ ਤੁਲਨਾ',
+    navSchemes: 'ਸਰਕਾਰੀ ਸਕੀਮਾਂ',
+    navComplaints: 'ਕਿਸਾਨ ਸ਼ਿਕਾਇਤ',
+    navSettings: 'ਭਾਸ਼ਾ ਅਤੇ ਸੈਟਿੰਗਜ਼',
+    connected: 'ਸਰਗਰਮ (Connected)',
     degraded: 'ਅੰਸ਼ਕ (Degraded)',
     offline: 'ਆਫਲਾਈਨ (Offline)',
-    backendStatus: 'ਸਪ੍ਰਿੰਗ ਬੂਟ ਬੈਕਐਂਡ',
-    databaseStatus: 'ਪੋਸਟਗ੍ਰੇਐਸਕਿਊਐਲ ਡਾਟਾਬੇਸ',
-    gnaniStatus: 'ਗਿਆਨੀ ਵੌਇਸ ਏਆਈ (ਪ੍ਰਿਜ਼ਮਾ/ਟਿੰਬਰੇ)',
-    refresh: 'ਸਥਿਤੀ ਤਾਜ਼ਾ ਕਰੋ',
-    allCategories: 'ਸਾਰੀਆਂ ਸ਼੍ਰੇਣੀਆਂ',
+
+    // Dashboard
+    greetingMorning: 'ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ, ਕਿਸਾਨ ਸਾਥੀ',
+    greetingAfternoon: 'ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ, ਕਿਸਾਨ ਸਾਥੀ',
+    greetingEvening: 'ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ, ਕਿਸਾਨ ਸਾਥੀ',
+    dashboardWelcome: 'ਆਵਾਜ਼ ਰਾਹੀਂ ਖੇਤੀਬਾੜੀ ਮੰਡੀ ਜਾਣਕਾਰੀ',
+    dashboardHeroSubtitle: 'ਪੰਜਾਬੀ, ਹਿੰਦੀ ਜਾਂ ਅੰਗਰੇਜ਼ੀ ਵਿੱਚ ਬੋਲ ਕੇ ਆਪਣੀ ਨੇੜਲੀ ਮੰਡੀ ਦੇ ਪ੍ਰਮਾਣਿਤ ਭਾਅ ਜਾਣੋ ਅਤੇ ਸਰਕਾਰੀ ਸਕੀਮਾਂ ਬਾਰੇ ਪਤਾ ਕਰੋ।',
+    startVoicePrompt: 'ਮਾਈਕ ਦਬਾ ਕੇ ਸਵਾਲ ਪੁੱਛੋ',
+    suggestedQueriesLabel: 'ਕਿਸਾਨਾਂ ਦੇ ਮੁੱਖ ਸਵਾਲ',
+    nearbyMandisTitle: 'ਮੁੱਖ ਖੇਤੀ ਮੰਡੀਆਂ',
+    recentQueriesTitle: 'ਪਿਛਲੇ ਸਵਾਲ',
+    noRecentQueries: 'ਅਜੇ ਕੋਈ ਪਿਛਲਾ ਸਵਾਲ ਨਹੀਂ ਹੈ। ਪੁੱਛਣ ਲਈ ਮਾਈਕ ਦਬਾਓ।',
+    clearRecent: 'ਸਾਫ਼ ਕਰੋ',
+    marketBriefTitle: 'ਮੰਡੀ ਸਲਾਹ ਅਤੇ ਜਾਣਕਾਰੀ',
+    marketBriefText: 'ਮੰਡੀ ਸਾਥੀ ਤੇ ਦਿਖਾਏ ਗਏ ਸਾਰੇ ਭਾਅ ਐਗਮਾਰਕਨੈੱਟ ਅਤੇ ਮੰਡੀ ਬੋਰਡਾਂ ਤੋਂ ਪ੍ਰਮਾਣਿਤ ਹਨ। ਕੋਈ ਨਕਲੀ ਭਾਅ ਨਹੀਂ ਦਿਖਾਇਆ ਜਾਂਦਾ।',
+    quickStatsCommodities: 'ਦਰਜ ਫ਼ਸਲਾਂ',
+    quickStatsMandis: 'ਸਰਗਰਮ ਮੰਡੀਆਂ',
+    quickStatsSchemes: 'ਸਰਕਾਰੀ ਸਕੀਮਾਂ',
+
+    // Voice Assistant
+    voiceTitle: 'ਵੌਇਸ ਅਸਿਸਟੈਂਟ (ਬੋਲ ਕੇ ਪੁੱਛੋ)',
+    voiceSubtitle: 'ਆਪਣੀ ਮਾਂ-ਬੋਲੀ ਵਿੱਚ ਸਹਿਜਤਾ ਨਾਲ ਬੋਲੋ ਅਤੇ ਤੁਰੰਤ ਜਾਣਕਾਰੀ ਲਵੋ',
+    micIdle: 'ਬੋਲਣ ਲਈ ਦਬਾਓ',
+    micListening: 'ਤੁਹਾਡੀ ਆਵਾਜ਼ ਸੁਣੀ ਜਾ ਰਹੀ ਹੈ...',
+    micRecording: 'ਆਡੀਓ ਰਿਕਾਰਡ ਹੋ ਰਹੀ ਹੈ...',
+    micProcessing: 'ਗਿਆਨੀ ਏਆਈ ਵੱਲੋਂ ਜਾਂਚ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ...',
+    micPermissionError: 'ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਮਾਈਕ੍ਰੋਫੋਨ ਦੀ ਇਜਾਜ਼ਤ ਨਹੀਂ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਸੈਟਿੰਗਜ਼ ਚੈੱਕ ਕਰੋ।',
+    typeQueryPlaceholder: 'ਜਾਂ ਇੱਥੇ ਲਿਖ ਕੇ ਪੁੱਛੋ (ਜਿਵੇਂ: ਲੁਧਿਆਣਾ ਮੰਡੀ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?)...',
+    sendTextQuery: 'ਪੁੱਛੋ',
+    detectedLanguageLabel: 'ਪਛਾਣੀ ਗਈ ਬੋਲੀ',
+    transcriptionLabel: 'ਤੁਹਾਡਾ ਸਵਾਲ (ਆਵਾਜ਼ ਤੋਂ ਅੱਖਰ)',
+    responseLabel: 'ਮੰਡੀ ਸਾਥੀ ਦਾ ਜਵਾਬ',
+    listenAudio: 'ਜਵਾਬ ਸੁਣੋ',
+    stopAudio: 'ਆਵਾਜ਼ ਬੰਦ ਕਰੋ',
+    tryAgain: 'ਨਵਾਂ ਸਵਾਲ ਪੁੱਛੋ',
+    gnaniNoticeTitle: 'ਵੌਇਸ ਇੰਜਣ ਸਥਿਤੀ',
+    gnaniDemoBadge: 'ਗਿਆਨੀ v2.5 ਡੈਮੋ ਮੋਡ',
+    gnaniNoticeText: 'ਗਿਆਨੀ ਪ੍ਰਿਜ਼ਮਾ v2.5 ਅਤੇ ਟਿੰਬਰੇ v2.5 ਇੰਟਰਫੇਸ ਡੈਮੋ ਮੋਡ ਵਿੱਚ ਸਰਗਰਮ ਹਨ। ਸੁਰੱਖਿਆ ਕਾਰਨਾਂ ਕਰਕੇ ਕੁੰਜੀਆਂ ਸਰਵਰ ਤੇ ਸੁਰੱਖਿਅਤ ਹਨ।',
+
+    // Price Intelligence
+    priceTitle: 'ਮੰਡੀ ਭਾਅ ਜਾਣਕਾਰੀ',
+    priceSubtitle: 'ਮੰਡੀ ਬੋਰਡਾਂ ਵੱਲੋਂ ਦਰਜ ਕੀਤੇ ਅਧਿਕਾਰਤ ਮਾਡਲ ਅਤੇ ਘੱਟੋ-ਘੱਟ ਭਾਅ',
+    selectCommodity: 'ਫ਼ਸਲ ਚੁਣੋ',
+    selectState: 'ਰਾਜ ਚੁਣੋ',
+    selectDistrict: 'ਜ਼ਿਲ੍ਹਾ ਚੁਣੋ',
+    selectMandi: 'ਮੰਡੀ ਚੁਣੋ',
+    allCommodities: 'ਸਾਰੀਆਂ ਫ਼ਸਲਾਂ',
     allStates: 'ਸਾਰੇ ਰਾਜ',
-    unit: 'ਇਕਾਈ',
-    active: 'ਸਰਗਰਮ',
-    state: 'ਰਾਜ',
-    district: 'ਜ਼ਿਲ੍ਹਾ',
-    testMicrophone: 'ਮਾਈਕ੍ਰੋਫੋਨ ਦੀ ਜਾਂਚ ਕਰੋ',
-    testingMic: 'ਇਜਾਜ਼ਤ ਮੰਗੀ ਜਾ ਰਹੀ ਹੈ...',
-    micAllowed: 'ਮਾਈਕ੍ਰੋਫੋਨ ਇਜਾਜ਼ਤ ਮਿਲ ਗਈ ਅਤੇ ਆਡੀਓ ਤਿਆਰ ਹੈ',
-    micDenied: 'ਬ੍ਰਾਊਜ਼ਰ ਦੁਆਰਾ ਮਾਈਕ੍ਰੋਫੋਨ ਇਜਾਜ਼ਤ ਰੱਦ ਕੀਤੀ ਗਈ',
+    allDistricts: 'ਸਾਰੇ ਜ਼ਿਲ੍ਹੇ',
+    allMandis: 'ਸਾਰੀਆਂ ਮੰਡੀਆਂ',
+    filterReset: 'ਮੁੜ ਸੈੱਟ ਕਰੋ',
+    modalPrice: 'ਮਾਡਲ ਭਾਅ',
+    minPrice: 'ਘੱਟੋ-ਘੱਟ ਭਾਅ',
+    maxPrice: 'ਵੱਧ ਤੋਂ ਵੱਧ ਭਾਅ',
+    priceSpread: 'ਭਾਅ ਦਾ ਫ਼ਰਕ',
+    reportingDate: 'ਤਾਰੀਖ',
+    dataSource: 'ਸਰੋਤ',
+    arrivals: 'ਕੁੱਲ ਆਮਦ',
+    perQuintal: '₹ / ਕੁਇੰਟਲ',
+    noPriceData: 'ਚੁਣੀ ਗਈ ਫ਼ਸਲ ਅਤੇ ਮੰਡੀ ਲਈ ਅੱਜ ਦਾ ਭਾਅ ਅਜੇ ਦਰਜ ਨਹੀਂ ਹੋਇਆ।',
+    noPriceNotice: 'ਬੋਲੀ ਖਤਮ ਹੋਣ ਤੋਂ ਬਾਅਦ ਸ਼ਾਮ ਨੂੰ ਭਾਅ ਅਪਡੇਟ ਕੀਤੇ ਜਾਂਦੇ ਹਨ।',
+    mspReferenceNotice: 'ਸਰਕਾਰੀ ਐਮਐਸਪੀ (MSP) ਅਨੁਸਾਰ ਪ੍ਰਮਾਣਿਤ ਭਾਅ।',
+
+    // Mandi Comparison
+    compareTitle: 'ਮੰਡੀਆਂ ਦੀ ਤੁਲਨਾ',
+    compareSubtitle: 'ਨੇੜਲੀਆਂ ਮੰਡੀਆਂ ਦੇ ਭਾਅ ਮਿਲਾ ਕੇ ਆਪਣੀ ਫ਼ਸਲ ਦਾ ਸਭ ਤੋਂ ਵੱਧ ਮੁੱਲ ਲਵੋ',
+    pickCommodityToCompare: 'ਤੁਲਨਾ ਲਈ ਫ਼ਸਲ ਚੁਣੋ',
+    selectTwoMandisNotice: 'ਤੁਲਨਾ ਦੇਖਣ ਲਈ ਘੱਟੋ-ਘੱਟ ਦੋ ਮੰਡੀਆਂ ਚੁਣੋ।',
+    bestRateBadge: 'ਸਭ ਤੋਂ ਵਧੀਆ ਭਾਅ',
+    differenceSpread: 'ਮੰਡੀਆਂ ਵਿੱਚ ਭਾਅ ਦਾ ਅੰਤਰ',
+    priceTrendChart: 'ਮੰਡੀ ਭਾਅ ਤੁਲਨਾ ਚਾਰਟ',
+    historicalNote: 'ਮਾਡਲ ਭਾਅ (₹/ਕੁਇੰਟਲ) ਦੀ ਤੁਲਨਾ।',
+
+    // Government Schemes
+    schemesTitle: 'ਸਰਕਾਰੀ ਖੇਤੀਬਾੜੀ ਸਕੀਮਾਂ',
+    schemesSubtitle: 'ਕਿਸਾਨਾਂ ਲਈ ਸਰਕਾਰੀ ਸਹਾਇਤਾ, ਯੋਗਤਾ ਅਤੇ ਅਰਜ਼ੀ ਦੇਣ ਦਾ ਤਰੀਕਾ',
+    searchSchemesPlaceholder: 'ਸਕੀਮ ਦਾ ਨਾਮ ਲੱਭੋ (ਜਿਵੇਂ ਪੀਐਮ-ਕਿਸਾਨ, ਫਸਲ ਬੀਮਾ)...',
+    allCategories: 'ਸਾਰੀਆਂ ਸ਼੍ਰੇਣੀਆਂ',
+    catIncome: 'ਆਮਦਨ ਸਹਾਇਤਾ',
+    catInsurance: 'ਫ਼ਸਲ ਬੀਮਾ',
+    catSoil: 'ਮਿੱਟੀ ਦੀ ਪਰਖ',
+    catMarket: 'ਮੰਡੀਕਰਨ',
+    catCredit: 'ਸਸਤਾ ਕਰਜ਼ਾ',
+    schemeEligibility: 'ਯੋਗਤਾ',
+    schemeDocuments: 'ਲੋੜੀਂਦੇ ਕਾਗਜ਼ਾਤ',
+    schemeApplication: 'ਅਰਜ਼ੀ ਕਿਵੇਂ ਦੇਣੀ ਹੈ',
+    officialPortalBtn: 'ਅਧਿਕਾਰਤ ਵੈੱਬਸਾਈਟ ਖੋਲ੍ਹੋ',
+    verifiedOn: 'ਪ੍ਰਮਾਣਿਤ ਸਰੋਤ',
+
+    // Complaint Registration
+    complaintsTitle: 'ਕਿਸਾਨ ਸ਼ਿਕਾਇਤ ਅਤੇ ਮੰਡੀ ਮਸਲੇ',
+    complaintsSubtitle: 'ਤੋਲ ਵਿੱਚ ਹੇਰਾਫੇਰੀ, ਭੁਗਤਾਨ ਵਿੱਚ ਦੇਰੀ ਜਾਂ ਮੰਡੀ ਦੀਆਂ ਮੁਸ਼ਕਲਾਂ ਦਰਜ ਕਰੋ',
+    complaintCategory: 'ਸ਼ਿਕਾਇਤ ਦੀ ਕਿਸਮ',
+    catWeighment: 'ਤੋਲ ਵਿੱਚ ਗੜਬੜੀ',
+    catPayment: 'ਪੈਸੇ ਮਿਲਣ ਵਿੱਚ ਦੇਰੀ / ਐਮਐਸਪੀ ਤੋਂ ਘੱਟ ਖਰੀਦ',
+    catInfra: 'ਮੰਡੀ ਵਿੱਚ ਸ਼ੈੱਡ ਜਾਂ ਪਾਣੀ ਦੀ ਘਾਟ',
+    catDeductions: 'ਨਾਜਾਇਜ਼ ਕਟੌਤੀ',
+    catQuality: 'ਗੁਣਵੱਤਾ ਦਾ ਝਗੜਾ',
+    descriptionLabel: 'ਮਸਲੇ ਦਾ ਪੂਰਾ ਵੇਰਵਾ',
+    descriptionPlaceholder: 'ਕਿਰਪਾ ਕਰਕੇ ਤਾਰੀਖ, ਆੜ੍ਹਤੀ ਦਾ ਨਾਮ ਜਾਂ ਮੁਸ਼ਕਲ ਲਿਖੋ...',
+    farmerNameLabel: 'ਕਿਸਾਨ ਦਾ ਨਾਮ (ਮਰਜ਼ੀ ਮੁਤਾਬਕ)',
+    farmerPhoneLabel: 'ਫ਼ੋਨ ਨੰਬਰ (ਮਰਜ਼ੀ ਮੁਤਾਬਕ)',
+    reviewBtn: 'ਵੇਰਵੇ ਚੈੱਕ ਕਰੋ',
+    confirmSubmitBtn: 'ਪੁਸ਼ਟੀ ਕਰੋ ਅਤੇ ਸ਼ਿਕਾਇਤ ਦਰਜ ਕਰੋ',
+    backToEditBtn: 'ਸੁਧਾਰ ਕਰੋ',
+    reviewNotice: 'ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵੇ ਚੈੱਕ ਕਰ ਲਵੋ। ਦਰਜ ਕਰਨ ਤੇ ਨੰਬਰ ਮਿਲੇਗਾ।',
+    complaintSuccessTitle: 'ਸ਼ਿਕਾਇਤ ਸਫਲਤਾਪੂਰਵਕ ਦਰਜ ਹੋ ਗਈ',
+    complaintRefNotice: 'ਤੁਹਾਡਾ ਸ਼ਿਕਾਇਤ ਨੰਬਰ ਹੈ:',
+    complaintLegalDisclaimer: 'ਸੂਚਨਾ: ਇਹ ਸ਼ਿਕਾਇਤ ਮੰਡੀ ਸਾਥੀ ਪਲੇਟਫਾਰਮ ਤੇ ਰਿਕਾਰਡ ਕੀਤੀ ਗਈ ਹੈ।',
+    registeredComplaintsTitle: 'ਤੁਹਾਡੀਆਂ ਦਰਜ ਸ਼ਿਕਾਇਤਾਂ',
+    noComplaintsRecorded: 'ਅਜੇ ਕੋਈ ਸ਼ਿਕਾਇਤ ਦਰਜ ਨਹੀਂ ਹੈ।',
+    statusRecorded: 'ਮੰਡੀ ਸਾਥੀ ਵਿੱਚ ਦਰਜ',
+
+    // Settings & Accessibility
+    settingsTitle: 'ਭਾਸ਼ਾ ਅਤੇ ਆਕਾਰ ਸੈਟਿੰਗਜ਼',
+    settingsSubtitle: 'ਆਪਣੀ ਪਸੰਦ ਅਨੁਸਾਰ ਬੋਲੀ ਅਤੇ ਅੱਖਰਾਂ ਦਾ ਆਕਾਰ ਚੁਣੋ',
+    languageSectionTitle: 'ਐਪਲੀਕੇਸ਼ਨ ਭਾਸ਼ਾ',
+    languageDesc: 'ਆਪਣੀ ਮਨਪਸੰਦ ਭਾਸ਼ਾ ਚੁਣੋ। ਸਾਰੀ ਜਾਣਕਾਰੀ ਇਸੇ ਭਾਸ਼ਾ ਵਿੱਚ ਮਿਲੇਗੀ।',
+    fontSizeTitle: 'ਅੱਖਰਾਂ ਦਾ ਆਕਾਰ (Text Size)',
+    fontSizeDesc: 'ਧੁੱਪ ਵਿੱਚ ਸਾਫ਼ ਪੜ੍ਹਨ ਲਈ ਅੱਖਰਾਂ ਦਾ ਆਕਾਰ ਵੱਡਾ ਕਰੋ।',
+    fontNormal: 'ਸਧਾਰਨ ਆਕਾਰ (Standard)',
+    fontLarge: 'ਵੱਡਾ ਆਕਾਰ (High Visibility)',
+    systemArchitecturePreview: 'ਸਿਸਟਮ ਨਿਯਮ ਅਤੇ ਡਾਟਾ ਸੁਰੱਖਿਆ',
+
+    // Common
+    loading: 'ਜਾਣਕਾਰੀ ਲੋਡ ਹੋ ਰਹੀ ਹੈ...',
+    error: 'ਡਾਟਾ ਲੋਡ ਕਰਨ ਵਿੱਚ ਸਮੱਸਿਆ',
     retry: 'ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ',
-    loading: 'ਡਾਟਾ ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...',
-    noData: 'ਕੋਈ ਰਿਕਾਰਡ ਨਹੀਂ ਮਿਲਿਆ।',
-    footerText: 'ਮੰਡੀ ਸਾਥੀ — ਪ੍ਰਮਾਣਿਤ ਖੇਤੀਬਾੜੀ ਪਲੇਟਫਾਰਮ। ਕੋਈ ਨਕਲੀ ਭਾਅ ਨਹੀਂ।',
+    close: 'ਬੰਦ ਕਰੋ',
+    details: 'ਵੇਰਵੇ ਦੇਖੋ',
+    footerNotice: 'ਮੰਡੀ ਸਾਥੀ — ਕਿਸਾਨਾਂ ਲਈ ਪ੍ਰਮਾਣਿਤ ਖੇਤੀ ਮੰਚ।',
   },
 };
 
@@ -105,7 +458,12 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('mandisaathi_lang');
-    return (saved === 'hi' || saved === 'pa' || saved === 'en') ? saved : 'hi';
+    return saved === 'hi' || saved === 'pa' || saved === 'en' ? saved : 'hi';
+  });
+
+  const [fontSize, setFontSizeState] = useState<'normal' | 'large'>(() => {
+    const saved = localStorage.getItem('mandisaathi_fontsize');
+    return saved === 'large' ? 'large' : 'normal';
   });
 
   const setLanguage = (lang: Language) => {
@@ -113,9 +471,22 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.setItem('mandisaathi_lang', lang);
   };
 
+  const setFontSize = (size: 'normal' | 'large') => {
+    setFontSizeState(size);
+    localStorage.setItem('mandisaathi_fontsize', size);
+  };
+
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    if (fontSize === 'large') {
+      document.documentElement.classList.add('text-lg');
+    } else {
+      document.documentElement.classList.remove('text-lg');
+    }
+  }, [fontSize]);
 
   const t = (key: string): string => {
     const current = translations[language];
@@ -123,7 +494,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, fontSize, setFontSize, t }}>
       {children}
     </LanguageContext.Provider>
   );
@@ -136,4 +507,3 @@ export const useLanguage = (): LanguageContextType => {
   }
   return ctx;
 };
-

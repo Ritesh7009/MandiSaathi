@@ -1,4 +1,15 @@
-import { Commodity, HealthResponse, Mandi, ApiError } from '../types';
+import {
+  Commodity,
+  HealthResponse,
+  Mandi,
+  PriceRecord,
+  PriceComparison,
+  GovernmentScheme,
+  Complaint,
+  ComplaintRequest,
+  VoiceQueryResponse,
+  ApiError,
+} from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -33,13 +44,13 @@ async function fetchJson<T>(endpoint: string, options: RequestInit = {}): Promis
       try {
         errorData = await response.json();
       } catch {
-        // Response was not JSON
+        // Non-JSON response
       }
       const message = errorData?.message || `HTTP ${response.status}: ${response.statusText}`;
       throw new ApiClientError(response.status, message, errorData);
     }
 
-    return await response.json() as T;
+    return (await response.json()) as T;
   } catch (err) {
     if (err instanceof ApiClientError) {
       throw err;
@@ -50,8 +61,10 @@ async function fetchJson<T>(endpoint: string, options: RequestInit = {}): Promis
 }
 
 export const api = {
+  // System Health
   checkHealth: (): Promise<HealthResponse> => fetchJson<HealthResponse>('/api/v1/health'),
 
+  // Commodities
   getCommodities: (category?: string): Promise<Commodity[]> => {
     const query = category ? `?category=${encodeURIComponent(category)}` : '';
     return fetchJson<Commodity[]>(`/api/v1/commodities${query}`);
@@ -60,6 +73,7 @@ export const api = {
   getCommodityByCode: (code: string): Promise<Commodity> =>
     fetchJson<Commodity>(`/api/v1/commodities/${encodeURIComponent(code)}`),
 
+  // Mandis
   getMandis: (state?: string): Promise<Mandi[]> => {
     const query = state ? `?state=${encodeURIComponent(state)}` : '';
     return fetchJson<Mandi[]>(`/api/v1/mandis${query}`);
@@ -67,7 +81,52 @@ export const api = {
 
   getMandiByCode: (code: string): Promise<Mandi> =>
     fetchJson<Mandi>(`/api/v1/mandis/${encodeURIComponent(code)}`),
+
+  // Mandi Price Intelligence
+  getPrices: (commodityCode?: string, mandiCode?: string): Promise<PriceRecord[]> => {
+    const params = new URLSearchParams();
+    if (commodityCode) params.append('commodityCode', commodityCode);
+    if (mandiCode) params.append('mandiCode', mandiCode);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return fetchJson<PriceRecord[]>(`/api/v1/prices${qs}`);
+  },
+
+  comparePrices: (commodityCode: string, mandiCodes?: string[]): Promise<PriceComparison> =>
+    fetchJson<PriceComparison>('/api/v1/prices/compare', {
+      method: 'POST',
+      body: JSON.stringify({ commodityCode, mandiCodes: mandiCodes || [] }),
+    }),
+
+  // Government Schemes
+  getSchemes: (category?: string, search?: string): Promise<GovernmentScheme[]> => {
+    const params = new URLSearchParams();
+    if (category) params.append('category', category);
+    if (search) params.append('search', search);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return fetchJson<GovernmentScheme[]>(`/api/v1/schemes${qs}`);
+  },
+
+  getSchemeByCode: (code: string): Promise<GovernmentScheme> =>
+    fetchJson<GovernmentScheme>(`/api/v1/schemes/${encodeURIComponent(code)}`),
+
+  // Complaints
+  registerComplaint: (request: ComplaintRequest): Promise<Complaint> =>
+    fetchJson<Complaint>('/api/v1/complaints', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+
+  getComplaints: (): Promise<Complaint[]> => fetchJson<Complaint[]>('/api/v1/complaints'),
+
+  getComplaintByRef: (referenceNumber: string): Promise<Complaint> =>
+    fetchJson<Complaint>(`/api/v1/complaints/${encodeURIComponent(referenceNumber)}`),
+
+  // Voice Assistant
+  sendVoiceQuery: (queryText: string, language?: string): Promise<VoiceQueryResponse> =>
+    fetchJson<VoiceQueryResponse>('/api/v1/voice/query', {
+      method: 'POST',
+      body: JSON.stringify({ queryText, language: language || 'hi' }),
+    }),
 };
 
 export { ApiClientError };
-

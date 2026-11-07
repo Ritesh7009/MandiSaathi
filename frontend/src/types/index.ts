@@ -41,6 +41,105 @@ export interface Mandi {
   active: boolean;
 }
 
+export interface PriceRecord {
+  id: number;
+  commodityCode: string;
+  commodityNameEn: string;
+  commodityNameHi: string;
+  commodityNamePa: string | null;
+  mandiCode: string;
+  mandiNameEn: string;
+  mandiNameHi: string;
+  mandiNamePa: string | null;
+  state: string;
+  district: string;
+  minPrice: number;
+  maxPrice: number;
+  modalPrice: number;
+  priceDate: string;
+  arrivalQuantity: number | null;
+  unit: string;
+  dataSource: string;
+  verified: boolean;
+}
+
+export interface PriceComparison {
+  commodity: Commodity;
+  records: PriceRecord[];
+  summaryEn: string;
+  summaryHi: string;
+  summaryPa: string;
+}
+
+export interface GovernmentScheme {
+  id: number;
+  code: string;
+  nameEn: string;
+  nameHi: string;
+  namePa: string | null;
+  category: string;
+  descriptionEn: string;
+  descriptionHi: string;
+  descriptionPa: string | null;
+  eligibilityEn: string;
+  eligibilityHi: string;
+  eligibilityPa: string | null;
+  documentsEn: string;
+  documentsHi: string;
+  documentsPa: string | null;
+  applicationStepsEn: string;
+  applicationStepsHi: string;
+  applicationStepsPa: string | null;
+  officialUrl: string;
+  verifiedDate: string;
+  active: boolean;
+}
+
+export interface ComplaintRequest {
+  category: string;
+  description: string;
+  state: string;
+  district: string;
+  mandiCode?: string;
+  farmerName?: string;
+  farmerPhone?: string;
+}
+
+export interface Complaint {
+  id: number;
+  referenceNumber: string;
+  category: string;
+  description: string;
+  state: string;
+  district: string;
+  mandiCode: string | null;
+  mandiName: string | null;
+  farmerName: string | null;
+  farmerPhone: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface VoiceQueryResponse {
+  transcript: string;
+  detectedLanguage: string;
+  responseText: string;
+  responseTextHi: string;
+  responseTextPa: string;
+  audioBase64: string | null;
+  isLiveGnaniConnected: boolean;
+  engineNotice: string;
+  relatedQueries: string[];
+}
+
+export interface RecentConversation {
+  id: string;
+  query: string;
+  response: string;
+  language: string;
+  timestamp: string;
+}
+
 export interface ApiError {
   status: number;
   error: string;
@@ -49,4 +148,3 @@ export interface ApiError {
   timestamp: string;
   validationErrors?: Record<string, string>;
 }
-

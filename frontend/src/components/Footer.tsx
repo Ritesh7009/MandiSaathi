@@ -10,7 +10,7 @@ export const Footer: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center space-x-2">
           <ShieldCheck className="w-4 h-4 text-forest" />
-          <span>{t('footerText')}</span>
+          <span>{t('footerNotice')}</span>
         </div>
         <div className="flex items-center space-x-1">
           <span>Engineered with care for Bharat's farmers</span>

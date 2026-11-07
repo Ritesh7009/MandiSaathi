@@ -27,12 +27,23 @@ export default {
           DEFAULT: '#F5F3EA',
           light: '#FAF9F4',
           dark: '#EBE7D8',
+          50: '#fdfcf9',
+          100: '#FAF9F4',
+          200: '#F5F3EA',
+          300: '#EBE7D8',
         },
         charcoal: {
           DEFAULT: '#25352C',
           light: '#374b40',
           dark: '#1a2620',
           muted: '#52665b',
+        },
+        mutedGreen: {
+          DEFAULT: '#78917E',
+          light: '#96ab9b',
+          dark: '#5d7363',
+          50: '#f4f6f4',
+          100: '#e5ebe6',
         },
       },
       fontFamily: {
@@ -47,8 +58,11 @@ export default {
         hindi: ['"Noto Sans Devanagari"', 'sans-serif'],
         punjabi: ['"Noto Sans Gurmukhi"', 'sans-serif'],
       },
+      boxShadow: {
+        subtle: '0 1px 2px 0 rgba(23, 75, 53, 0.05)',
+        card: '0 1px 3px 0 rgba(23, 75, 53, 0.08), 0 1px 2px -1px rgba(23, 75, 53, 0.05)',
+      },
     },
   },
   plugins: [],
 }
-
