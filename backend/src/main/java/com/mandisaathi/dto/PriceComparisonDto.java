@@ -9,3 +9,4 @@ public record PriceComparisonDto(
         String summaryHi,
         String summaryPa
 ) {}
+

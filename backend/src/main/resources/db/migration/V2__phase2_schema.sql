@@ -207,3 +207,4 @@ INSERT INTO government_schemes (
     'Reserve Bank of India & NABARD, Verified Nov 2026'
 )
 ON CONFLICT (code) DO NOTHING;
+

@@ -6,3 +6,4 @@ public record VoiceQueryRequest(
         String queryText,
         String language
 ) {}
+

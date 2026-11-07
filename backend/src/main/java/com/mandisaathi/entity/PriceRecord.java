@@ -83,3 +83,4 @@ public class PriceRecord {
 
     public Instant getCreatedAt() { return createdAt; }
 }
+

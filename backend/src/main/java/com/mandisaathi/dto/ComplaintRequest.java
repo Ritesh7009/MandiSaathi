@@ -21,3 +21,4 @@ public record ComplaintRequest(
         String farmerName,
         String farmerPhone
 ) {}
+

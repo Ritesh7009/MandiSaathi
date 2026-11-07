@@ -24,3 +24,4 @@ public record PriceRecordDto(
         String dataSource,
         boolean verified
 ) {}
+

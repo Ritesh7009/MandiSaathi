@@ -14,9 +14,19 @@ import java.util.List;
 public class PriceRecordController {
 
     private final PriceRecordService priceRecordService;
+    private final com.mandisaathi.service.MandiDataIngestionService mandiDataIngestionService;
 
-    public PriceRecordController(PriceRecordService priceRecordService) {
+    public PriceRecordController(
+            PriceRecordService priceRecordService,
+            com.mandisaathi.service.MandiDataIngestionService mandiDataIngestionService
+    ) {
         this.priceRecordService = priceRecordService;
+        this.mandiDataIngestionService = mandiDataIngestionService;
+    }
+
+    @PostMapping("/sync")
+    public ResponseEntity<com.mandisaathi.dto.IngestionSummaryDto> syncPrices() {
+        return ResponseEntity.ok(mandiDataIngestionService.ingestLatestMandiPrices());
     }
 
     @GetMapping
@@ -32,3 +42,4 @@ public class PriceRecordController {
         return ResponseEntity.ok(priceRecordService.comparePrices(request.commodityCode(), request.mandiCodes()));
     }
 }
+

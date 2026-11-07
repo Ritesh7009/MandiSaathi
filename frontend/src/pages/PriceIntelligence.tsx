@@ -15,7 +15,10 @@ import {
   Wheat,
   Clock,
   Info,
+  RefreshCw,
+  CheckCircle,
 } from 'lucide-react';
+import { IngestionSummary } from '../types';
 
 export const PriceIntelligence: React.FC = () => {
   const { language, t } = useLanguage();
@@ -24,6 +27,9 @@ export const PriceIntelligence: React.FC = () => {
   const [selectedState, setSelectedState] = useState<string>('');
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
   const [selectedMandi, setSelectedMandi] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncSummary, setSyncSummary] = useState<IngestionSummary | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Fetch commodities list
   const { data: commodities = [] } = useQuery({
@@ -117,6 +123,23 @@ export const PriceIntelligence: React.FC = () => {
     return { avgModal, minOverall, maxOverall, totalArrivals };
   }, [displayedRecords]);
 
+  // Handle real Agmarknet data synchronization
+  const handleSyncAgmarknet = async () => {
+    setIsSyncing(true);
+    setSyncError(null);
+    setSyncSummary(null);
+
+    try {
+      const summary = await api.syncMandiPrices();
+      setSyncSummary(summary);
+      await refetchPrices();
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Agmarknet synchronization failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8">
       {/* Page Header */}
@@ -135,11 +158,55 @@ export const PriceIntelligence: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2 text-xs font-mono bg-ivory border border-ivory-dark px-3 py-1.5 rounded text-charcoal-muted self-start sm:self-center">
-            <ShieldCheck className="w-4 h-4 text-forest" />
-            <span>Agmarknet Direct Feed</span>
+          <div className="flex items-center space-x-2 self-start sm:self-center">
+            <button
+              type="button"
+              onClick={handleSyncAgmarknet}
+              disabled={isSyncing}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? t('dataSyncInProgress') : t('dataSyncButton')}</span>
+            </button>
+
+            <div className="flex items-center space-x-2 text-xs font-mono bg-ivory border border-ivory-dark px-3 py-1.5 rounded text-charcoal-muted">
+              <ShieldCheck className="w-4 h-4 text-forest" />
+              <span>Agmarknet Direct Feed</span>
+            </div>
           </div>
         </div>
+
+        {/* Sync result feedback */}
+        {syncSummary && (
+          <div className="mt-4 p-3 bg-forest-50 border border-forest/30 rounded text-xs text-forest-dark flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-forest shrink-0" />
+              <span>
+                <strong>{t('dataSyncSuccess')}:</strong> {syncSummary.message} (Fetched: {syncSummary.totalFetched}, Inserted: {syncSummary.insertedCount}, Updated: {syncSummary.updatedCount})
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSyncSummary(null)}
+              className="text-forest hover:text-forest-dark text-[11px] underline ml-2"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {syncError && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-xs text-red-800 flex items-center justify-between">
+            <span>{syncError}</span>
+            <button
+              type="button"
+              onClick={() => setSyncError(null)}
+              className="text-red-700 hover:text-red-900 text-[11px] underline ml-2"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter Toolbar (Watermelon UI pattern) */}

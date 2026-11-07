@@ -151,3 +151,4 @@ public class PriceRecordService {
         return String.format("%s ਦਾ ਪ੍ਰਮਾਣਿਤ ਮਾਡਲ ਭਾਅ ₹%s/ਕੁਇੰਟਲ ਦਰਜ ਕੀਤਾ ਗਿਆ ਹੈ।", name, maxRecord.map(PriceRecordDto::modalPrice).orElse(BigDecimal.ZERO));
     }
 }
+

@@ -8,12 +8,31 @@ export interface HealthResponse {
   services: {
     database: {
       status: string;
+      connectionStatus?: string;
       type: string;
     };
-    gnaniVoice: {
+    gnaniVoice?: {
       status: string;
       prismaStt: string;
       timbreTts: string;
+    };
+    gnaniPrismaStt?: {
+      status: string;
+      model: string;
+      endpoint: string;
+    };
+    gnaniTimbreTts?: {
+      status: string;
+      model: string;
+      voiceHindi?: string;
+      voicePunjabi?: string;
+      voiceEnglish?: string;
+      endpoint: string;
+    };
+    mandiDataSource?: {
+      status: string;
+      source: string;
+      catalog: string;
     };
   };
 }
@@ -123,13 +142,29 @@ export interface Complaint {
 export interface VoiceQueryResponse {
   transcript: string;
   detectedLanguage: string;
+  intent?: string;
+  extractedEntities?: Record<string, string>;
+  priceRecords?: PriceRecord[];
   responseText: string;
   responseTextHi: string;
   responseTextPa: string;
   audioBase64: string | null;
+  source?: string;
+  reportingDate?: string;
+  aiServiceStatus?: string;
   isLiveGnaniConnected: boolean;
   engineNotice: string;
   relatedQueries: string[];
+}
+
+export interface IngestionSummary {
+  totalFetched: number;
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  status: string;
+  message: string;
+  timestamp: string;
 }
 
 export interface RecentConversation {

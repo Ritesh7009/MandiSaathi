@@ -23,3 +23,4 @@ public record SchemeDto(
         String verifiedDate,
         boolean active
 ) {}
+

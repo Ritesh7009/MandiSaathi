@@ -54,3 +54,4 @@ class ComplaintControllerTest {
                 .andExpect(jsonPath("$.status", is("RECORDED")));
     }
 }
+

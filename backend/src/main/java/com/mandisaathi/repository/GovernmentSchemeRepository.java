@@ -26,3 +26,4 @@ public interface GovernmentSchemeRepository extends JpaRepository<GovernmentSche
            ")")
     List<GovernmentScheme> searchSchemes(@Param("term") String term);
 }
+

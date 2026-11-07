@@ -1,5 +1,7 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '../context/LanguageContext';
+import { api } from '../services/apiClient';
 import { Language } from '../types';
 import {
   Sliders,
@@ -14,6 +16,12 @@ import {
 
 export const Settings: React.FC = () => {
   const { language, setLanguage, fontSize, setFontSize, t } = useLanguage();
+
+  const { data: health } = useQuery({
+    queryKey: ['systemHealthDetails'],
+    queryFn: () => api.checkHealth(),
+    refetchInterval: 30000,
+  });
 
   const supportedLanguages: {
     code: Language;
@@ -247,43 +255,70 @@ export const Settings: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
           {/* AI Voice Stack */}
           <div className="p-3.5 rounded bg-ivory/40 border border-ivory-dark space-y-2">
-            <div className="flex items-center space-x-2 font-bold text-forest">
-              <Radio className="w-4 h-4 text-harvest-dark" />
-              <span>Gnani AI Gateway</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 font-bold text-forest">
+                <Radio className="w-4 h-4 text-harvest-dark" />
+                <span>Gnani AI Gateway</span>
+              </div>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                health?.services.gnaniPrismaStt?.status === 'CONNECTED'
+                  ? 'bg-forest text-white'
+                  : 'bg-amber-100 text-amber-800'
+              }`}>
+                {health?.services.gnaniPrismaStt?.status || 'STUBBED'}
+              </span>
             </div>
             <p className="text-[11px] text-charcoal-muted leading-relaxed">
               Prisma v2.5 STT & Timbre v2.5 TTS operating behind server-side Spring Boot abstractions. No vendor API keys exposed to browser clients.
             </p>
-            <div className="text-[10px] font-mono text-forest bg-white px-2 py-0.5 rounded border border-ivory-dark inline-block">
-              Dialect Boundary Protected
+            <div className="flex items-center space-x-2 text-[10px] font-mono text-charcoal-muted">
+              <span>Model: {health?.services.gnaniPrismaStt?.model || 'prisma-v2.5'}</span>
             </div>
           </div>
 
           {/* Data Provenance */}
           <div className="p-3.5 rounded bg-ivory/40 border border-ivory-dark space-y-2">
-            <div className="flex items-center space-x-2 font-bold text-forest">
-              <Database className="w-4 h-4 text-harvest-dark" />
-              <span>Agmarknet Provenance</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 font-bold text-forest">
+                <Database className="w-4 h-4 text-harvest-dark" />
+                <span>Agmarknet Provenance</span>
+              </div>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                health?.services.mandiDataSource?.status === 'CONNECTED'
+                  ? 'bg-forest text-white'
+                  : 'bg-forest-50 text-forest border border-forest/20'
+              }`}>
+                {health?.services.mandiDataSource?.status || 'ACTIVE'}
+              </span>
             </div>
             <p className="text-[11px] text-charcoal-muted leading-relaxed">
               All market prices, modal rates, and daily arrivals originate strictly from verified APMC market committee auctions. Zero fake or simulated live bids.
             </p>
             <div className="text-[10px] font-mono text-forest bg-white px-2 py-0.5 rounded border border-ivory-dark inline-block">
-              Rule 2 Compliant
+              {health?.services.mandiDataSource?.source || 'Agmarknet / data.gov.in'}
             </div>
           </div>
 
           {/* Infrastructure */}
           <div className="p-3.5 rounded bg-ivory/40 border border-ivory-dark space-y-2">
-            <div className="flex items-center space-x-2 font-bold text-forest">
-              <Server className="w-4 h-4 text-harvest-dark" />
-              <span>Production Stack</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 font-bold text-forest">
+                <Server className="w-4 h-4 text-harvest-dark" />
+                <span>Production Stack</span>
+              </div>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                health?.services.database.status === 'UP'
+                  ? 'bg-forest text-white'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                DB {health?.services.database.connectionStatus || health?.services.database.status || 'UP'}
+              </span>
             </div>
             <p className="text-[11px] text-charcoal-muted leading-relaxed">
               Java 21, Spring Boot 3.3.5, PostgreSQL 16 with Flyway schema versioning, React 19, TypeScript strict mode, and Docker containerization.
             </p>
             <div className="text-[10px] font-mono text-forest bg-white px-2 py-0.5 rounded border border-ivory-dark inline-block">
-              Flyway V2__phase2_schema
+              v{health?.version || '0.3.0-phase3'}
             </div>
           </div>
         </div>

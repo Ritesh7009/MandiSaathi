@@ -28,3 +28,4 @@ export const PromptChip: React.FC<PromptChipProps> = ({ text, onClick, langTag }
     </button>
   );
 };
+

@@ -39,3 +39,4 @@ class VoiceAssistantControllerTest {
                 .andExpect(jsonPath("$.engineNotice", containsString("Gnani Prisma v2.5")));
     }
 }
+

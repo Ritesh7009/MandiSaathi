@@ -59,3 +59,4 @@ export const AccordionItem: React.FC<AccordionItemProps> = ({
     </div>
   );
 };
+

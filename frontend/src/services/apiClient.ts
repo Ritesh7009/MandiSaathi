@@ -8,6 +8,7 @@ import {
   Complaint,
   ComplaintRequest,
   VoiceQueryResponse,
+  IngestionSummary,
   ApiError,
 } from '../types';
 
@@ -97,6 +98,11 @@ export const api = {
       body: JSON.stringify({ commodityCode, mandiCodes: mandiCodes || [] }),
     }),
 
+  syncMandiPrices: (): Promise<IngestionSummary> =>
+    fetchJson<IngestionSummary>('/api/v1/prices/sync', {
+      method: 'POST',
+    }),
+
   // Government Schemes
   getSchemes: (category?: string, search?: string): Promise<GovernmentScheme[]> => {
     const params = new URLSearchParams();
@@ -127,6 +133,45 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ queryText, language: language || 'hi' }),
     }),
+
+  sendVoiceAudio: async (audioBlob: Blob, language?: string): Promise<VoiceQueryResponse> => {
+    const url = `${API_BASE_URL}/api/v1/voice/audio`;
+    const formData = new FormData();
+    const extension = audioBlob.type.includes('wav') ? 'wav' : 'webm';
+    formData.append('audio', audioBlob, `voice_query.${extension}`);
+    if (language) {
+      formData.append('language', language);
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        let errorData: ApiError | undefined;
+        try {
+          errorData = await response.json();
+        } catch {
+          // Non-JSON
+        }
+        const message = errorData?.message || `HTTP ${response.status}: ${response.statusText}`;
+        throw new ApiClientError(response.status, message, errorData);
+      }
+
+      return (await response.json()) as VoiceQueryResponse;
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        throw err;
+      }
+      const message = err instanceof Error ? err.message : 'Audio upload failed';
+      throw new ApiClientError(0, `Cannot process audio query: ${message}`);
+    }
+  },
 };
 
 export { ApiClientError };

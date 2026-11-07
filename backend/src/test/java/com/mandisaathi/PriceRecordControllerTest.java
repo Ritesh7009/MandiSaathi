@@ -88,3 +88,4 @@ class PriceRecordControllerTest {
                 .andExpect(jsonPath("$.records", hasSize(1)));
     }
 }
+

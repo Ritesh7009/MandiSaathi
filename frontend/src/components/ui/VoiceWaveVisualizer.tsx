@@ -84,3 +84,4 @@ export const VoiceWaveVisualizer: React.FC<VoiceWaveVisualizerProps> = ({
     </div>
   );
 };
+

@@ -6,3 +6,4 @@ public record PriceComparisonRequest(
         String commodityCode,
         List<String> mandiCodes
 ) {}
+

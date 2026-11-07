@@ -13,9 +13,14 @@ public class GnaniSttStubService implements GnaniSttService {
 
     @Override
     public TranscriptionResult transcribe(byte[] audioData, String languageCode) {
-        log.info("Gnani STT Stub received audio payload ({} bytes, lang: {}). Returning stub transcription.",
+        log.info("Gnani STT Stub received audio payload ({} bytes, lang: {}). Returning offline stub transcription.",
                 audioData != null ? audioData.length : 0, languageCode);
-        return TranscriptionResult.success("गेहूं का भाव क्या है", languageCode != null ? languageCode : "hi-IN", 0.95);
+        String lang = languageCode != null ? languageCode : "hi-IN";
+        String sampleQuery = switch (lang.toLowerCase().substring(0, 2)) {
+            case "pa" -> "ਕਣਕ ਦਾ ਭਾਅ ਕੀ ਹੈ";
+            case "en" -> "What is the wheat price in mandi";
+            default -> "आज पंजाब में गेहूं का भाव क्या चल रहा है";
+        };
+        return TranscriptionResult.success(sampleQuery, lang, 0.95);
     }
 }
-
