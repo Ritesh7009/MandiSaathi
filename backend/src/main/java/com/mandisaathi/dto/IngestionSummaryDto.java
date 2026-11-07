@@ -11,3 +11,4 @@ public record IngestionSummaryDto(
         String message,
         Instant timestamp
 ) {}
+

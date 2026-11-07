@@ -65,12 +65,7 @@ public class GnaniTtsServiceImpl implements GnaniTtsService {
 
             byte[] audioBytes = restClient.post()
                     .uri(endpoint)
-                    .headers(headers -> {
-                        headers.set(gnaniProperties.getEffectiveAuthHeaderKey(), gnaniProperties.getEffectiveAuthHeaderValue());
-                        if (gnaniProperties.token() != null && !gnaniProperties.token().isBlank()) {
-                            headers.set("token", gnaniProperties.token());
-                        }
-                    })
+                    .headers(headers -> headers.set("X-API-Key-ID", gnaniProperties.apiKey()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(requestBody)
                     .retrieve()
@@ -121,3 +116,4 @@ public class GnaniTtsServiceImpl implements GnaniTtsService {
         }
     }
 }
+

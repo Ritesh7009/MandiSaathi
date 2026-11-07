@@ -5,3 +5,4 @@ public class GnaniApiException extends RuntimeException {
         super(message);
     }
 }
+

@@ -18,3 +18,4 @@ END $$;
 -- Add index on price_records for fast lookup by commodity, state, and price date
 CREATE INDEX IF NOT EXISTS idx_price_records_lookup
 ON price_records (commodity_code, price_date DESC);
+

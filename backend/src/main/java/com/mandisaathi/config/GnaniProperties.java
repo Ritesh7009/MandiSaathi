@@ -2,11 +2,15 @@ package com.mandisaathi.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Single-credential Gnani Voice AI configuration.
+ * Uses ONE GNANI_API_KEY for both Prisma STT and Timbre TTS scopes,
+ * authenticated via the documented X-API-Key-ID header.
+ */
 @ConfigurationProperties(prefix = "gnani")
 public record GnaniProperties(
         boolean enabled,
         String apiKey,
-        String token,
         String sttUrl,
         String ttsUrl,
         String sttModel,
@@ -43,21 +47,24 @@ public record GnaniProperties(
         }
     }
 
+    /**
+     * Returns true when Gnani integration is enabled and a non-blank API key is configured.
+     */
     public boolean isConfigured() {
-        return enabled && ((apiKey != null && !apiKey.isBlank()) || (token != null && !token.isBlank()));
+        return enabled && apiKey != null && !apiKey.isBlank();
     }
 
+    /**
+     * Documented Gnani API authentication header.
+     */
     public String getEffectiveAuthHeaderKey() {
-        return (apiKey != null && !apiKey.isBlank()) ? "X-API-Key-ID" : "Authorization";
+        return "X-API-Key-ID";
     }
 
+    /**
+     * Effective authentication key value.
+     */
     public String getEffectiveAuthHeaderValue() {
-        if (apiKey != null && !apiKey.isBlank()) {
-            return apiKey;
-        }
-        if (token != null && !token.isBlank()) {
-            return token.startsWith("Bearer ") ? token : "Bearer " + token;
-        }
-        return "";
+        return apiKey != null ? apiKey : "";
     }
 }

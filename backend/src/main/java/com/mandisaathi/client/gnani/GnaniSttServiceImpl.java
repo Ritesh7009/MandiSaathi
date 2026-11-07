@@ -70,12 +70,7 @@ public class GnaniSttServiceImpl implements GnaniSttService {
 
             String responseString = restClient.post()
                     .uri(endpoint)
-                    .headers(headers -> {
-                        headers.set(gnaniProperties.getEffectiveAuthHeaderKey(), gnaniProperties.getEffectiveAuthHeaderValue());
-                        if (gnaniProperties.token() != null && !gnaniProperties.token().isBlank()) {
-                            headers.set("token", gnaniProperties.token());
-                        }
-                    })
+                    .headers(headers -> headers.set("X-API-Key-ID", gnaniProperties.apiKey()))
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .body(body)
                     .retrieve()
@@ -131,3 +126,4 @@ public class GnaniSttServiceImpl implements GnaniSttService {
         }
     }
 }
+

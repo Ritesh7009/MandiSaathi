@@ -26,3 +26,4 @@ public record MandiDataProperties(
         return enabled && apiKey != null && !apiKey.isBlank();
     }
 }
+

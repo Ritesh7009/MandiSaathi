@@ -85,7 +85,9 @@ public class HealthService {
         ));
 
         // 5. Mandi Data Source Status
-        String mandiStatus = mandiDataIngestionService.getStatus();
+        String mandiStatus = (mandiDataIngestionService != null && mandiDataIngestionService.getStatus() != null)
+                ? mandiDataIngestionService.getStatus()
+                : "IDLE";
         services.put("mandiDataSource", Map.of(
                 "status", mandiStatus,
                 "source", "Agmarknet / data.gov.in (OGD)",
@@ -124,7 +126,7 @@ public class HealthService {
         try {
             int statusCode = restClient.get()
                     .uri(gnaniProperties.sttUrl())
-                    .headers(headers -> headers.set(gnaniProperties.getEffectiveAuthHeaderKey(), gnaniProperties.getEffectiveAuthHeaderValue()))
+                    .headers(headers -> headers.set("X-API-Key-ID", gnaniProperties.apiKey()))
                     .exchange((req, res) -> res.getStatusCode().value());
 
             // 405 Method Not Allowed or 400 Bad Request indicates endpoint is online and responsive
@@ -150,7 +152,7 @@ public class HealthService {
         try {
             int statusCode = restClient.get()
                     .uri(gnaniProperties.ttsUrl())
-                    .headers(headers -> headers.set(gnaniProperties.getEffectiveAuthHeaderKey(), gnaniProperties.getEffectiveAuthHeaderValue()))
+                    .headers(headers -> headers.set("X-API-Key-ID", gnaniProperties.apiKey()))
                     .exchange((req, res) -> res.getStatusCode().value());
 
             if (statusCode == 200 || statusCode == 405 || statusCode == 400) {
