@@ -67,4 +67,16 @@ class MandiDataIngestionServiceTest {
         assertFalse(status.recentRuns().isEmpty());
         assertEquals("MANUAL_SYNC", status.latestRun().triggeredBy());
     }
+
+    @Test
+    void testManualSyncRateLimitCooldown() {
+        IngestionSummaryDto first = ingestionService.ingestLatestMandiPrices("MANUAL_SYNC");
+        assertNotNull(first);
+
+        // Immediate subsequent call should be rate limited (cooldown active)
+        IngestionSummaryDto second = ingestionService.ingestLatestMandiPrices("MANUAL_SYNC");
+        assertNotNull(second);
+        assertEquals("THROTTLED", second.status());
+        assertTrue(second.message().contains("rate limited"));
+    }
 }

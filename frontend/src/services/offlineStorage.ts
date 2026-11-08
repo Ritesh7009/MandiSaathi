@@ -89,34 +89,38 @@ function getDb(): Promise<IDBDatabase> {
  */
 export async function savePriceRecords(records: PriceRecord[]): Promise<void> {
   if (!records || records.length === 0) return;
-  const db = await getDb();
-  const now = Date.now();
-  const syncIso = new Date(now).toISOString();
+  try {
+    const db = await getDb();
+    const now = Date.now();
+    const syncIso = new Date(now).toISOString();
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([STORE_PRICES, STORE_METADATA], 'readwrite');
-    const priceStore = tx.objectStore(STORE_PRICES);
-    const metaStore = tx.objectStore(STORE_METADATA);
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_PRICES, STORE_METADATA], 'readwrite');
+      const priceStore = tx.objectStore(STORE_PRICES);
+      const metaStore = tx.objectStore(STORE_METADATA);
 
-    for (const record of records) {
-      const cachedRecord: CachedPriceRecord = {
-        ...record,
-        cachedAt: now,
-        syncTimestamp: syncIso,
-      };
-      priceStore.put(cachedRecord);
-    }
+      for (const record of records) {
+        const cachedRecord: CachedPriceRecord = {
+          ...record,
+          cachedAt: now,
+          syncTimestamp: syncIso,
+        };
+        priceStore.put(cachedRecord);
+      }
 
-    metaStore.put({
-      key: 'last_price_sync',
-      timestamp: now,
-      iso: syncIso,
-      count: records.length,
+      metaStore.put({
+        key: 'last_price_sync',
+        timestamp: now,
+        iso: syncIso,
+        count: records.length,
+      });
+
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
-
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  } catch (err) {
+    console.warn('[MandiSaathi Offline] Could not persist to IndexedDB:', err);
+  }
 }
 
 /**
@@ -126,44 +130,54 @@ export async function getCachedPrices(
   commodityCode?: string,
   mandiCode?: string
 ): Promise<CachedQueryResult> {
-  const db = await getDb();
+  try {
+    const db = await getDb();
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction([STORE_PRICES, STORE_METADATA], 'readonly');
-    const priceStore = tx.objectStore(STORE_PRICES);
-    const metaStore = tx.objectStore(STORE_METADATA);
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_PRICES, STORE_METADATA], 'readonly');
+      const priceStore = tx.objectStore(STORE_PRICES);
+      const metaStore = tx.objectStore(STORE_METADATA);
 
-    const priceReq = priceStore.getAll();
-    const metaReq = metaStore.get('last_price_sync');
+      const priceReq = priceStore.getAll();
+      const metaReq = metaStore.get('last_price_sync');
 
-    tx.oncomplete = () => {
-      const allRecords = (priceReq.result || []) as CachedPriceRecord[];
-      const meta = metaReq.result as { timestamp: number } | undefined;
-      const lastSyncedAt = meta?.timestamp ?? (allRecords.length > 0 ? (allRecords[0]?.cachedAt ?? null) : null);
+      tx.oncomplete = () => {
+        const allRecords = (priceReq.result || []) as CachedPriceRecord[];
+        const meta = metaReq.result as { timestamp: number } | undefined;
+        const lastSyncedAt = meta?.timestamp ?? (allRecords.length > 0 ? (allRecords[0]?.cachedAt ?? null) : null);
 
-      let filtered = allRecords;
-      if (commodityCode) {
-        filtered = filtered.filter((r) => r.commodityCode.toUpperCase() === commodityCode.toUpperCase());
-      }
-      if (mandiCode) {
-        filtered = filtered.filter((r) => r.mandiCode.toUpperCase() === mandiCode.toUpperCase());
-      }
+        let filtered = allRecords;
+        if (commodityCode) {
+          filtered = filtered.filter((r) => r.commodityCode.toUpperCase() === commodityCode.toUpperCase());
+        }
+        if (mandiCode) {
+          filtered = filtered.filter((r) => r.mandiCode.toUpperCase() === mandiCode.toUpperCase());
+        }
 
-      // Sort by priceDate desc
-      filtered.sort((a, b) => (b.priceDate || '').localeCompare(a.priceDate || ''));
+        // Sort by priceDate desc
+        filtered.sort((a, b) => (b.priceDate || '').localeCompare(a.priceDate || ''));
 
-      const isStale = lastSyncedAt ? Date.now() - lastSyncedAt > STALE_THRESHOLD_MS : true;
+        const isStale = lastSyncedAt ? Date.now() - lastSyncedAt > STALE_THRESHOLD_MS : true;
 
-      resolve({
-        records: filtered,
-        lastSyncedAt,
-        isStale,
-        totalCached: allRecords.length,
-      });
+        resolve({
+          records: filtered,
+          lastSyncedAt,
+          isStale,
+          totalCached: allRecords.length,
+        });
+      };
+
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[MandiSaathi Offline] IndexedDB unavailable or corrupt:', err);
+    return {
+      records: [],
+      lastSyncedAt: null,
+      isStale: true,
+      totalCached: 0,
     };
-
-    tx.onerror = () => reject(tx.error);
-  });
+  }
 }
 
 /**

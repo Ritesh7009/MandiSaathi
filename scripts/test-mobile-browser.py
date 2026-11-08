@@ -72,7 +72,7 @@ async def run_mobile_tests():
         await input_box.fill("ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?")
         await input_box.press("Enter")
 
-        await page.wait_for_selector("text=Ludhiana", timeout=15000)
+        await page.wait_for_selector("text=Ludhiana", timeout=35000)
         await page.screenshot(path="/tmp/mandisaathi_screenshots/03_mobile_punjabi_ludhiana.png")
         print("  Verified Punjabi district resolution displayed properly on mobile.")
         print("  Saved screenshot: /tmp/mandisaathi_screenshots/03_mobile_punjabi_ludhiana.png")

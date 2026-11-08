@@ -327,7 +327,7 @@ docker compose ps
 MandiSaathi includes comprehensive automated test suites:
 
 ```bash
-# 1. Run all backend JUnit/MockMvc tests & frontend TypeScript checks
+# 1. Run all backend JUnit/MockMvc tests (39 tests) & frontend TypeScript checks
 ./scripts/test.sh
 
 # 2. Run Gnani AI upstream authentication verification
@@ -339,7 +339,10 @@ python3 scripts/test-mobile-browser.py
 # 4. Run Phase 4B PWA and IndexedDB offline verification suite
 python3 scripts/test-pwa-offline.py
 
-# 5. Compile full production JAR and Vite bundle
+# 5. Run Phase 4C complete 5-Farmer-Journeys verification suite
+python3 scripts/test-farmer-journeys.py
+
+# 6. Compile full production JAR and Vite bundle
 ./scripts/build.sh
 ```
 

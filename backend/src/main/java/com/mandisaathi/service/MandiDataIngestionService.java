@@ -43,6 +43,8 @@ public class MandiDataIngestionService {
     private final ObjectMapper objectMapper;
 
     private final AtomicBoolean isSyncRunning = new AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicReference<Instant> lastCompletedSync = new java.util.concurrent.atomic.AtomicReference<>(null);
+    private static final long MANUAL_SYNC_COOLDOWN_SECONDS = 10;
 
     private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
             DateTimeFormatter.ofPattern("dd/MM/yyyy"),
@@ -99,6 +101,19 @@ public class MandiDataIngestionService {
 
     @Transactional
     public IngestionSummaryDto ingestLatestMandiPrices(String triggeredBy) {
+        if ("MANUAL_SYNC".equalsIgnoreCase(triggeredBy)) {
+            Instant last = lastCompletedSync.get();
+            if (last != null && Instant.now().isBefore(last.plusSeconds(MANUAL_SYNC_COOLDOWN_SECONDS))) {
+                log.warn("Manual sync rate limited: please wait {} seconds between requests", MANUAL_SYNC_COOLDOWN_SECONDS);
+                return new IngestionSummaryDto(
+                        0, 0, 0, 0,
+                        "THROTTLED",
+                        "Manual synchronization rate limited: please wait " + MANUAL_SYNC_COOLDOWN_SECONDS + " seconds between requests.",
+                        Instant.now()
+                );
+            }
+        }
+
         if (!isSyncRunning.compareAndSet(false, true)) {
             log.warn("Ingestion skipped: another sync run is currently in progress");
             return new IngestionSummaryDto(
@@ -279,6 +294,7 @@ public class MandiDataIngestionService {
                     run.getCompletedAt()
             );
         } finally {
+            lastCompletedSync.set(Instant.now());
             isSyncRunning.set(false);
         }
     }
