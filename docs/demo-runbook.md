@@ -225,3 +225,4 @@ python3 scripts/test-farmer-journeys.py
 | **PostgreSQL 16** | `5433` | `localhost:5433/mandisaathi` | `docker logs mandisaathi-postgres` |
 | **Actuator Health** | `8080` | `http://localhost:8080/actuator/health` | HTTP JSON |
 | **API Health Probes** | `8080` | `http://localhost:8080/api/v1/health` | HTTP JSON |
+

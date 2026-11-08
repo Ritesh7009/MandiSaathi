@@ -39,3 +39,4 @@ This matrix maps MandiSaathi's implementation against the core evaluation criter
 | **Core Farmer Journeys** | `python3 scripts/test-farmer-journeys.py` | 5 | 100% (5/5) | **PASS** |
 | **Gnani Upstream API Connectivity** | `./scripts/verify-gnani.sh` | 2 | 100% (2/2) | **PASS** |
 | **Total Automated Assertions** | Combined Automated Verification | 56+ | 100% | **PASS** |
+
