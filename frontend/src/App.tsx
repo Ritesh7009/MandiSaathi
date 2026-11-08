@@ -9,14 +9,11 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { Footer } from './components/Footer';
 import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 
-// Screen Pages
+// Primary & Secondary Destination Pages
 import { Home } from './pages/Home';
-import { VoiceAssistant } from './pages/VoiceAssistant';
 import { PriceIntelligence } from './pages/PriceIntelligence';
 import { MandiComparison } from './pages/MandiComparison';
-import { GovernmentSchemes } from './pages/GovernmentSchemes';
-import { ComplaintRegistration } from './pages/ComplaintRegistration';
-import { Settings } from './pages/Settings';
+import { More } from './pages/More';
 import { NotFound } from './pages/NotFound';
 
 const queryClient = new QueryClient({
@@ -36,7 +33,7 @@ export const App: React.FC = () => {
         <LanguageProvider>
           <BrowserRouter>
             <div className="flex min-h-screen bg-ivory font-sans text-charcoal">
-              {/* Desktop Left Sidebar */}
+              {/* Desktop Compact 4-Destination Sidebar */}
               <Sidebar />
 
               {/* Main Content Viewport */}
@@ -44,21 +41,27 @@ export const App: React.FC = () => {
                 <Header />
                 <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-6 pb-20 lg:pb-8">
                   <Routes>
+                    {/* Primary 4 Destinations */}
                     <Route path="/" element={<Home />} />
-                    <Route path="/assistant" element={<VoiceAssistant />} />
-                    <Route path="/voice" element={<VoiceAssistant />} />
                     <Route path="/prices" element={<PriceIntelligence />} />
                     <Route path="/compare" element={<MandiComparison />} />
-                    <Route path="/schemes" element={<GovernmentSchemes />} />
-                    <Route path="/complaints" element={<ComplaintRegistration />} />
-                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/more" element={<More />} />
+
+                    {/* Preserved Backward-Compatible Deep Links */}
+                    <Route path="/assistant" element={<Home />} />
+                    <Route path="/voice" element={<Home />} />
+                    <Route path="/schemes" element={<More defaultTab="schemes" />} />
+                    <Route path="/complaints" element={<More defaultTab="complaints" />} />
+                    <Route path="/settings" element={<More defaultTab="settings" />} />
+
+                    {/* Fallback Catch-all */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </main>
                 <Footer />
               </div>
 
-              {/* Mobile Thumb-Zone Bottom Navigation */}
+              {/* Mobile 4-Item Thumb-Zone Navigation */}
               <MobileBottomNav />
 
               {/* PWA Floating Install Prompt */}

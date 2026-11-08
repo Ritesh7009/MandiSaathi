@@ -135,36 +135,40 @@ Rather than importing heavyweight UI libraries that could introduce bundle bloat
 All 14 comprehensive screenshots were captured using Playwright in headless Chromium at high-DPI scaling:
 
 ### 7.1 Desktop Screens (1440 × 900)
-1. **Home (`/`)**:  
+1. **Home with Voice Studio (`/`)**:  
    ![Desktop Home](/home/ritesh/Desktop/mandisaathi/docs/screenshots/01_desktop_home.png)
-2. **Voice Assistant (`/assistant`)**:  
+2. **Voice Assistant / Grounded Response (`/assistant`)**:  
    ![Desktop Voice Assistant](/home/ritesh/Desktop/mandisaathi/docs/screenshots/02_desktop_voice_assistant.png)
 3. **Price Intelligence (`/prices`)**:  
    ![Desktop Price Intelligence](/home/ritesh/Desktop/mandisaathi/docs/screenshots/03_desktop_price_intelligence.png)
 4. **Mandi Comparison (`/compare`)**:  
    ![Desktop Mandi Comparison](/home/ritesh/Desktop/mandisaathi/docs/screenshots/04_desktop_mandi_comparison.png)
-5. **Government Schemes (`/schemes`)**:  
-   ![Desktop Government Schemes](/home/ritesh/Desktop/mandisaathi/docs/screenshots/05_desktop_government_schemes.png)
-6. **Complaints (`/complaints`)**:  
-   ![Desktop Complaints](/home/ritesh/Desktop/mandisaathi/docs/screenshots/06_desktop_complaints.png)
-7. **Settings (`/settings`)**:  
-   ![Desktop Settings](/home/ritesh/Desktop/mandisaathi/docs/screenshots/07_desktop_settings.png)
+5. **More Hub (`/more`)**:  
+   ![Desktop More Hub](/home/ritesh/Desktop/mandisaathi/docs/screenshots/05_desktop_more_hub.png)
+6. **Government Schemes Tab (`/schemes`)**:  
+   ![Desktop Government Schemes](/home/ritesh/Desktop/mandisaathi/docs/screenshots/06_desktop_government_schemes.png)
+7. **Complaints Tab (`/complaints`)**:  
+   ![Desktop Complaints](/home/ritesh/Desktop/mandisaathi/docs/screenshots/07_desktop_complaints.png)
+8. **Settings Tab (`/settings`)**:  
+   ![Desktop Settings](/home/ritesh/Desktop/mandisaathi/docs/screenshots/08_desktop_settings.png)
 
 ### 7.2 Mobile Screens (Android Pixel 7: 412 × 915)
-8. **Mobile Home**:  
-   ![Mobile Home](/home/ritesh/Desktop/mandisaathi/docs/screenshots/08_mobile_home.png)
-9. **Mobile Voice Assistant**:  
-   ![Mobile Voice Assistant](/home/ritesh/Desktop/mandisaathi/docs/screenshots/09_mobile_voice_assistant.png)
-10. **Mobile Price Intelligence**:  
-    ![Mobile Price Intelligence](/home/ritesh/Desktop/mandisaathi/docs/screenshots/10_mobile_price_intelligence.png)
-11. **Mobile Mandi Comparison**:  
-    ![Mobile Mandi Comparison](/home/ritesh/Desktop/mandisaathi/docs/screenshots/11_mobile_mandi_comparison.png)
-12. **Mobile Government Schemes**:  
-    ![Mobile Government Schemes](/home/ritesh/Desktop/mandisaathi/docs/screenshots/12_mobile_government_schemes.png)
-13. **Mobile Complaints**:  
-    ![Mobile Complaints](/home/ritesh/Desktop/mandisaathi/docs/screenshots/13_mobile_complaints.png)
-14. **Mobile Settings**:  
-    ![Mobile Settings](/home/ritesh/Desktop/mandisaathi/docs/screenshots/14_mobile_settings.png)
+9. **Mobile Home**:  
+   ![Mobile Home](/home/ritesh/Desktop/mandisaathi/docs/screenshots/09_mobile_home.png)
+10. **Mobile Voice Assistant / Grounded Card**:  
+    ![Mobile Voice Assistant](/home/ritesh/Desktop/mandisaathi/docs/screenshots/10_mobile_voice_assistant.png)
+11. **Mobile Price Intelligence**:  
+    ![Mobile Price Intelligence](/home/ritesh/Desktop/mandisaathi/docs/screenshots/11_mobile_price_intelligence.png)
+12. **Mobile Mandi Comparison**:  
+    ![Mobile Mandi Comparison](/home/ritesh/Desktop/mandisaathi/docs/screenshots/12_mobile_mandi_comparison.png)
+13. **Mobile More Hub**:  
+    ![Mobile More Hub](/home/ritesh/Desktop/mandisaathi/docs/screenshots/13_mobile_more_hub.png)
+14. **Mobile Government Schemes**:  
+    ![Mobile Government Schemes](/home/ritesh/Desktop/mandisaathi/docs/screenshots/14_mobile_government_schemes.png)
+15. **Mobile Complaints**:  
+    ![Mobile Complaints](/home/ritesh/Desktop/mandisaathi/docs/screenshots/15_mobile_complaints.png)
+16. **Mobile Settings**:  
+    ![Mobile Settings](/home/ritesh/Desktop/mandisaathi/docs/screenshots/16_mobile_settings.png)
 
 ---
 

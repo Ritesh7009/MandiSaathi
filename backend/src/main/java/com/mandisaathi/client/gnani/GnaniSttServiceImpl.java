@@ -79,11 +79,11 @@ public class GnaniSttServiceImpl implements GnaniSttService {
                         String statusText = res.getStatusText();
                         log.error("Gnani STT upstream error: HTTP {} {}", status, statusText);
                         if (status == 401 || status == 403) {
-                            throw new GnaniApiException("Gnani AI authentication failure: Invalid API Key or Token.");
+                            throw new GnaniApiException("Gnani AI authentication failure: Invalid API Key or Token.", status);
                         } else if (status == 429) {
-                            throw new GnaniApiException("Gnani AI STT rate limit reached. Please retry in a few moments.");
+                            throw new GnaniApiException("Gnani AI STT rate limit reached. Please retry in a few moments.", 429);
                         } else {
-                            throw new GnaniApiException("Gnani AI STT upstream error (HTTP " + status + ").");
+                            throw new GnaniApiException("Gnani AI STT upstream error (HTTP " + status + ").", status);
                         }
                     })
                     .body(String.class);

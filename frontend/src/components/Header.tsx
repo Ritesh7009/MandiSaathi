@@ -75,8 +75,8 @@ export const Header: React.FC = () => {
             <span className="text-[11px] font-mono hidden sm:inline">A+</span>
           </button>
 
-          {/* Mobile Language Selector */}
-          <div className="flex lg:hidden items-center space-x-0.5 bg-ivory-dark/60 p-0.5 rounded-lg border border-hairline">
+          {/* Language Selector (Always visible for multi-dialect access) */}
+          <div className="flex items-center space-x-0.5 bg-ivory-dark/60 p-0.5 rounded-lg border border-hairline">
             <Globe className="w-3 h-3 text-forest ml-1 mr-0.5" />
             {languages.map((l) => (
               <button

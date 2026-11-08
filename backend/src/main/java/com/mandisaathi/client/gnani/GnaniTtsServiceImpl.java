@@ -47,62 +47,77 @@ public class GnaniTtsServiceImpl implements GnaniTtsService {
         log.info("Dispatching TTS synthesis (text chars: {}, lang: {}, voice: {}, model: {}) to Gnani Timbre",
                 text.length(), targetLang, voice, gnaniProperties.ttsModel());
 
-        try {
-            Map<String, Object> audioConfig = new HashMap<>();
-            audioConfig.put("sample_rate", 22050);
-            audioConfig.put("num_channels", 1);
-            audioConfig.put("sample_width", 2);
-            audioConfig.put("encoding", "linear_pcm");
-            audioConfig.put("container", "wav");
+        int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                Map<String, Object> audioConfig = new HashMap<>();
+                audioConfig.put("sample_rate", 22050);
+                audioConfig.put("num_channels", 1);
+                audioConfig.put("sample_width", 2);
+                audioConfig.put("encoding", "linear_pcm");
+                audioConfig.put("container", "wav");
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("text", text);
-            requestBody.put("voice", voice);
-            requestBody.put("model", gnaniProperties.ttsModel());
-            requestBody.put("language", targetLang);
-            requestBody.put("speed", 1.0);
-            requestBody.put("audio_config", audioConfig);
+                Map<String, Object> requestBody = new HashMap<>();
+                requestBody.put("text", text);
+                requestBody.put("voice", voice);
+                requestBody.put("model", gnaniProperties.ttsModel());
+                requestBody.put("language", targetLang);
+                requestBody.put("speed", 1.0);
+                requestBody.put("audio_config", audioConfig);
 
-            byte[] audioBytes = restClient.post()
-                    .uri(endpoint)
-                    .headers(headers -> headers.set("X-API-Key-ID", gnaniProperties.apiKey()))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, res) -> {
-                        int status = res.getStatusCode().value();
-                        String statusText = res.getStatusText();
-                        log.error("Gnani TTS upstream error: HTTP {} {}", status, statusText);
-                        if (status == 401 || status == 403) {
-                            throw new GnaniApiException("Gnani AI authentication failure: Invalid API Key or Token.");
-                        } else if (status == 429) {
-                            throw new GnaniApiException("Gnani AI TTS rate limit reached. Please retry in a few moments.");
-                        } else {
-                            throw new GnaniApiException("Gnani AI TTS upstream error (HTTP " + status + ").");
-                        }
-                    })
-                    .body(byte[].class);
+                byte[] audioBytes = restClient.post()
+                        .uri(endpoint)
+                        .headers(headers -> headers.set("X-API-Key-ID", gnaniProperties.apiKey()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(requestBody)
+                        .retrieve()
+                        .onStatus(HttpStatusCode::isError, (req, res) -> {
+                            int status = res.getStatusCode().value();
+                            String statusText = res.getStatusText();
+                            log.error("Gnani TTS upstream error: HTTP {} {}", status, statusText);
+                            if (status == 401 || status == 403) {
+                                throw new GnaniApiException("Gnani AI authentication failure: Invalid API Key or Token.", status);
+                            } else if (status == 429) {
+                                throw new GnaniApiException("Gnani AI TTS rate limit reached. Please retry in a few moments.", 429);
+                            } else {
+                                throw new GnaniApiException("Gnani AI TTS upstream error (HTTP " + status + ").", status);
+                            }
+                        })
+                        .body(byte[].class);
 
-            if (audioBytes == null || audioBytes.length == 0) {
-                log.warn("Gnani TTS returned empty audio bytes");
-                return SynthesisResult.failure("Empty audio stream received from Gnani Timbre engine.");
+                if (audioBytes == null || audioBytes.length == 0) {
+                    log.warn("Gnani TTS returned empty audio bytes");
+                    return SynthesisResult.failure("Empty audio stream received from Gnani Timbre engine.");
+                }
+
+                log.info("Gnani Timbre TTS synthesized {} bytes of audio/wav successfully", audioBytes.length);
+                return SynthesisResult.success(audioBytes, "audio/wav", targetLang);
+
+            } catch (GnaniApiException ex) {
+                if (ex.getStatusCode() == 429 && attempt < maxAttempts) {
+                    long backoffMs = 1500L * attempt;
+                    log.warn("Gnani TTS rate limited (429). Retrying attempt {}/{} after {}ms backoff...", attempt + 1, maxAttempts, backoffMs);
+                    try {
+                        Thread.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return SynthesisResult.failure("TTS synthesis interrupted during backoff.");
+                    }
+                    continue;
+                }
+                return SynthesisResult.failure(ex.getMessage());
+            } catch (ResourceAccessException ex) {
+                log.error("Gnani TTS network connection timed out: {}", ex.getMessage());
+                return SynthesisResult.failure("Gnani AI TTS service timed out. Check network connection.");
+            } catch (RestClientResponseException ex) {
+                log.error("Gnani TTS HTTP exception: status {}", ex.getStatusCode().value());
+                return SynthesisResult.failure("Gnani TTS service error: HTTP " + ex.getStatusCode().value());
+            } catch (Exception ex) {
+                log.error("Unexpected error in Gnani TTS synthesis: {}", ex.getMessage());
+                return SynthesisResult.failure("Unable to synthesize speech audio: " + ex.getMessage());
             }
-
-            log.info("Gnani Timbre TTS synthesized {} bytes of audio/wav successfully", audioBytes.length);
-            return SynthesisResult.success(audioBytes, "audio/wav", targetLang);
-
-        } catch (GnaniApiException ex) {
-            return SynthesisResult.failure(ex.getMessage());
-        } catch (ResourceAccessException ex) {
-            log.error("Gnani TTS network connection timed out: {}", ex.getMessage());
-            return SynthesisResult.failure("Gnani AI TTS service timed out. Check network connection.");
-        } catch (RestClientResponseException ex) {
-            log.error("Gnani TTS HTTP exception: status {}", ex.getStatusCode().value());
-            return SynthesisResult.failure("Gnani TTS service error: HTTP " + ex.getStatusCode().value());
-        } catch (Exception ex) {
-            log.error("Unexpected error in Gnani TTS synthesis: {}", ex.getMessage());
-            return SynthesisResult.failure("Unable to synthesize speech audio: " + ex.getMessage());
         }
+        return SynthesisResult.failure("Gnani AI TTS rate limit reached after retries.");
     }
 
     private String resolveVoice(String languageCode, String voiceGender) {

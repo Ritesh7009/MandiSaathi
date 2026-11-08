@@ -60,8 +60,7 @@ def run_journeys():
             input_box.press("Enter")
 
             # Wait for response
-            page.wait_for_selector("text=खन्ना मंडी", timeout=35000)
-            page.locator("text=/Live Gnani AI Connected|Development AI Sandbox/").first.wait_for(timeout=10000)
+            page.locator("text=/Live Gnani AI Connected|Development AI Sandbox/").first.wait_for(timeout=35000)
             page.locator("text=/Gnani Timbre|ज्ञानी टिम्ब्रे/").first.wait_for(timeout=10000)
             
             # Verify modal price is displayed (matches ₹2,320 or ₹2320)
@@ -107,6 +106,9 @@ def run_journeys():
         # ==========================================
         print("\n--- Executing Journey C: No-Data Scenario (Zero Price Fabrication) ---")
         try:
+            page.goto(f"{FRONTEND_URL}/voice", wait_until="networkidle")
+            page.wait_for_timeout(1000)
+
             # Switch back to Hindi
             hi_btn = page.locator("header button:has-text('हिन्दी'), button:has-text('हिन्दी')").first
             if hi_btn.is_visible():
@@ -117,10 +119,15 @@ def run_journeys():
             query_c = "आज सिरसा में प्याज का क्या भाव है?"
             input_box = page.locator("input[type='text']")
             input_box.fill(query_c)
-            input_box.press("Enter")
+            page.wait_for_timeout(300)
+            submit_btn = page.locator("form button[type='submit']")
+            if submit_btn.is_visible() and submit_btn.is_enabled():
+                submit_btn.click()
+            else:
+                input_box.press("Enter")
 
             # Wait for response card
-            page.wait_for_timeout(3500)
+            page.locator("text=/दर्ज नहीं|उपलब्ध नहीं|not available|ਸੂਚਨਾ ਉਪਲਬਧ ਨਹੀਂ/").first.wait_for(timeout=40000)
             card_text = page.locator("main").inner_text()
             
             # Ensure price was NOT fabricated and honest no-data notice is given

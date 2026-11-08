@@ -12,13 +12,14 @@ OUTPUT_DIR = "/home/ritesh/Desktop/mandisaathi/docs/screenshots"
 BASE_URL = "http://localhost:5173"
 
 SCREENS = [
-    ("home", "/", "01_desktop_home.png", "08_mobile_home.png"),
-    ("assistant", "/assistant", "02_desktop_voice_assistant.png", "09_mobile_voice_assistant.png"),
-    ("prices", "/prices", "03_desktop_price_intelligence.png", "10_mobile_price_intelligence.png"),
-    ("compare", "/compare", "04_desktop_mandi_comparison.png", "11_mobile_mandi_comparison.png"),
-    ("schemes", "/schemes", "05_desktop_government_schemes.png", "12_mobile_government_schemes.png"),
-    ("complaints", "/complaints", "06_desktop_complaints.png", "13_mobile_complaints.png"),
-    ("settings", "/settings", "07_desktop_settings.png", "14_mobile_settings.png"),
+    ("home", "/", "01_desktop_home.png", "09_mobile_home.png"),
+    ("assistant", "/assistant", "02_desktop_voice_assistant.png", "10_mobile_voice_assistant.png"),
+    ("prices", "/prices", "03_desktop_price_intelligence.png", "11_mobile_price_intelligence.png"),
+    ("compare", "/compare", "04_desktop_mandi_comparison.png", "12_mobile_mandi_comparison.png"),
+    ("more", "/more", "05_desktop_more_hub.png", "13_mobile_more_hub.png"),
+    ("schemes", "/schemes", "06_desktop_government_schemes.png", "14_mobile_government_schemes.png"),
+    ("complaints", "/complaints", "07_desktop_complaints.png", "15_mobile_complaints.png"),
+    ("settings", "/settings", "08_desktop_settings.png", "16_mobile_settings.png"),
 ]
 
 def main():
