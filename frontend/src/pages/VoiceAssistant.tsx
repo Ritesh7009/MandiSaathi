@@ -18,6 +18,7 @@ import {
   Play,
   Pause,
   Repeat,
+  Volume2,
 } from 'lucide-react';
 import { VoiceQueryResponse, RecentConversation, PriceRecord } from '../types';
 
@@ -56,7 +57,7 @@ export const VoiceAssistant: React.FC = () => {
     'आज गेहूं का भाव क्या है?',
     'ਲੁਧਿਆਣਾ ਮੰਡੀ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?',
     'What documents are needed for PM-KISAN?',
-    'सरसों का मॉडल भाव क्या है?',
+    'आज सिरसा में सरसों का क्या भाव है?',
   ];
 
   // Auto-run if query param is passed
@@ -140,7 +141,6 @@ export const VoiceAssistant: React.FC = () => {
         };
         updateLevel();
       } catch {
-        // Fallback if AudioContext is restricted
         setAudioLevel(0.5);
       }
 
@@ -155,43 +155,31 @@ export const VoiceAssistant: React.FC = () => {
       }
 
       const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
       };
 
       recorder.onstop = async () => {
-        // Stop audio tracks
-        stream.getTracks().forEach((t) => t.stop());
-        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-        setAudioLevel(0);
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        await handleAudioProcessing(audioBlob);
 
-        const recordedBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        if (recordedBlob.size > 0) {
-          await submitAudioBlob(recordedBlob);
-        } else {
-          setState('idle');
-        }
+        // Stop all audio stream tracks
+        stream.getTracks().forEach((track) => track.stop());
       };
 
-      mediaRecorderRef.current = recorder;
-      recorder.start(250); // Slice into 250ms chunks
-
-      // Auto stop after 7 seconds max to prevent runaway recording
-      setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          stopAudioRecording();
-        }
-      }, 7000);
+      recorder.start(250);
     } catch (err: unknown) {
-      if (err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+      const errorObj = err as { name?: string; message?: string };
+      if (errorObj.name === 'NotAllowedError' || errorObj.name === 'PermissionDeniedError') {
         setState('permission_denied');
       } else {
         setState('error');
-        setErrorMessage(t('micPermissionError'));
+        setErrorMessage(errorObj.message || 'Microphone initialization failed.');
       }
     }
   };
@@ -199,55 +187,66 @@ export const VoiceAssistant: React.FC = () => {
   const stopAudioRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
+      setState('transcribing');
     }
   };
 
-  // Submit audio blob to Gnani Prisma STT backend
-  const submitAudioBlob = async (blob: Blob) => {
-    setState('transcribing');
+  // Submit Audio Blob to Backend
+  const handleAudioProcessing = async (blob: Blob) => {
     try {
-      const res = await api.sendVoiceAudio(blob, language);
-      setTranscription(res.transcript);
-      setResponse(res);
-      setState('answered');
-      saveConversation(res.transcript, res.responseText, res.detectedLanguage);
+      setState('processing');
+      const langParam = language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-IN';
+      const result = await api.sendVoiceAudio(blob, langParam);
 
-      // Play audio response (Gnani Timbre synthesized audio or browser fallback)
-      playAudioResponse(res);
-    } catch (err) {
+      setTranscription(result.transcript);
+      setResponse(result);
+      setState('answered');
+
+      saveConversation(result.transcript, result.responseText, result.detectedLanguage);
+
+      if (result.audioBase64) {
+        playAudioResponse(result);
+      }
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
       setState('error');
-      setErrorMessage(err instanceof Error ? err.message : 'Voice audio processing failed');
+      setErrorMessage(errorObj.message || 'Failed to process voice query.');
     }
   };
 
-  // Execute text query fallback
+  // Execute fallback text query
   const executeTextQuery = async (queryText: string) => {
     if (!queryText.trim()) return;
-    setTranscription(queryText);
-    setResponse(null);
+
     setErrorMessage(null);
-    stopAudioPlayback();
+    setTranscription(queryText);
     setState('processing');
+    stopAudioPlayback();
 
     try {
-      const res = await api.sendVoiceQuery(queryText, language);
-      setResponse(res);
-      setState('answered');
-      saveConversation(queryText, res.responseText, res.detectedLanguage);
+      const langParam = language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-IN';
+      const result = await api.sendVoiceQuery(queryText.trim(), langParam);
 
-      playAudioResponse(res);
-    } catch (err) {
+      setResponse(result);
+      setState('answered');
+
+      saveConversation(queryText, result.responseText, result.detectedLanguage);
+
+      if (result.audioBase64) {
+        playAudioResponse(result);
+      }
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
       setState('error');
-      setErrorMessage(err instanceof Error ? err.message : 'Voice query failed');
+      setErrorMessage(errorObj.message || 'Failed to process query.');
     }
   };
 
-  // Audio Playback Handling: Gnani Timbre Base64 WAV or Browser Speech Synthesis Fallback
+  // Playback Gnani Timbre Audio
   const playAudioResponse = (res: VoiceQueryResponse) => {
     stopAudioPlayback();
 
     if (res.audioBase64) {
-      // Play real audio synthesized by Gnani Timbre TTS
       try {
         const audioSrc = `data:audio/wav;base64,${res.audioBase64}`;
         const audio = new Audio(audioSrc);
@@ -256,37 +255,33 @@ export const VoiceAssistant: React.FC = () => {
         audio.onplay = () => setIsPlayingAudio(true);
         audio.onended = () => setIsPlayingAudio(false);
         audio.onerror = () => {
-          // If WAV decode fails, fall back to browser synthesis
-          speakResponseFallback(res.responseText, res.detectedLanguage);
+          setIsPlayingAudio(false);
+          fallbackWebSpeech(res.responseText);
         };
 
         audio.play().catch(() => {
-          // Autoplay was prevented by browser policy, user can tap play button
-          setIsPlayingAudio(false);
+          fallbackWebSpeech(res.responseText);
         });
-        return;
       } catch {
-        // Fall back
+        fallbackWebSpeech(res.responseText);
       }
+    } else {
+      fallbackWebSpeech(res.responseText);
     }
-
-    // Local browser speech synthesis fallback
-    speakResponseFallback(res.responseText, res.detectedLanguage);
   };
 
-  const speakResponseFallback = (text: string, langCode: string) => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = langCode || (language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-IN');
-    utterance.rate = 0.95;
-
-    utterance.onstart = () => setIsPlayingAudio(true);
-    utterance.onend = () => setIsPlayingAudio(false);
-    utterance.onerror = () => setIsPlayingAudio(false);
-
-    window.speechSynthesis.speak(utterance);
+  // Web Speech API client fallback
+  const fallbackWebSpeech = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-IN';
+      utterance.rate = 0.95;
+      utterance.onstart = () => setIsPlayingAudio(true);
+      utterance.onend = () => setIsPlayingAudio(false);
+      utterance.onerror = () => setIsPlayingAudio(false);
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   const stopAudioPlayback = () => {
@@ -295,7 +290,7 @@ export const VoiceAssistant: React.FC = () => {
       audioElementRef.current.currentTime = 0;
       audioElementRef.current = null;
     }
-    if (window.speechSynthesis) {
+    if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setIsPlayingAudio(false);
@@ -323,56 +318,57 @@ export const VoiceAssistant: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 lg:pb-8">
-      {/* Header */}
-      <div className="bg-white border border-ivory-dark rounded-md p-5 shadow-subtle">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-forest text-harvest">
-                PHASE 3: GNANI AI & AGMARKNET
-              </span>
-              <h2 className="text-lg sm:text-xl font-bold text-charcoal">{t('voiceTitle')}</h2>
-            </div>
-            <p className="text-xs sm:text-sm text-charcoal-muted mt-1">{t('voiceSubtitle')}</p>
+      {/* Screen Header */}
+      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
+            <Volume2 className="w-3.5 h-3.5 text-harvest-dark" />
+            <span>Dedicated Voice Interface</span>
           </div>
-
-          <div className="flex items-center space-x-2 text-xs text-charcoal-muted">
-            <Globe className="w-3.5 h-3.5 text-forest" />
-            <span>Target Dialect:</span>
-            <span className="font-semibold text-charcoal uppercase bg-ivory px-2 py-0.5 rounded border border-ivory-dark">
-              {language === 'hi' ? 'हिन्दी (hi-IN)' : language === 'pa' ? 'ਪੰਜਾਬੀ (pa-IN)' : 'English (en-IN)'}
-            </span>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
+            {t('voiceTitle')}
+          </h1>
+          <p className="text-xs sm:text-sm text-charcoal-muted mt-0.5">
+            {t('voiceSubtitle')}
+          </p>
         </div>
-      </div>
+
+        <div className="flex items-center space-x-2 text-xs text-charcoal-muted self-start sm:self-center">
+          <Globe className="w-3.5 h-3.5 text-forest" />
+          <span>Active Dialect:</span>
+          <span className="font-semibold text-charcoal uppercase bg-surface px-2.5 py-1 rounded-md border border-hairline font-mono text-[11px]">
+            {language === 'hi' ? 'हिन्दी (hi-IN)' : language === 'pa' ? 'ਪੰਜਾਬੀ (pa-IN)' : 'English (en-IN)'}
+          </span>
+        </div>
+      </section>
 
       {/* Main Voice Interactive Canvas */}
-      <div className="bg-white border border-ivory-dark rounded-md p-6 sm:p-8 shadow-subtle text-center">
-        {/* State Label */}
+      <section className="rounded-2xl border border-hairline bg-surface-white p-6 sm:p-10 shadow-card text-center relative overflow-hidden">
+        {/* Status Indicator Pill */}
         <div className="mb-4">
           <span
-            className={`inline-flex items-center space-x-1.5 text-xs font-semibold px-3 py-1 rounded-full ${
+            className={`inline-flex items-center space-x-2 text-xs font-semibold px-3.5 py-1.5 rounded-full transition-all duration-200 ${
               state === 'recording'
-                ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse'
+                ? 'bg-red-50 text-red-700 border border-red-200 shadow-sm animate-pulse'
                 : state === 'transcribing'
                 ? 'bg-amber-50 text-amber-800 border border-amber-300 animate-pulse'
                 : state === 'processing'
-                ? 'bg-harvest-50 text-forest-dark border border-harvest/40'
+                ? 'bg-forest-50 text-forest border border-forest/20'
                 : state === 'answered'
                 ? 'bg-forest-50 text-forest border border-forest/20'
                 : state === 'error' || state === 'permission_denied'
                 ? 'bg-red-50 text-red-700 border border-red-200'
-                : 'bg-ivory text-charcoal-muted border border-ivory-dark'
+                : 'bg-surface text-charcoal-muted border border-hairline'
             }`}
           >
             <span
               className={`w-2 h-2 rounded-full ${
                 state === 'recording'
-                  ? 'bg-red-600'
+                  ? 'bg-red-600 animate-ping'
                   : state === 'transcribing'
                   ? 'bg-amber-500'
                   : state === 'processing'
-                  ? 'bg-harvest-dark'
+                  ? 'bg-forest'
                   : state === 'answered'
                   ? 'bg-forest'
                   : state === 'permission_denied'
@@ -406,12 +402,12 @@ export const VoiceAssistant: React.FC = () => {
         />
 
         {/* Big Interactive Action Button */}
-        <div className="my-6">
+        <div className="my-6 flex justify-center">
           {state === 'recording' ? (
             <button
               type="button"
               onClick={stopAudioRecording}
-              className="inline-flex items-center space-x-2 px-6 py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+              className="inline-flex items-center space-x-2.5 px-7 py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Square className="w-4 h-4 fill-white" />
               <span>Stop & Process Voice</span>
@@ -421,9 +417,9 @@ export const VoiceAssistant: React.FC = () => {
               type="button"
               onClick={startAudioRecording}
               disabled={state === 'transcribing' || state === 'processing'}
-              className="inline-flex items-center space-x-2.5 px-8 py-4 rounded-full bg-forest hover:bg-forest-dark text-harvest font-bold text-base shadow-md transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center space-x-3 px-8 py-4 rounded-full bg-forest hover:bg-forest-light text-harvest font-bold text-base shadow-voice transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
             >
-              <Mic className="w-5 h-5 stroke-[2.4]" />
+              <Mic className="w-5 h-5 stroke-[2.4] text-harvest" />
               <span>{state === 'answered' ? t('tryAgain') : t('micIdle')}</span>
             </button>
           )}
@@ -431,24 +427,26 @@ export const VoiceAssistant: React.FC = () => {
 
         {/* Real-time / Completed Transcription Display */}
         {transcription && (
-          <div className="max-w-xl mx-auto my-4 p-3.5 bg-ivory/60 rounded border border-ivory-dark text-left">
-            <div className="flex items-center justify-between mb-1">
+          <div className="max-w-xl mx-auto my-4 p-4 bg-surface rounded-xl border border-hairline text-left shadow-subtle">
+            <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-semibold text-charcoal-muted uppercase tracking-wider">
                 {t('transcriptionLabel')}
               </span>
               {response?.detectedLanguage && (
-                <span className="text-[10px] font-mono text-forest bg-forest/10 px-2 py-0.5 rounded font-medium">
+                <span className="text-[10px] font-mono text-forest bg-forest-50 px-2 py-0.5 rounded border border-forest/20 font-medium">
                   {response.detectedLanguage}
                 </span>
               )}
             </div>
-            <p className="text-sm font-medium text-charcoal">"{transcription}"</p>
+            <p className="text-sm font-semibold text-charcoal leading-relaxed">
+              "{transcription}"
+            </p>
           </div>
         )}
 
         {/* Answer Box */}
         {response && state === 'answered' && (
-          <div className="max-w-2xl mx-auto mt-6 p-5 sm:p-6 bg-forest-50/50 rounded-md border border-forest/30 text-left space-y-4">
+          <div className="max-w-2xl mx-auto mt-6 p-5 sm:p-6 bg-forest-50/50 rounded-xl border border-forest/25 text-left space-y-4 shadow-subtle">
             {/* Header of Response Box */}
             <div className="flex items-center justify-between border-b border-forest/20 pb-3 flex-wrap gap-2">
               <div className="flex items-center space-x-2">
@@ -457,7 +455,7 @@ export const VoiceAssistant: React.FC = () => {
                   {t('responseLabel')}
                 </span>
                 {response.intent && response.intent !== 'UNKNOWN' && (
-                  <span className="text-[10px] font-semibold bg-white border border-forest/30 text-forest-dark px-2 py-0.5 rounded">
+                  <span className="text-[10px] font-semibold bg-surface-white border border-forest/25 text-forest-dark px-2 py-0.5 rounded font-mono">
                     {response.intent}
                   </span>
                 )}
@@ -465,7 +463,7 @@ export const VoiceAssistant: React.FC = () => {
 
               {/* Spoken Audio Controls */}
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] sm:text-[11px] text-charcoal-muted">
+                <span className="text-[11px] text-charcoal-muted">
                   {response.audioBase64
                     ? (response.isLiveGnaniConnected ? t('audioSourceGnani') : t('audioSourceSandbox'))
                     : t('audioSourceBrowser')}
@@ -474,10 +472,10 @@ export const VoiceAssistant: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleAudioPlayback}
-                  className={`inline-flex items-center space-x-1 px-3 py-1 text-xs font-medium rounded transition-colors cursor-pointer ${
+                  className={`inline-flex items-center space-x-1 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                     isPlayingAudio
                       ? 'bg-red-100 text-red-800 border border-red-300'
-                      : 'bg-forest text-white hover:bg-forest-light'
+                      : 'bg-forest text-white hover:bg-forest-light shadow-subtle'
                   }`}
                 >
                   {isPlayingAudio ? (
@@ -497,7 +495,7 @@ export const VoiceAssistant: React.FC = () => {
                   type="button"
                   onClick={() => playAudioResponse(response)}
                   title="Replay Audio"
-                  className="p-1 text-charcoal-muted hover:text-forest bg-white border border-forest/20 rounded cursor-pointer"
+                  className="p-1 text-charcoal-muted hover:text-forest bg-surface-white border border-forest/20 rounded-lg cursor-pointer"
                 >
                   <Repeat className="w-3.5 h-3.5" />
                 </button>
@@ -513,7 +511,7 @@ export const VoiceAssistant: React.FC = () => {
                 {Object.entries(response.extractedEntities).map(([key, val]) => (
                   <span
                     key={key}
-                    className="inline-flex items-center space-x-1 text-[11px] font-medium bg-white border border-forest/25 text-charcoal px-2 py-0.5 rounded"
+                    className="inline-flex items-center space-x-1 text-[11px] font-medium bg-surface-white border border-forest/25 text-charcoal px-2 py-0.5 rounded-md"
                   >
                     <Tag className="w-3 h-3 text-forest" />
                     <span>
@@ -537,23 +535,23 @@ export const VoiceAssistant: React.FC = () => {
                     <CheckCircle className="w-3.5 h-3.5 text-forest" />
                     <span>{t('mandiRateCardTitle')}</span>
                   </span>
-                  <span className="text-[10px] text-charcoal-muted bg-white px-2 py-0.5 rounded border border-forest/15 font-mono">
+                  <span className="text-[10px] text-charcoal-muted bg-surface-white px-2 py-0.5 rounded border border-forest/15 font-mono">
                     {response.source || 'Agmarknet (data.gov.in)'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {response.priceRecords.map((rec) => (
                     <div
                       key={rec.id}
-                      className="bg-white p-3 rounded border border-forest/20 shadow-xs flex flex-col justify-between"
+                      className="bg-surface-white p-3.5 rounded-xl border border-forest/20 shadow-subtle flex flex-col justify-between"
                     >
                       <div>
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-bold text-charcoal">
+                          <span className="font-bold text-charcoal text-sm">
                             {getRecordCommodityName(rec)}
                           </span>
-                          <span className="text-[11px] text-charcoal-muted">
+                          <span className="text-[10px] text-charcoal-muted font-mono">
                             {rec.priceDate}
                           </span>
                         </div>
@@ -562,19 +560,19 @@ export const VoiceAssistant: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="pt-2 border-t border-ivory-dark flex items-baseline justify-between">
+                      <div className="pt-2 border-t border-hairline flex items-baseline justify-between">
                         <div>
-                          <span className="text-[10px] text-charcoal-muted uppercase block">
+                          <span className="text-[10px] text-charcoal-muted uppercase block font-semibold">
                             Modal Rate
                           </span>
-                          <span className="text-base font-bold text-forest">
+                          <span className="text-lg font-bold text-forest tnum font-mono">
                             ₹{rec.modalPrice.toLocaleString('en-IN')}{' '}
                             <span className="text-[11px] font-normal text-charcoal-muted">
                               / {rec.unit || 'Quintal'}
                             </span>
                           </span>
                         </div>
-                        <div className="text-right text-[11px] text-charcoal-muted">
+                        <div className="text-right text-[11px] text-charcoal-muted font-mono">
                           <div>Min: ₹{rec.minPrice}</div>
                           <div>Max: ₹{rec.maxPrice}</div>
                         </div>
@@ -607,7 +605,7 @@ export const VoiceAssistant: React.FC = () => {
                       key={i}
                       type="button"
                       onClick={() => executeTextQuery(rq)}
-                      className="text-xs px-2.5 py-1 rounded bg-white hover:bg-forest-50 border border-forest/20 text-forest-dark font-medium transition-colors cursor-pointer"
+                      className="text-xs px-2.5 py-1 rounded-full bg-surface-white hover:bg-forest-50 border border-forest/20 text-forest-dark font-medium transition-colors cursor-pointer"
                     >
                       {rq}
                     </button>
@@ -620,7 +618,7 @@ export const VoiceAssistant: React.FC = () => {
 
         {/* Permission Denied UI Guide */}
         {state === 'permission_denied' && (
-          <div className="max-w-xl mx-auto my-4 p-4 bg-amber-50 border border-amber-300 rounded text-left space-y-2">
+          <div className="max-w-xl mx-auto my-4 p-4 bg-amber-50 border border-amber-300 rounded-xl text-left space-y-2">
             <div className="flex items-center space-x-2 text-amber-900 font-bold text-sm">
               <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
               <span>{t('permissionDeniedTitle')}</span>
@@ -632,14 +630,14 @@ export const VoiceAssistant: React.FC = () => {
               <button
                 type="button"
                 onClick={startAudioRecording}
-                className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded text-xs font-semibold cursor-pointer"
+                className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Retry Microphone
               </button>
               <button
                 type="button"
                 onClick={() => setState('idle')}
-                className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 rounded text-xs font-semibold cursor-pointer"
+                className="px-3 py-1.5 bg-surface-white border border-amber-300 text-amber-900 rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Use Text Input Below
               </button>
@@ -649,7 +647,7 @@ export const VoiceAssistant: React.FC = () => {
 
         {/* Error Notification */}
         {errorMessage && state === 'error' && (
-          <div className="max-w-xl mx-auto my-4 p-4 bg-red-50 border border-red-200 rounded text-left flex items-start space-x-3 text-red-800 text-xs">
+          <div className="max-w-xl mx-auto my-4 p-4 bg-red-50 border border-red-200 rounded-xl text-left flex items-start space-x-3 text-red-800 text-xs">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
             <div className="flex-1">
               <span className="font-semibold block mb-0.5">Voice Gateway Notice</span>
@@ -667,10 +665,10 @@ export const VoiceAssistant: React.FC = () => {
             </button>
           </div>
         )}
-      </div>
+      </section>
 
       {/* Fallback Text Input Form */}
-      <div className="bg-white border border-ivory-dark rounded-md p-4 sm:p-5 shadow-subtle">
+      <section className="rounded-xl border border-hairline bg-surface-white p-4 sm:p-5 shadow-subtle">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -683,12 +681,12 @@ export const VoiceAssistant: React.FC = () => {
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             placeholder={t('typeQueryPlaceholder')}
-            className="flex-1 px-4 py-2.5 text-xs sm:text-sm bg-ivory border border-ivory-dark rounded focus:outline-none focus:ring-1 focus:ring-forest text-charcoal"
+            className="flex-1 px-4 py-2.5 text-xs sm:text-sm bg-surface border border-hairline rounded-lg focus:outline-none focus:ring-1 focus:ring-forest text-charcoal"
           />
           <button
             type="submit"
             disabled={!textInput.trim() || state === 'transcribing' || state === 'processing'}
-            className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded bg-forest hover:bg-forest-light text-white text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-lg bg-forest hover:bg-forest-light text-white text-xs sm:text-sm font-semibold transition-all disabled:opacity-50 cursor-pointer shadow-subtle active:scale-[0.98]"
           >
             <Send className="w-4 h-4 text-harvest" />
             <span>{t('sendTextQuery')}</span>
@@ -696,7 +694,7 @@ export const VoiceAssistant: React.FC = () => {
         </form>
 
         {/* Quick prompt suggestions */}
-        <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-ivory-dark">
+        <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-hairline">
           {suggestedQuestions.map((q, idx) => (
             <button
               key={idx}
@@ -705,27 +703,27 @@ export const VoiceAssistant: React.FC = () => {
                 setTextInput(q);
                 executeTextQuery(q);
               }}
-              className="text-[11px] px-2.5 py-1 rounded bg-ivory hover:bg-ivory-dark/70 text-charcoal font-medium transition-colors cursor-pointer"
+              className="text-[11px] px-2.5 py-1 rounded-full bg-surface hover:bg-forest-50 border border-hairline text-charcoal font-medium transition-colors cursor-pointer"
             >
               {q}
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* Gnani Prisma / Timbre Architecture Status Disclosure */}
-      <div className="bg-ivory/80 border border-ivory-dark rounded-md p-4 flex items-start space-x-3 text-xs text-charcoal">
+      {/* Gnani Architecture Status Disclosure */}
+      <footer className="rounded-xl border border-hairline bg-surface p-4 flex items-start space-x-3 text-xs text-charcoal">
         <Info className="w-4 h-4 text-forest shrink-0 mt-0.5" />
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <span className="font-bold text-forest-dark">{t('gnaniNoticeTitle')}</span>
-            <span className="text-[10px] bg-harvest-50 text-forest-dark border border-harvest/40 px-1.5 py-0.2 rounded font-semibold">
+            <span className="text-[10px] bg-forest-50 text-forest border border-forest/20 px-1.5 py-0.2 rounded font-semibold font-mono">
               {t('gnaniDemoBadge')}
             </span>
           </div>
           <p className="text-charcoal-muted leading-relaxed">{t('gnaniNoticeText')}</p>
         </div>
-      </div>
+      </footer>
     </div>
   );
 };

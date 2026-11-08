@@ -11,8 +11,8 @@ interface MetricTileProps {
 }
 
 /**
- * Adapted from Cult UI:
- * Refined metric indicator with subtle border highlight, status badge, and clean typography.
+ * Editorial AgriTech Metric Block
+ * High-density, tabular numeric presentation inspired by Linear and Apple.
  */
 export const MetricTile: React.FC<MetricTileProps> = ({
   label,
@@ -25,41 +25,42 @@ export const MetricTile: React.FC<MetricTileProps> = ({
 }) => {
   const borderClass =
     variant === 'forest'
-      ? 'border-forest/30 bg-forest-50/40'
+      ? 'border-forest/20 bg-forest-50/50'
       : variant === 'harvest'
-      ? 'border-harvest/50 bg-harvest-50/50'
-      : 'border-ivory-dark bg-white';
+      ? 'border-harvest/30 bg-harvest-50/40'
+      : 'border-hairline bg-surface';
 
-  const valueClass =
+  const valueColor =
     variant === 'forest'
-      ? 'text-forest font-bold'
+      ? 'text-forest'
       : variant === 'harvest'
-      ? 'text-harvest-dark font-bold'
-      : 'text-charcoal font-bold';
+      ? 'text-harvest-600'
+      : 'text-charcoal';
 
   return (
     <div
-      className={`rounded-md border p-4 transition-all hover:border-forest/50 hover:shadow-subtle ${borderClass}`}
+      className={`rounded-xl border p-4 transition-all duration-150 hover:border-forest/30 ${borderClass}`}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="text-[11px] font-semibold text-charcoal-muted uppercase tracking-wider">
           {label}
         </span>
         {badge && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-forest-50 text-forest border border-forest/20">
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-forest-100/60 text-forest border border-forest/20 font-mono">
             {badge}
           </span>
         )}
-        {icon && !badge && <div className="text-forest-light">{icon}</div>}
+        {icon && !badge && <div className="text-forest-light shrink-0">{icon}</div>}
       </div>
 
       <div className="flex items-baseline space-x-1.5">
-        <span className={`text-2xl tracking-tight ${valueClass}`}>{value}</span>
+        <span className={`text-2xl font-bold tracking-tight tnum font-mono ${valueColor}`}>
+          {value}
+        </span>
         {unit && <span className="text-xs font-medium text-charcoal-muted">{unit}</span>}
       </div>
 
-      {subtext && <p className="mt-1.5 text-xs text-charcoal-muted font-normal">{subtext}</p>}
+      {subtext && <p className="mt-1 text-xs text-charcoal-muted leading-relaxed">{subtext}</p>}
     </div>
   );
 };
-

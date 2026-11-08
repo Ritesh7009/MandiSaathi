@@ -3,10 +3,48 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --app-bg: #F5F3EA;
+    --app-text: #1B2620;
+  }
+
   body {
-    background-color: #F5F3EA;
-    color: #25352C;
+    background-color: var(--app-bg);
+    color: var(--app-text);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Universal Tabular Figures for currency & statistics */
+  .tnum,
+  .tabular-nums {
+    font-feature-settings: "tnum" 1, "zero" 1;
+    font-variant-numeric: tabular-nums;
   }
 }
 
+/* Custom minimal scrollbar for tables & lists */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(37, 53, 44, 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 53, 44, 0.3);
+}
+
+/* Accessible focus ring */
+*:focus-visible {
+  outline: 2px solid #174B35;
+  outline-offset: 2px;
+}

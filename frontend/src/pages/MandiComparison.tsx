@@ -137,34 +137,32 @@ export const MandiComparison: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8">
-      {/* Header */}
-      <div className="bg-white border border-ivory-dark rounded-md p-5 sm:p-6 shadow-subtle">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
-              <Scale className="w-4 h-4 text-harvest-dark" />
-              <span>{t('compareTitle')}</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
-              {t('compareTitle')}
-            </h1>
-            <p className="text-xs sm:text-sm text-charcoal-muted mt-1 max-w-2xl">
-              {t('compareSubtitle')}
-            </p>
+      {/* Screen Header */}
+      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
+            <Scale className="w-3.5 h-3.5 text-harvest-dark" />
+            <span>{t('compareTitle')}</span>
           </div>
-
-          <div className="flex items-center space-x-2 text-xs font-mono bg-ivory border border-ivory-dark px-3 py-1.5 rounded text-charcoal-muted self-start sm:self-center">
-            <ArrowRightLeft className="w-4 h-4 text-forest" />
-            <span>Multi-Market Arbitrage Intelligence</span>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
+            {t('compareTitle')}
+          </h1>
+          <p className="text-xs sm:text-sm text-charcoal-muted mt-0.5 max-w-2xl">
+            {t('compareSubtitle')}
+          </p>
         </div>
-      </div>
 
-      {/* Control Panel: Commodity & Multi-Mandi Selector (Watermelon UI toolbar) */}
-      <div className="bg-white border border-ivory-dark rounded-md p-5 shadow-subtle space-y-4">
+        <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
+          <ArrowRightLeft className="w-3.5 h-3.5 text-forest" />
+          <span>Cross-Mandi Arbitrage Analysis</span>
+        </div>
+      </section>
+
+      {/* Control Panel: Commodity Choice & Mandi Multi-Selector */}
+      <section className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle space-y-4">
         {/* Commodity Choice */}
         <div>
-          <label className="block text-xs font-semibold text-charcoal uppercase tracking-wider mb-2">
+          <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-2">
             1. {t('pickCommodityToCompare')}
           </label>
           <div className="flex flex-wrap gap-2">
@@ -175,10 +173,10 @@ export const MandiComparison: React.FC = () => {
                   key={c.code}
                   type="button"
                   onClick={() => setSelectedCommodity(c.code)}
-                  className={`flex items-center space-x-2 px-3 py-1.5 rounded text-xs font-semibold border transition-all ${
+                  className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-150 cursor-pointer ${
                     isSelected
-                      ? 'bg-forest text-white border-forest shadow-xs'
-                      : 'bg-ivory text-charcoal border-ivory-dark hover:bg-ivory-dark'
+                      ? 'bg-forest text-white border-forest shadow-subtle'
+                      : 'bg-surface text-charcoal border-hairline hover:bg-forest-50/50'
                   }`}
                 >
                   <Wheat className={`w-3.5 h-3.5 ${isSelected ? 'text-harvest' : 'text-charcoal-muted'}`} />
@@ -190,12 +188,12 @@ export const MandiComparison: React.FC = () => {
         </div>
 
         {/* Mandi Multi-Selector */}
-        <div className="pt-2 border-t border-ivory-dark">
+        <div className="pt-3 border-t border-hairline">
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-xs font-semibold text-charcoal uppercase tracking-wider">
-              2. Select Mandis ({selectedMandis.length} selected)
+            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">
+              2. Select Mandis ({selectedMandis.length} SELECTED)
             </label>
-            <span className="text-[11px] text-charcoal-muted">
+            <span className="text-[11px] text-charcoal-muted font-mono">
               Choose 2 or more to compare
             </span>
           </div>
@@ -208,45 +206,45 @@ export const MandiComparison: React.FC = () => {
                   key={m.code}
                   type="button"
                   onClick={() => toggleMandiSelection(m.code)}
-                  className={`flex items-center justify-between p-2 rounded text-left border transition-all ${
+                  className={`flex items-center justify-between p-2.5 rounded-lg text-left border transition-all duration-150 cursor-pointer ${
                     isSelected
-                      ? 'bg-forest/5 border-forest text-forest font-semibold'
-                      : 'bg-white border-ivory-dark text-charcoal hover:bg-ivory/60'
+                      ? 'bg-forest-50/60 border-forest text-forest font-semibold shadow-subtle'
+                      : 'bg-surface-white border-hairline text-charcoal hover:bg-surface'
                   }`}
                 >
-                  <div className="truncate mr-1">
+                  <div className="truncate mr-1.5">
                     <div className="text-xs truncate">{getMandiName(m)}</div>
                     <div className="text-[10px] text-charcoal-muted truncate">
                       {m.district}, {m.state}
                     </div>
                   </div>
                   <div
-                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border ${
+                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border transition-all ${
                       isSelected
                         ? 'bg-forest text-white border-forest'
-                        : 'border-charcoal/20 bg-white'
+                        : 'border-hairline-dark bg-surface-white'
                     }`}
                   >
-                    {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                    {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                   </div>
                 </button>
               );
             })}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Notice if less than 2 mandis are selected */}
       {selectedMandis.length < 2 && (
-        <div className="bg-harvest/10 border border-harvest rounded-md p-4 flex items-center space-x-3 text-xs text-charcoal">
-          <AlertCircle className="w-5 h-5 text-harvest-dark shrink-0" />
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-center space-x-3 text-xs text-charcoal shadow-subtle">
+          <AlertCircle className="w-5 h-5 text-amber-700 shrink-0" />
           <span>{t('selectTwoMandisNotice')}</span>
         </div>
       )}
 
       {/* Loading state */}
       {loadingComparison && (
-        <div className="bg-white border border-ivory-dark rounded-md p-10 flex justify-center">
+        <div className="rounded-xl border border-hairline bg-surface-white p-12 flex justify-center shadow-subtle">
           <LoadingSpinner />
         </div>
       )}
@@ -259,7 +257,7 @@ export const MandiComparison: React.FC = () => {
         />
       )}
 
-      {/* Summary Metrics (Cult UI Pattern) */}
+      {/* Summary Metrics & Analytics */}
       {!loadingComparison && !errorComparison && analytics && analytics.best && analytics.count > 0 && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -283,7 +281,7 @@ export const MandiComparison: React.FC = () => {
               value={`₹${analytics.spread.toLocaleString('en-IN')}`}
               unit="Gain / Quintal"
               variant="harvest"
-              badge="Cross-Mandi Differential"
+              badge="Differential"
               icon={<ArrowRightLeft className="w-4 h-4 text-forest" />}
             />
 
@@ -296,12 +294,12 @@ export const MandiComparison: React.FC = () => {
             />
           </div>
 
-          {/* Multilingual Summary Callout */}
+          {/* Multilingual Advisory Callout */}
           {summaryText && (
-            <div className="bg-forest-50 border border-forest/20 rounded-md p-4 text-xs text-forest-dark flex items-start space-x-3">
+            <div className="rounded-xl bg-forest-50 border border-forest/20 p-4 text-xs text-forest-dark flex items-start space-x-3 shadow-subtle">
               <TrendingUp className="w-4 h-4 text-forest shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <span className="font-bold uppercase tracking-wider text-[11px] text-forest">
+                <span className="font-bold uppercase tracking-wider text-[10px] text-forest">
                   Market Intelligence Advisory
                 </span>
                 <p className="text-xs text-charcoal leading-relaxed font-medium">
@@ -313,7 +311,7 @@ export const MandiComparison: React.FC = () => {
 
           {/* Recharts Bar Chart Comparison */}
           {chartData.length >= 2 && (
-            <div className="bg-white border border-ivory-dark rounded-md p-5 shadow-subtle">
+            <section className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-bold text-charcoal">
@@ -323,7 +321,7 @@ export const MandiComparison: React.FC = () => {
                     {t('historicalNote')}
                   </p>
                 </div>
-                <div className="text-[11px] font-mono text-charcoal-muted bg-ivory px-2.5 py-1 rounded border border-ivory-dark">
+                <div className="text-[11px] font-mono text-charcoal-muted bg-surface px-2.5 py-1 rounded-md border border-hairline">
                   Unit: ₹ / Quintal
                 </div>
               </div>
@@ -331,16 +329,16 @@ export const MandiComparison: React.FC = () => {
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#EBE7D8" vertical={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E8E5DC" vertical={false} />
                     <XAxis
                       dataKey="name"
-                      tick={{ fill: '#25352C', fontSize: 11, fontWeight: 500 }}
-                      axisLine={{ stroke: '#EBE7D8' }}
+                      tick={{ fill: '#1B2620', fontSize: 11, fontWeight: 500 }}
+                      axisLine={{ stroke: '#E8E5DC' }}
                       tickLine={false}
                     />
                     <YAxis
-                      tick={{ fill: '#52665b', fontSize: 11 }}
-                      axisLine={{ stroke: '#EBE7D8' }}
+                      tick={{ fill: '#5A6B62', fontSize: 11 }}
+                      axisLine={{ stroke: '#E8E5DC' }}
                       tickLine={false}
                       domain={['auto', 'auto']}
                     />
@@ -349,18 +347,18 @@ export const MandiComparison: React.FC = () => {
                         if (active && payload && payload.length && payload[0]?.payload) {
                           const data = payload[0].payload;
                           return (
-                            <div className="bg-white border border-ivory-dark p-3 rounded shadow-md text-xs space-y-1">
-                              <div className="font-bold text-forest-dark">{data.name}</div>
+                            <div className="bg-surface-white border border-hairline p-3 rounded-lg shadow-float text-xs space-y-1">
+                              <div className="font-bold text-forest">{data.name}</div>
                               <div className="text-[11px] text-charcoal-muted">{data.location}</div>
-                              <div className="pt-1.5 border-t border-ivory-dark space-y-0.5">
-                                <div className="text-forest font-semibold">
+                              <div className="pt-1.5 border-t border-hairline space-y-0.5">
+                                <div className="text-forest font-semibold tnum font-mono">
                                   Modal Price: ₹{data.modal?.toLocaleString('en-IN')} / qtl
                                 </div>
-                                <div className="text-charcoal-muted">
-                                  Min - Max: ₹{data.min?.toLocaleString('en-IN')} - ₹{data.max?.toLocaleString('en-IN')}
+                                <div className="text-charcoal-muted tnum font-mono">
+                                  Min – Max: ₹{data.min?.toLocaleString('en-IN')} – ₹{data.max?.toLocaleString('en-IN')}
                                 </div>
-                                <div className="text-[10px] text-charcoal-muted pt-0.5">
-                                  Date: {data.date}
+                                <div className="text-[10px] text-charcoal-muted pt-0.5 font-mono">
+                                  Auction Date: {data.date}
                                 </div>
                               </div>
                             </div>
@@ -378,22 +376,22 @@ export const MandiComparison: React.FC = () => {
                         </span>
                       )}
                     />
-                    <Bar dataKey="min" fill="#78917E" radius={[3, 3, 0, 0]} name="min" maxBarSize={36} />
-                    <Bar dataKey="modal" fill="#174B35" radius={[3, 3, 0, 0]} name="modal" maxBarSize={36} />
-                    <Bar dataKey="max" fill="#D7B66A" radius={[3, 3, 0, 0]} name="max" maxBarSize={36} />
+                    <Bar dataKey="min" fill="#78917E" radius={[4, 4, 0, 0]} name="min" maxBarSize={32} />
+                    <Bar dataKey="modal" fill="#174B35" radius={[4, 4, 0, 0]} name="modal" maxBarSize={32} />
+                    <Bar dataKey="max" fill="#D7B66A" radius={[4, 4, 0, 0]} name="max" maxBarSize={32} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Side-by-Side Comparison Matrix (Watermelon UI Table) */}
-          <div className="bg-white border border-ivory-dark rounded-md overflow-hidden shadow-subtle">
-            <div className="px-5 py-4 border-b border-ivory-dark flex items-center justify-between">
+          {/* Side-by-Side Comparison Matrix */}
+          <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
+            <div className="px-5 py-4 border-b border-hairline flex items-center justify-between">
               <h2 className="text-sm font-bold text-charcoal">
                 Comparative Rate Breakdown
               </h2>
-              <span className="text-xs text-charcoal-muted flex items-center space-x-1">
+              <span className="text-xs text-charcoal-muted flex items-center space-x-1 font-mono">
                 <ShieldCheck className="w-3.5 h-3.5 text-forest" />
                 <span>Agmarknet Verified</span>
               </span>
@@ -402,7 +400,7 @@ export const MandiComparison: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-ivory border-b border-ivory-dark text-charcoal-muted uppercase text-[11px] font-semibold">
+                  <tr className="bg-surface border-b border-hairline text-charcoal-subtle uppercase text-[10px] font-semibold tracking-wider">
                     <th className="py-3 px-4">Mandi Market</th>
                     <th className="py-3 px-4">State & District</th>
                     <th className="py-3 px-4 text-right">Min Rate</th>
@@ -412,7 +410,7 @@ export const MandiComparison: React.FC = () => {
                     <th className="py-3 px-4 text-center">Filing Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-ivory-dark text-charcoal">
+                <tbody className="divide-y divide-hairline text-charcoal">
                   {comparison?.records?.map((r) => {
                     const mandiName =
                       language === 'hi'
@@ -428,7 +426,7 @@ export const MandiComparison: React.FC = () => {
                       <tr
                         key={r.id}
                         className={`transition-colors ${
-                          isBest ? 'bg-forest-50/60 font-medium' : 'hover:bg-ivory/50'
+                          isBest ? 'bg-forest-50/50 font-medium' : 'hover:bg-surface'
                         }`}
                       >
                         <td className="py-3 px-4">
@@ -436,7 +434,7 @@ export const MandiComparison: React.FC = () => {
                             <MapPin className="w-3.5 h-3.5 text-harvest-dark shrink-0" />
                             <span className="font-semibold text-charcoal">{mandiName}</span>
                             {isBest && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-harvest text-forest-dark uppercase">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-forest text-harvest uppercase font-mono">
                                 Best Rate
                               </span>
                             )}
@@ -445,16 +443,16 @@ export const MandiComparison: React.FC = () => {
                         <td className="py-3 px-4 text-charcoal-muted">
                           {r.district}, {r.state}
                         </td>
-                        <td className="py-3 px-4 text-right font-mono text-charcoal-muted">
+                        <td className="py-3 px-4 text-right font-mono text-charcoal-muted tnum">
                           ₹{r.minPrice.toLocaleString('en-IN')}
                         </td>
-                        <td className="py-3 px-4 text-right font-mono font-bold text-forest text-sm">
+                        <td className="py-3 px-4 text-right font-mono font-bold text-forest text-sm bg-forest-50/30 tnum">
                           ₹{r.modalPrice.toLocaleString('en-IN')}
                         </td>
-                        <td className="py-3 px-4 text-right font-mono text-charcoal-muted">
+                        <td className="py-3 px-4 text-right font-mono text-charcoal-muted tnum">
                           ₹{r.maxPrice.toLocaleString('en-IN')}
                         </td>
-                        <td className="py-3 px-4 text-right font-mono">
+                        <td className="py-3 px-4 text-right font-mono tnum">
                           {isBest ? (
                             <span className="text-forest font-bold">—</span>
                           ) : (
@@ -472,16 +470,16 @@ export const MandiComparison: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
         </div>
       )}
 
-      {/* Empty State when no records exist for selected combination */}
+      {/* Empty State */}
       {!loadingComparison &&
         !errorComparison &&
         selectedMandis.length >= 2 &&
         (!comparison || comparison.records.length === 0) && (
-          <div className="bg-white border border-ivory-dark rounded-md p-8 text-center max-w-xl mx-auto shadow-subtle">
+          <div className="rounded-xl border border-hairline bg-surface-white p-8 text-center max-w-xl mx-auto shadow-subtle">
             <Wheat className="w-10 h-10 text-charcoal-muted mx-auto mb-2" />
             <h3 className="font-bold text-charcoal text-base mb-1">
               No Comparison Data Available
@@ -495,7 +493,7 @@ export const MandiComparison: React.FC = () => {
                 setSelectedCommodity('WHEAT');
                 setSelectedMandis(['KHANNA_PB', 'SIRSA_HR', 'KARNAL_HR']);
               }}
-              className="px-3.5 py-1.5 bg-forest text-white text-xs font-semibold rounded hover:bg-forest-light transition-colors"
+              className="px-4 py-2 bg-forest text-white text-xs font-semibold rounded-lg hover:bg-forest-light transition-all shadow-subtle cursor-pointer"
             >
               Reset to Active Wheat Mandis
             </button>

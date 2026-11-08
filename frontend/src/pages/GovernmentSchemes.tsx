@@ -99,31 +99,29 @@ export const GovernmentSchemes: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8">
-      {/* Page Header */}
-      <div className="bg-white border border-ivory-dark rounded-md p-5 sm:p-6 shadow-subtle">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
-              <Landmark className="w-4 h-4 text-harvest-dark" />
-              <span>{t('schemesTitle')}</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
-              {t('schemesTitle')}
-            </h1>
-            <p className="text-xs sm:text-sm text-charcoal-muted mt-1 max-w-2xl">
-              {t('schemesSubtitle')}
-            </p>
+      {/* Screen Header */}
+      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
+            <Landmark className="w-3.5 h-3.5 text-harvest-dark" />
+            <span>Government Welfare Directory</span>
           </div>
-
-          <div className="flex items-center space-x-2 text-xs font-mono bg-ivory border border-ivory-dark px-3 py-1.5 rounded text-charcoal-muted self-start sm:self-center">
-            <ShieldCheck className="w-4 h-4 text-forest" />
-            <span>Official Government Verified Data</span>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
+            {t('schemesTitle')}
+          </h1>
+          <p className="text-xs sm:text-sm text-charcoal-muted mt-0.5 max-w-2xl">
+            {t('schemesSubtitle')}
+          </p>
         </div>
-      </div>
+
+        <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
+          <ShieldCheck className="w-3.5 h-3.5 text-forest" />
+          <span>Official Portal Directory</span>
+        </div>
+      </section>
 
       {/* Search & Category Filter Toolbar */}
-      <div className="bg-white border border-ivory-dark rounded-md p-4 sm:p-5 shadow-subtle space-y-4">
+      <section className="rounded-xl border border-hairline bg-surface-white p-4 shadow-subtle space-y-3">
         {/* Search Input */}
         <div className="relative">
           <Search className="w-4 h-4 text-charcoal-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -132,13 +130,13 @@ export const GovernmentSchemes: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder={t('searchSchemesPlaceholder')}
-            className="w-full pl-10 pr-4 py-2.5 bg-ivory border border-ivory-dark rounded text-xs text-charcoal placeholder-charcoal-muted/60 focus:outline-none focus:border-forest"
+            className="w-full pl-10 pr-12 py-2.5 bg-surface border border-hairline rounded-lg text-xs text-charcoal placeholder-charcoal-subtle focus:outline-none focus:border-forest"
           />
           {searchTerm && (
             <button
               type="button"
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal-muted hover:text-charcoal text-xs"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal-muted hover:text-charcoal text-xs cursor-pointer"
             >
               Clear
             </button>
@@ -146,8 +144,8 @@ export const GovernmentSchemes: React.FC = () => {
         </div>
 
         {/* Category Pills */}
-        <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-ivory-dark">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-hairline">
+          <div className="flex flex-wrap gap-1.5">
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
               return (
@@ -155,10 +153,10 @@ export const GovernmentSchemes: React.FC = () => {
                   key={cat.id}
                   type="button"
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded text-xs font-semibold border transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-150 cursor-pointer ${
                     isSelected
-                      ? 'bg-forest text-white border-forest shadow-xs'
-                      : 'bg-ivory text-charcoal border-ivory-dark hover:bg-ivory-dark'
+                      ? 'bg-forest text-white border-forest shadow-subtle'
+                      : 'bg-surface text-charcoal border-hairline hover:bg-forest-50/50'
                   }`}
                 >
                   {t(cat.labelKey)}
@@ -171,18 +169,18 @@ export const GovernmentSchemes: React.FC = () => {
             <button
               type="button"
               onClick={handleClearFilters}
-              className="text-xs text-forest hover:text-forest-dark font-semibold flex items-center space-x-1"
+              className="text-xs text-forest hover:text-forest-dark font-semibold flex items-center space-x-1 cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>{t('filterReset')}</span>
             </button>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Loading & Error States */}
       {isLoading && (
-        <div className="bg-white border border-ivory-dark rounded-md p-10 flex justify-center">
+        <div className="rounded-xl border border-hairline bg-surface-white p-12 flex justify-center shadow-subtle">
           <LoadingSpinner />
         </div>
       )}
@@ -194,7 +192,7 @@ export const GovernmentSchemes: React.FC = () => {
         />
       )}
 
-      {/* Scheme Accordion List (Adapted from Motion Primitives) */}
+      {/* Scheme Accordion List */}
       {!isLoading && !isError && schemes.length > 0 && (
         <div className="space-y-3">
           {schemes.map((scheme, idx) => (
@@ -214,9 +212,9 @@ export const GovernmentSchemes: React.FC = () => {
                 </div>
 
                 {/* Eligibility Criteria */}
-                <div className="bg-white border border-ivory-dark rounded p-3.5 space-y-1.5">
+                <div className="bg-surface-white border border-hairline rounded-lg p-4 space-y-1.5 shadow-subtle">
                   <div className="flex items-center space-x-1.5 font-bold text-forest text-xs uppercase tracking-wider">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-forest" />
                     <span>{t('schemeEligibility')}</span>
                   </div>
                   <p className="text-charcoal leading-relaxed">
@@ -227,7 +225,7 @@ export const GovernmentSchemes: React.FC = () => {
                 {/* Documents & Application Steps Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* Required Documents */}
-                  <div className="bg-white border border-ivory-dark rounded p-3.5 space-y-2">
+                  <div className="bg-surface-white border border-hairline rounded-lg p-4 space-y-2 shadow-subtle">
                     <div className="flex items-center space-x-1.5 font-bold text-charcoal text-xs uppercase tracking-wider">
                       <FileText className="w-3.5 h-3.5 text-harvest-dark" />
                       <span>{t('schemeDocuments')}</span>
@@ -238,7 +236,7 @@ export const GovernmentSchemes: React.FC = () => {
                   </div>
 
                   {/* Application Steps */}
-                  <div className="bg-white border border-ivory-dark rounded p-3.5 space-y-2">
+                  <div className="bg-surface-white border border-hairline rounded-lg p-4 space-y-2 shadow-subtle">
                     <div className="flex items-center space-x-1.5 font-bold text-charcoal text-xs uppercase tracking-wider">
                       <ListOrdered className="w-3.5 h-3.5 text-forest" />
                       <span>{t('schemeApplication')}</span>
@@ -250,8 +248,8 @@ export const GovernmentSchemes: React.FC = () => {
                 </div>
 
                 {/* Footer with Verified Provenance & Official Portal Button */}
-                <div className="pt-2 border-t border-ivory-dark/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center space-x-1.5 text-[11px] text-charcoal-muted">
+                <div className="pt-2 border-t border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center space-x-1.5 text-[11px] text-charcoal-muted font-mono">
                     <Calendar className="w-3.5 h-3.5 text-forest" />
                     <span>
                       {t('verifiedOn')}: {scheme.verifiedDate}
@@ -262,7 +260,7 @@ export const GovernmentSchemes: React.FC = () => {
                     href={scheme.officialUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-1.5 bg-forest hover:bg-forest-light text-white text-xs font-semibold rounded shadow-xs transition-colors"
+                    className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 bg-forest hover:bg-forest-light text-white text-xs font-semibold rounded-lg shadow-subtle transition-all cursor-pointer active:scale-[0.98]"
                   >
                     <span>{t('officialPortalBtn')}</span>
                     <ExternalLink className="w-3 h-3 text-harvest" />
@@ -276,7 +274,7 @@ export const GovernmentSchemes: React.FC = () => {
 
       {/* Empty State */}
       {!isLoading && !isError && schemes.length === 0 && (
-        <div className="bg-white border border-ivory-dark rounded-md p-8 text-center max-w-xl mx-auto shadow-subtle">
+        <div className="rounded-xl border border-hairline bg-surface-white p-8 text-center max-w-xl mx-auto shadow-subtle">
           <Landmark className="w-10 h-10 text-charcoal-muted mx-auto mb-2" />
           <h3 className="font-bold text-charcoal text-base mb-1">
             No Schemes Found
@@ -287,7 +285,7 @@ export const GovernmentSchemes: React.FC = () => {
           <button
             type="button"
             onClick={handleClearFilters}
-            className="px-3.5 py-1.5 bg-forest text-white text-xs font-semibold rounded hover:bg-forest-light transition-colors"
+            className="px-4 py-2 bg-forest text-white text-xs font-semibold rounded-lg hover:bg-forest-light transition-all shadow-subtle cursor-pointer"
           >
             {t('filterReset')}
           </button>
@@ -296,4 +294,3 @@ export const GovernmentSchemes: React.FC = () => {
     </div>
   );
 };
-

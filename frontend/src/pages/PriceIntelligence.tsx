@@ -27,6 +27,7 @@ import {
   WifiOff,
   Database,
   AlertCircle,
+  Filter,
 } from 'lucide-react';
 import { IngestionSummary, PriceRecord } from '../types';
 
@@ -216,7 +217,7 @@ export const PriceIntelligence: React.FC = () => {
       {!isOnline && (
         <div
           data-testid="offline-alert-banner"
-          className="p-4 bg-amber-50 border-2 border-amber-300 rounded-lg text-amber-900 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in"
+          className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 shadow-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in"
         >
           <div className="flex items-start sm:items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-amber-200/80 flex items-center justify-center shrink-0">
@@ -232,134 +233,135 @@ export const PriceIntelligence: React.FC = () => {
             </div>
           </div>
           {lastSyncedAt && (
-            <div className="text-[11px] text-amber-800 font-mono self-start sm:self-auto bg-amber-100/70 px-2.5 py-1 rounded border border-amber-200">
+            <div className="text-[11px] text-amber-800 font-mono self-start sm:self-auto bg-amber-100/70 px-2.5 py-1 rounded-md border border-amber-200">
               {t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleString()}
             </div>
           )}
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="bg-white border border-ivory-dark rounded-md p-5 sm:p-6 shadow-subtle">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
-              <TrendingUp className="w-4 h-4 text-harvest-dark" />
-              <span>{t('priceTitle')}</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
-              {t('priceTitle')}
-            </h1>
-            <p className="text-xs sm:text-sm text-charcoal-muted mt-1 max-w-2xl">
-              {t('priceSubtitle')}
-            </p>
+      {/* Screen Header & Action Toolbar */}
+      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
+            <TrendingUp className="w-3.5 h-3.5 text-harvest-dark" />
+            <span>Market Price Telemetry</span>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-            {/* Live vs Offline Cache Telemetry Badges */}
-            {isUsingCache || !isOnline ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <div
-                  data-testid="offline-cached-badge"
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold shadow-xs"
-                >
-                  <Database className="w-3.5 h-3.5 text-amber-800" />
-                  <span>{t('offlineCachedBadge')}</span>
-                  {lastSyncedAt && (
-                    <span className="text-[11px] font-normal text-amber-800 hidden md:inline">
-                      • {t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
-                </div>
-
-                {isCacheStale && (
-                  <div
-                    data-testid="stale-data-badge"
-                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-red-100 text-red-900 border border-red-300 text-xs font-bold"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5 text-red-700" />
-                    <span>{t('staleDataWarning')}</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div
-                data-testid="live-feed-badge"
-                className="flex items-center space-x-2 text-xs font-semibold bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded text-emerald-800 shadow-xs"
-              >
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>{t('liveFeedBadge')}</span>
-              </div>
-            )}
-
-            {/* Sync Trigger Button */}
-            {isOnline && (
-              <button
-                type="button"
-                onClick={handleSyncAgmarknet}
-                disabled={isSyncing}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span>{isSyncing ? t('dataSyncInProgress') : t('dataSyncButton')}</span>
-              </button>
-            )}
-
-            {/* Nightly Scheduled Cron Telemetry */}
-            {syncStatus && (
-              <div
-                title={`Nightly Ingestion Cron: ${syncStatus.cron} (${syncStatus.zone})`}
-                className="hidden lg:flex items-center space-x-1.5 text-[11px] font-mono bg-ivory border border-ivory-dark px-2.5 py-1.5 rounded text-charcoal-muted"
-              >
-                <Clock className="w-3.5 h-3.5 text-forest" />
-                <span>Cron: {syncStatus.cron} ({syncStatus.zone})</span>
-              </div>
-            )}
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
+            {t('priceTitle')}
+          </h1>
+          <p className="text-xs sm:text-sm text-charcoal-muted mt-0.5 max-w-2xl">
+            {t('priceSubtitle')}
+          </p>
         </div>
 
-        {/* Sync result feedback */}
-        {syncSummary && (
-          <div className="mt-4 p-3 bg-forest-50 border border-forest/30 rounded text-xs text-forest-dark flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="w-4 h-4 text-forest shrink-0" />
-              <span>
-                <strong>{t('dataSyncSuccess')}:</strong> {syncSummary.message} (Fetched: {syncSummary.totalFetched}, Inserted: {syncSummary.insertedCount}, Updated: {syncSummary.updatedCount})
-              </span>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+          {/* Live vs Offline Cache Telemetry Badges */}
+          {isUsingCache || !isOnline ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                data-testid="offline-cached-badge"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 text-xs font-semibold shadow-subtle"
+              >
+                <Database className="w-3.5 h-3.5 text-amber-800" />
+                <span>{t('offlineCachedBadge')}</span>
+                {lastSyncedAt && (
+                  <span className="text-[11px] font-normal text-amber-800 hidden md:inline font-mono">
+                    • {t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
+
+              {isCacheStale && (
+                <div
+                  data-testid="stale-data-badge"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-900 border border-red-300 text-xs font-bold"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-red-700" />
+                  <span>{t('staleDataWarning')}</span>
+                </div>
+              )}
             </div>
+          ) : (
+            <div
+              data-testid="live-feed-badge"
+              className="flex items-center space-x-1.5 text-xs font-semibold bg-forest-50 border border-forest/20 px-3 py-1.5 rounded-lg text-forest shadow-subtle"
+            >
+              <ShieldCheck className="w-4 h-4 text-forest" />
+              <span>{t('liveFeedBadge')}</span>
+            </div>
+          )}
+
+          {/* Sync Trigger Button */}
+          {isOnline && (
             <button
               type="button"
-              onClick={() => setSyncSummary(null)}
-              className="text-forest hover:text-forest-dark text-[11px] underline ml-2"
+              onClick={handleSyncAgmarknet}
+              disabled={isSyncing}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-subtle transition-all disabled:opacity-50 cursor-pointer active:scale-[0.98]"
             >
-              Dismiss
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? t('dataSyncInProgress') : t('dataSyncButton')}</span>
             </button>
-          </div>
-        )}
+          )}
 
-        {syncError && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-xs text-red-800 flex items-center justify-between">
-            <span>{syncError}</span>
-            <button
-              type="button"
-              onClick={() => setSyncError(null)}
-              className="text-red-700 hover:text-red-900 text-[11px] underline ml-2"
+          {/* Nightly Scheduled Cron Telemetry */}
+          {syncStatus && (
+            <div
+              title={`Nightly Ingestion Cron: ${syncStatus.cron} (${syncStatus.zone})`}
+              className="hidden lg:flex items-center space-x-1.5 text-[11px] font-mono bg-surface border border-hairline px-2.5 py-1.5 rounded-lg text-charcoal-muted"
             >
-              Dismiss
-            </button>
-          </div>
-        )}
-      </div>
+              <Clock className="w-3.5 h-3.5 text-forest" />
+              <span>Cron: {syncStatus.cron} ({syncStatus.zone})</span>
+            </div>
+          )}
+        </div>
+      </section>
 
-      {/* Filter Toolbar (Watermelon UI pattern) */}
-      <div className="bg-white border border-ivory-dark rounded-md p-4 sm:p-5 shadow-subtle">
-        <div className="text-xs font-semibold text-charcoal uppercase tracking-wider mb-3 flex items-center justify-between">
-          <span>Search & Filter Mandi Rates</span>
+      {/* Sync Result Feedback */}
+      {syncSummary && (
+        <div className="p-3 bg-forest-50 border border-forest/25 rounded-xl text-xs text-forest-dark flex items-center justify-between shadow-subtle">
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-4 h-4 text-forest shrink-0" />
+            <span>
+              <strong>{t('dataSyncSuccess')}:</strong> {syncSummary.message} (Fetched: {syncSummary.totalFetched}, Inserted: {syncSummary.insertedCount}, Updated: {syncSummary.updatedCount})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSyncSummary(null)}
+            className="text-forest hover:text-forest-dark text-[11px] underline ml-2 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between shadow-subtle">
+          <span>{syncError}</span>
+          <button
+            type="button"
+            onClick={() => setSyncError(null)}
+            className="text-red-700 hover:text-red-900 text-[11px] underline ml-2 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* High-Density Filter Toolbar (Linear/Watermelon UI inspired) */}
+      <section className="rounded-xl border border-hairline bg-surface-white p-4 shadow-subtle space-y-3">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-1.5 font-semibold text-charcoal">
+            <Filter className="w-3.5 h-3.5 text-forest" />
+            <span className="uppercase tracking-wider text-[11px] text-charcoal-muted">Filter Telemetry</span>
+          </div>
           {(selectedCommodity || selectedState || selectedDistrict || selectedMandi) && (
             <button
               type="button"
               onClick={handleResetFilters}
-              className="text-forest hover:text-forest-dark flex items-center space-x-1 font-semibold normal-case"
+              className="text-forest hover:text-forest-dark flex items-center space-x-1 font-semibold text-xs cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>{t('filterReset')}</span>
@@ -367,16 +369,16 @@ export const PriceIntelligence: React.FC = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {/* Commodity Selector */}
           <div>
-            <label className="block text-[11px] font-medium text-charcoal-muted mb-1">
+            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
               {t('selectCommodity')}
             </label>
             <select
               value={selectedCommodity}
               onChange={(e) => setSelectedCommodity(e.target.value)}
-              className="w-full bg-ivory border border-ivory-dark rounded px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
+              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
             >
               <option value="">{t('allCommodities')}</option>
               {commodities.map((c) => (
@@ -389,7 +391,7 @@ export const PriceIntelligence: React.FC = () => {
 
           {/* State Selector */}
           <div>
-            <label className="block text-[11px] font-medium text-charcoal-muted mb-1">
+            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
               {t('selectState')}
             </label>
             <select
@@ -399,7 +401,7 @@ export const PriceIntelligence: React.FC = () => {
                 setSelectedDistrict('');
                 setSelectedMandi('');
               }}
-              className="w-full bg-ivory border border-ivory-dark rounded px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
+              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
             >
               <option value="">{t('allStates')}</option>
               {states.map((s) => (
@@ -412,7 +414,7 @@ export const PriceIntelligence: React.FC = () => {
 
           {/* District Selector */}
           <div>
-            <label className="block text-[11px] font-medium text-charcoal-muted mb-1">
+            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
               {t('selectDistrict')}
             </label>
             <select
@@ -422,7 +424,7 @@ export const PriceIntelligence: React.FC = () => {
                 setSelectedMandi('');
               }}
               disabled={districts.length === 0}
-              className="w-full bg-ivory border border-ivory-dark rounded px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest disabled:opacity-50"
+              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest disabled:opacity-50"
             >
               <option value="">{t('allDistricts')}</option>
               {districts.map((d) => (
@@ -435,13 +437,13 @@ export const PriceIntelligence: React.FC = () => {
 
           {/* Mandi Selector */}
           <div>
-            <label className="block text-[11px] font-medium text-charcoal-muted mb-1">
+            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
               {t('selectMandi')}
             </label>
             <select
               value={selectedMandi}
               onChange={(e) => setSelectedMandi(e.target.value)}
-              className="w-full bg-ivory border border-ivory-dark rounded px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
+              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
             >
               <option value="">{t('allMandis')}</option>
               {filteredMandis.map((m) => (
@@ -452,11 +454,11 @@ export const PriceIntelligence: React.FC = () => {
             </select>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Loading & Error States */}
       {loadingPrices && isOnline && !isUsingCache && (
-        <div className="bg-white border border-ivory-dark rounded-md p-10 flex justify-center">
+        <div className="rounded-xl border border-hairline bg-surface-white p-12 flex justify-center shadow-subtle">
           <LoadingSpinner />
         </div>
       )}
@@ -468,7 +470,7 @@ export const PriceIntelligence: React.FC = () => {
         />
       )}
 
-      {/* Aggregate Metric Tiles (Cult UI Pattern) */}
+      {/* Aggregate Metric Tiles */}
       {summary && displayedRecords.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <MetricTile
@@ -504,13 +506,13 @@ export const PriceIntelligence: React.FC = () => {
         </div>
       )}
 
-      {/* Price Records Table / List (Watermelon UI Structured Data Grid) */}
+      {/* Price Records Table / List */}
       {displayedRecords.length > 0 && (
-        <div className="bg-white border border-ivory-dark rounded-md overflow-hidden shadow-subtle">
-          <div className="px-5 py-4 border-b border-ivory-dark flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
+          <div className="px-5 py-4 border-b border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-charcoal flex items-center space-x-2">
-              <span>{isUsingCache ? 'Cached Local Market Filings' : 'Verified Market Filings'}</span>
-              <span className="text-xs font-normal text-charcoal-muted">
+              <span>{isUsingCache ? 'Cached Local Market Filings' : 'Verified APMC Market Filings'}</span>
+              <span className="text-xs font-normal text-charcoal-muted font-mono">
                 ({displayedRecords.length} records)
               </span>
             </h2>
@@ -524,10 +526,11 @@ export const PriceIntelligence: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Desktop Table View (>= 768px) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-ivory border-b border-ivory-dark text-charcoal-muted uppercase text-[11px] font-semibold">
+                <tr className="bg-surface border-b border-hairline text-charcoal-subtle uppercase text-[10px] font-semibold tracking-wider">
                   <th className="py-3 px-4">Commodity / फसल</th>
                   <th className="py-3 px-4">APMC Mandi / मंडी</th>
                   <th className="py-3 px-4">Location</th>
@@ -538,7 +541,7 @@ export const PriceIntelligence: React.FC = () => {
                   <th className="py-3 px-4 text-center">{t('reportingDateLabel')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-ivory-dark text-charcoal">
+              <tbody className="divide-y divide-hairline text-charcoal">
                 {displayedRecords.map((r) => {
                   const commName =
                     language === 'hi'
@@ -554,7 +557,7 @@ export const PriceIntelligence: React.FC = () => {
                       : r.mandiNameEn;
 
                   return (
-                    <tr key={r.id} className="hover:bg-ivory/50 transition-colors">
+                    <tr key={r.id} className="hover:bg-forest-50/20 transition-colors">
                       <td className="py-3 px-4 font-semibold text-charcoal">
                         <div className="flex items-center space-x-2">
                           <Wheat className="w-3.5 h-3.5 text-forest shrink-0" />
@@ -570,16 +573,16 @@ export const PriceIntelligence: React.FC = () => {
                       <td className="py-3 px-4 text-charcoal-muted">
                         {r.district}, {r.state}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-charcoal-muted">
+                      <td className="py-3 px-4 text-right font-mono text-charcoal-muted tnum">
                         ₹{r.minPrice.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-forest text-sm bg-forest-50/50">
+                      <td className="py-3 px-4 text-right font-mono font-bold text-forest text-sm bg-forest-50/40 tnum">
                         ₹{r.modalPrice.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-charcoal-muted">
+                      <td className="py-3 px-4 text-right font-mono text-charcoal-muted tnum">
                         ₹{r.maxPrice.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3 px-4 text-right font-mono">
+                      <td className="py-3 px-4 text-right font-mono tnum">
                         {r.arrivalQuantity ? `${r.arrivalQuantity} qtl` : '—'}
                       </td>
                       <td className="py-3 px-4 text-center font-mono">
@@ -594,14 +597,60 @@ export const PriceIntelligence: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
+
+          {/* Mobile Responsive Compact Rows (< 768px) - Eliminates horizontal table scrolling */}
+          <div className="md:hidden divide-y divide-hairline">
+            {displayedRecords.map((r) => {
+              const commName =
+                language === 'hi'
+                  ? r.commodityNameHi
+                  : language === 'pa' && r.commodityNamePa
+                  ? r.commodityNamePa
+                  : r.commodityNameEn;
+              const mandiName =
+                language === 'hi'
+                  ? r.mandiNameHi
+                  : language === 'pa' && r.mandiNamePa
+                  ? r.mandiNamePa
+                  : r.mandiNameEn;
+
+              return (
+                <div key={r.id} className="p-4 space-y-2 hover:bg-forest-50/20 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-bold text-sm text-charcoal flex items-center space-x-1.5">
+                        <Wheat className="w-3.5 h-3.5 text-forest shrink-0" />
+                        <span>{commName}</span>
+                      </div>
+                      <div className="text-xs text-charcoal-muted flex items-center space-x-1 mt-0.5">
+                        <MapPin className="w-3 h-3 text-harvest-dark shrink-0" />
+                        <span>{mandiName} ({r.district})</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-base font-bold text-forest tnum font-mono">
+                        ₹{r.modalPrice.toLocaleString('en-IN')}
+                      </div>
+                      <div className="text-[10px] text-charcoal-muted">Modal / Quintal</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-mono text-charcoal-muted pt-1 border-t border-hairline/60">
+                    <span>Range: ₹{r.minPrice} – ₹{r.maxPrice}</span>
+                    <span>Date: {r.priceDate}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {/* Empty State */}
       {displayedRecords.length === 0 && (
-        <div className="bg-white border border-ivory-dark rounded-md p-8 text-center max-w-xl mx-auto shadow-subtle">
-          <div className="w-12 h-12 bg-ivory rounded-full flex items-center justify-center mx-auto mb-3 text-charcoal-muted border border-ivory-dark">
-            <Clock className="w-6 h-6 text-forest" />
+        <div className="rounded-xl border border-hairline bg-surface-white p-8 text-center max-w-xl mx-auto shadow-subtle">
+          <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mx-auto mb-3 text-charcoal-muted border border-hairline">
+            <Clock className="w-5 h-5 text-forest" />
           </div>
           <h3 className="font-bold text-charcoal text-base mb-1">
             {!isOnline ? t('offlineNoDataMsg') : t('noPriceData')}
@@ -615,14 +664,14 @@ export const PriceIntelligence: React.FC = () => {
             <button
               type="button"
               onClick={handleResetFilters}
-              className="px-3.5 py-1.5 bg-forest hover:bg-forest-light text-white text-xs font-semibold rounded transition-colors"
+              className="px-4 py-2 bg-forest hover:bg-forest-light text-white text-xs font-semibold rounded-lg transition-all shadow-subtle cursor-pointer"
             >
               {t('filterReset')}
             </button>
             <button
               type="button"
               onClick={() => setSelectedCommodity('WHEAT')}
-              className="px-3.5 py-1.5 bg-ivory hover:bg-ivory-dark border border-ivory-dark text-charcoal text-xs font-semibold rounded transition-colors"
+              className="px-4 py-2 bg-surface hover:bg-forest-50 border border-hairline text-charcoal text-xs font-semibold rounded-lg transition-all cursor-pointer"
             >
               View Wheat (गेहूं) Rates
             </button>
@@ -630,8 +679,8 @@ export const PriceIntelligence: React.FC = () => {
         </div>
       )}
 
-      {/* MSP Reference Notice (Benchmark) */}
-      <div className="bg-ivory border border-harvest/40 rounded-md p-4 flex items-start space-x-3 text-xs text-charcoal">
+      {/* CACP & MSP Reference Notice */}
+      <footer className="rounded-xl border border-hairline bg-surface p-4 flex items-start space-x-3 text-xs text-charcoal">
         <Info className="w-4 h-4 text-harvest-dark shrink-0 mt-0.5" />
         <div className="space-y-1">
           <div className="font-semibold text-charcoal">
@@ -641,7 +690,7 @@ export const PriceIntelligence: React.FC = () => {
             {t('mspReferenceNotice')} The Minimum Support Price (MSP) acts as a price floor for agricultural commodities. Market modal prices fluctuate based on daily quality, moisture percentage, and arrival volume in each APMC yard.
           </p>
         </div>
-      </div>
+      </footer>
     </div>
   );
 };

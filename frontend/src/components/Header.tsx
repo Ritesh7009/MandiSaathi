@@ -21,27 +21,27 @@ export const Header: React.FC = () => {
   const languages: { code: Language; label: string }[] = [
     { code: 'hi', label: 'हिन्दी' },
     { code: 'pa', label: 'ਪੰਜਾਬੀ' },
-    { code: 'en', label: 'English' },
+    { code: 'en', label: 'EN' },
   ];
 
   return (
-    <header className="bg-white border-b border-ivory-dark sticky top-0 z-30 px-4 sm:px-6 py-3">
+    <header className="bg-surface/90 backdrop-blur-md border-b border-hairline sticky top-0 z-30 px-4 sm:px-6 py-2.5">
       <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
         {/* Mobile Brand */}
         <div className="flex items-center space-x-2.5 lg:hidden">
           <Link to="/" className="flex items-center space-x-2">
-            <div className="bg-forest text-harvest p-1.5 rounded-md">
-              <Sprout className="w-5 h-5" />
+            <div className="bg-forest text-harvest p-1.5 rounded-lg shadow-subtle">
+              <Sprout className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <span className="font-bold text-base text-forest-dark">{t('appTitle')}</span>
+            <span className="font-bold text-sm text-charcoal tracking-tight">{t('appTitle')}</span>
           </Link>
         </div>
 
         {/* Desktop Breadcrumb/Subtitle */}
         <div className="hidden lg:flex items-center space-x-3 text-xs text-charcoal-muted">
-          <span className="font-semibold text-charcoal">{t('appSubtitle')}</span>
-          <span>•</span>
-          <span className="flex items-center space-x-1">
+          <span className="font-medium text-charcoal-light">{t('appSubtitle')}</span>
+          <span className="text-charcoal-subtle">•</span>
+          <span className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full bg-forest-50 border border-forest/15">
             {isUp ? (
               <CheckCircle2 className="w-3.5 h-3.5 text-forest" />
             ) : health?.status === 'DEGRADED' ? (
@@ -49,14 +49,14 @@ export const Header: React.FC = () => {
             ) : (
               <XCircle className="w-3.5 h-3.5 text-red-600" />
             )}
-            <span className="text-[11px] font-mono">
+            <span className="text-[10px] font-mono font-medium text-forest-dark">
               APMC Telemetry: {isUp ? 'LIVE' : 'STANDALONE'}
             </span>
           </span>
         </div>
 
         {/* Right Action Utilities */}
-        <div className="flex items-center space-x-2 sm:space-x-3 ml-auto">
+        <div className="flex items-center space-x-2 sm:space-x-2.5 ml-auto">
           {/* Network Connection Indicator */}
           <NetworkStatusBadge />
 
@@ -64,27 +64,29 @@ export const Header: React.FC = () => {
           <button
             type="button"
             onClick={() => setFontSize(fontSize === 'normal' ? 'large' : 'normal')}
-            className={`p-1.5 rounded text-xs font-semibold border flex items-center space-x-1 transition-colors ${
+            className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-all duration-150 flex items-center space-x-1 cursor-pointer ${
               fontSize === 'large'
-                ? 'bg-harvest text-forest-dark border-harvest-dark'
-                : 'bg-ivory border-ivory-dark text-charcoal hover:bg-ivory-dark'
+                ? 'bg-harvest-100 text-harvest-dark border-harvest'
+                : 'bg-surface-white border-hairline text-charcoal-muted hover:text-charcoal hover:border-forest/20'
             }`}
             title="Toggle high-visibility text size"
           >
             <Type className="w-3.5 h-3.5" />
-            <span className="text-[11px] hidden sm:inline">A+</span>
+            <span className="text-[11px] font-mono hidden sm:inline">A+</span>
           </button>
 
-          {/* Mobile Language Selector Dropdown */}
-          <div className="flex lg:hidden items-center space-x-1 bg-ivory p-1 rounded border border-ivory-dark">
-            <Globe className="w-3.5 h-3.5 text-forest ml-1" />
+          {/* Mobile Language Selector */}
+          <div className="flex lg:hidden items-center space-x-0.5 bg-ivory-dark/60 p-0.5 rounded-lg border border-hairline">
+            <Globe className="w-3 h-3 text-forest ml-1 mr-0.5" />
             {languages.map((l) => (
               <button
                 key={l.code}
                 type="button"
                 onClick={() => setLanguage(l.code)}
-                className={`px-1.5 py-0.5 text-[11px] font-medium rounded ${
-                  language === l.code ? 'bg-forest text-white font-bold' : 'text-charcoal'
+                className={`px-2 py-0.5 text-[11px] font-medium rounded-md transition-all cursor-pointer ${
+                  language === l.code
+                    ? 'bg-surface-white text-forest font-semibold shadow-subtle'
+                    : 'text-charcoal-muted hover:text-charcoal'
                 }`}
               >
                 {l.label}
@@ -95,14 +97,13 @@ export const Header: React.FC = () => {
           {/* Quick Voice Access CTA Button */}
           <Link
             to="/assistant"
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-xs transition-colors"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-subtle transition-all duration-150 active:scale-[0.98]"
           >
-            <Mic className="w-3.5 h-3.5 text-harvest" />
-            <span className="hidden sm:inline">{t('navVoice')}</span>
+            <Mic className="w-3.5 h-3.5 text-harvest stroke-[2.2]" />
+            <span className="hidden sm:inline font-medium">{t('navVoice')}</span>
           </Link>
         </div>
       </div>
     </header>
   );
 };
-
