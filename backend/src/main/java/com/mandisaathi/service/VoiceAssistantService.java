@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -191,30 +192,72 @@ public class VoiceAssistantService {
             case "MANDI_COMPARISON" -> {
                 String targetComm = commodityCode != null ? commodityCode : "WHEAT";
                 Commodity commodity = commodityRepository.findByCode(targetComm).orElse(null);
-                matchedPriceRecords = priceRecordService.getPrices(targetComm, null);
+                List<PriceRecordDto> allPrices = priceRecordService.getPrices(targetComm, null);
 
-                if (matchedPriceRecords.size() >= 2) {
-                    PriceRecordDto best = matchedPriceRecords.stream()
+                // If state is specified, filter mandis by that state
+                if (state != null && !state.isBlank()) {
+                    allPrices = allPrices.stream()
+                            .filter(p -> p.state() != null && p.state().equalsIgnoreCase(state))
+                            .toList();
+                }
+
+                // Group by distinct mandi taking the most recent consistent reporting date
+                LocalDate latestDate = allPrices.stream()
+                        .map(PriceRecordDto::priceDate)
+                        .filter(Objects::nonNull)
+                        .max(Comparator.naturalOrder())
+                        .orElse(null);
+
+                List<PriceRecordDto> consistentDateRecords = (latestDate != null)
+                        ? allPrices.stream()
+                                .filter(p -> latestDate.equals(p.priceDate()))
+                                .collect(Collectors.toMap(PriceRecordDto::mandiCode, p -> p, (p1, p2) -> p1))
+                                .values().stream().toList()
+                        : List.of();
+
+                matchedPriceRecords = consistentDateRecords;
+
+                if (consistentDateRecords.size() >= 2) {
+                    PriceRecordDto best = consistentDateRecords.stream()
                             .max(Comparator.comparing(PriceRecordDto::modalPrice))
-                            .orElse(matchedPriceRecords.get(0));
-                    PriceRecordDto lowest = matchedPriceRecords.stream()
+                            .orElse(consistentDateRecords.get(0));
+                    PriceRecordDto lowest = consistentDateRecords.stream()
                             .min(Comparator.comparing(PriceRecordDto::modalPrice))
-                            .orElse(matchedPriceRecords.get(0));
+                            .orElse(consistentDateRecords.get(0));
                     BigDecimal spread = best.modalPrice().subtract(lowest.modalPrice());
+                    reportingDate = latestDate != null ? latestDate.toString() : "";
 
-                    responseEn = String.format("Comparing %s across %d mandis: Highest modal rate is ₹%s in %s; lowest is ₹%s in %s (Inter-mandi spread: ₹%s/qtl).",
-                            commodity != null ? commodity.getNameEn() : targetComm, matchedPriceRecords.size(),
+                    responseEn = String.format("Comparing %s across %d mandis (Date: %s): Highest modal rate is ₹%s in %s; lowest is ₹%s in %s (Inter-mandi spread: ₹%s/qtl).",
+                            commodity != null ? commodity.getNameEn() : targetComm, consistentDateRecords.size(), reportingDate,
                             best.modalPrice(), best.mandiNameEn(), lowest.modalPrice(), lowest.mandiNameEn(), spread);
-                    responseHi = String.format("%s की मंडियों में तुलना: सर्वोत्तम मॉडल भाव ₹%s (%s) है, जबकि न्यूनतम ₹%s (%s) है (भाव का अंतर: ₹%s प्रति क्विंटल)।",
-                            commodity != null ? commodity.getNameHi() : targetComm,
+                    responseHi = String.format("%s की %d मंडियों में तुलना (दिनांक: %s): सर्वोत्तम मॉडल भाव ₹%s (%s) है, जबकि न्यूनतम ₹%s (%s) है (भाव का अंतर: ₹%s प्रति क्विंटल)।",
+                            commodity != null ? commodity.getNameHi() : targetComm, consistentDateRecords.size(), reportingDate,
                             best.modalPrice(), best.mandiNameHi(), lowest.modalPrice(), lowest.mandiNameHi(), spread);
-                    responsePa = String.format("%s ਦੀਆਂ ਮੰਡੀਆਂ ਦੀ ਤੁਲਨਾ: ਸਭ ਤੋਂ ਵੱਧ ਭਾਅ ₹%s (%s) ਅਤੇ ਘੱਟੋ-ਘੱਟ ₹%s (%s) ਹੈ (ਅੰਤਰ: ₹%s ਪ੍ਰਤੀ ਕੁਇੰਟਲ)।",
-                            commodity != null && commodity.getNamePa() != null ? commodity.getNamePa() : targetComm,
+                    responsePa = String.format("%s ਦੀਆਂ %d ਮੰਡੀਆਂ ਦੀ ਤੁਲਨਾ (ਮਿਤੀ: %s): ਸਭ ਤੋਂ ਵੱਧ ਭਾਅ ₹%s (%s) ਅਤੇ ਘੱਟੋ-ਘੱਟ ₹%s (%s) ਹੈ (ਅੰਤਰ: ₹%s ਪ੍ਰਤੀ ਕੁਇੰਟਲ)।",
+                            commodity != null && commodity.getNamePa() != null ? commodity.getNamePa() : targetComm, consistentDateRecords.size(), reportingDate,
                             best.modalPrice(), best.mandiNamePa() != null ? best.mandiNamePa() : best.mandiNameEn(),
                             lowest.modalPrice(), lowest.mandiNamePa() != null ? lowest.mandiNamePa() : lowest.mandiNameEn(), spread);
+                } else if (state != null && !state.isBlank()) {
+                    String stateName = state;
+                    String singleMandiInfo = !consistentDateRecords.isEmpty()
+                            ? String.format(" (वर्तमान में केवल %s दर्ज है, भाव: ₹%s)", consistentDateRecords.get(0).mandiNameHi(), consistentDateRecords.get(0).modalPrice())
+                            : "";
+                    String singleMandiInfoEn = !consistentDateRecords.isEmpty()
+                            ? String.format(" (only %s is currently tracked, rate: ₹%s)", consistentDateRecords.get(0).mandiNameEn(), consistentDateRecords.get(0).modalPrice())
+                            : "";
+                    String singleMandiInfoPa = !consistentDateRecords.isEmpty()
+                            ? String.format(" (ਸਿਰਫ਼ %s ਦਾ ਭਾਅ ₹%s ਦਰਜ ਹੈ)", consistentDateRecords.get(0).mandiNamePa() != null ? consistentDateRecords.get(0).mandiNamePa() : consistentDateRecords.get(0).mandiNameEn(), consistentDateRecords.get(0).modalPrice())
+                            : "";
+
+                    responseEn = String.format("Insufficient comparative records for %s in %s%s. Market recommendation requires verified price filings from at least two mandis on the same reporting date.",
+                            commodity != null ? commodity.getNameEn() : targetComm, stateName, singleMandiInfoEn);
+                    responseHi = String.format("%s में %s के लिए तुलनात्मक डेटा अपर्याप्त है%s। विश्वसनीय तुलना और मंडी सिफारिश के लिए एक ही तारीख पर कम से कम दो मंडियों के भाव दर्ज होने आवश्यक हैं।",
+                            stateName, commodity != null ? commodity.getNameHi() : targetComm, singleMandiInfo);
+                    responsePa = String.format("%s ਵਿੱਚ %s ਲਈ ਤੁਲਨਾਤਮਕ ਡਾਟਾ ਨਾਕਾਫ਼ੀ ਹੈ%s। ਮੰਡੀ ਦੀ ਸਿਫ਼ਾਰਸ਼ ਲਈ ਘੱਟੋ-ਘੱਟ ਦੋ ਮੰਡੀਆਂ ਦੇ ਭਾਅ ਚਾਹੀਦੇ ਹਨ।",
+                            stateName, commodity != null && commodity.getNamePa() != null ? commodity.getNamePa() : targetComm, singleMandiInfoPa);
                 } else {
-                    responseEn = "Need price filings from at least two mandis to calculate comparison spread.";
-                    responseHi = "तुलना देखने के लिए कम से कम दो मंडियों के भाव दर्ज होने आवश्यक हैं।";
+                    responseEn = "Need price filings from at least two mandis with consistent reporting dates to calculate comparison spread.";
+                    responseHi = "तुलना देखने के लिए एक ही तारीख पर कम से कम दो मंडियों के भाव दर्ज होने आवश्यक हैं।";
                     responsePa = "ਤੁਲਨਾ ਦੇਖਣ ਲਈ ਘੱਟੋ-ਘੱਟ ਦੋ ਮੰਡੀਆਂ ਚੁਣੋ।";
                 }
             }
@@ -369,7 +412,10 @@ public class VoiceAssistantService {
         if (text == null || text.isBlank()) return "UNKNOWN";
         String lower = text.toLowerCase();
 
-        if (lower.contains("compare") || lower.contains("तुलना") || lower.contains("अंतर") || lower.contains("ਮਿਲਾਓ") || lower.contains("ਫ਼ਰਕ")) {
+        if (lower.contains("compare") || lower.contains("तुलना") || lower.contains("अंतर") || lower.contains("ਮਿਲਾਓ") || lower.contains("ਫ਼ਰਕ")
+                || lower.contains("सबसे अच्छा") || lower.contains("सबसे ज्यादा") || lower.contains("किस मंडी") || lower.contains("best mandi")
+                || lower.contains("best price") || lower.contains("highest price") || lower.contains("highest rate")
+                || lower.contains("ਸਭ ਤੋਂ ਵੱਧ") || lower.contains("ਕਿਹੜੀ ਮੰਡੀ")) {
             return "MANDI_COMPARISON";
         }
         if (lower.contains("भाव") || lower.contains("रेट") || lower.contains("मूल्य") || lower.contains("ਦਰ") || lower.contains("ਕੀ ਭਾਅ") || lower.contains("rate") || lower.contains("price")) {

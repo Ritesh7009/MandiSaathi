@@ -262,6 +262,26 @@ class VoicePipelineIntegrationTest {
     }
 
     @Test
+    void testMandiComparisonQuery_InsufficientDataInState_DoesNotRecommendArbitraryMarket() throws Exception {
+        String json = """
+            {
+                "queryText": "पंजाब में किस मंडी में गेहूं का सबसे अच्छा भाव मिल रहा है?",
+                "language": "hi"
+            }
+            """;
+
+        mockMvc.perform(post("/api/v1/voice/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent", is("MANDI_COMPARISON")))
+                .andExpect(jsonPath("$.extractedEntities.state", is("Punjab")))
+                .andExpect(jsonPath("$.extractedEntities.commodity", is("WHEAT")))
+                .andExpect(jsonPath("$.responseTextHi", containsString("तुलनात्मक डेटा अपर्याप्त है")))
+                .andExpect(jsonPath("$.priceRecords", hasSize(1)));
+    }
+
+    @Test
     void testMultipartAudioSubmission() throws Exception {
         MockMultipartFile audioFile = new MockMultipartFile(
                 "audio",

@@ -152,3 +152,4 @@ else
     echo "⚠️  One or more endpoints failed authentication or connectivity."
     exit 1
 fi
+
