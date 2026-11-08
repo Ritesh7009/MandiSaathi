@@ -54,46 +54,69 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
     }
   };
 
-  const sections = [
+  const farmerServices = [
     {
       id: 'schemes',
       title: t('navSchemes'),
-      subtitle: language === 'hi' ? 'पीएम-किसान, फसल बीमा, मृदा स्वास्थ्य एवं कृषि ऋण योजनाएं' : language === 'pa' ? 'ਪੀਐਮ-ਕਿਸਾਨ, ਫ਼ਸਲ ਬੀਮਾ ਅਤੇ ਸਰਕਾਰੀ ਸਹਾਇਤਾ ਸਕੀਮਾਂ' : 'Central & State agricultural subsidies, welfare programs & portals',
+      subtitle:
+        language === 'hi'
+          ? 'पीएम-किसान, फसल बीमा, मृदा स्वास्थ्य एवं कृषि ऋण योजनाएं'
+          : language === 'pa'
+          ? 'ਪੀਐਮ-ਕਿਸਾਨ, ਫ਼ਸਲ ਬੀਮਾ ਅਤੇ ਸਰਕਾਰੀ ਸਹਾਇਤਾ ਸਕੀਮਾਂ'
+          : 'Central & State agricultural subsidies, welfare programs & portals',
       icon: Landmark,
-      badge: '5 Schemes',
-      color: 'forest',
+      badge: language === 'hi' ? 'कल्याणकारी योजनाएं' : language === 'pa' ? 'ਸਰਕਾਰੀ ਸਕੀਮਾਂ' : 'Welfare Directory',
     },
     {
       id: 'complaints',
-      title: t('navComplaints'),
-      subtitle: language === 'hi' ? 'तौल में कटौती, देरी से भुगतान या मंडी गेट पास की समस्या दर्ज करें' : language === 'pa' ? 'ਤੋਲ ਕਟੌਤੀ, ਦੇਰੀ ਨਾਲ ਭੁਗਤਾਨ ਜਾਂ ਮੰਡੀ ਸ਼ਿਕਾਇਤ ਦਰਜ ਕਰੋ' : 'Official APMC dispute recording for weighment and auction discrepancies',
+      title: t('complaintsTitle'),
+      subtitle:
+        language === 'hi'
+          ? 'तौल में कटौती, देरी से भुगतान या गेट पास की व्यक्तिगत समस्या दर्ज करें'
+          : language === 'pa'
+          ? 'ਤੋਲ ਕਟੌਤੀ, ਦੇਰੀ ਨਾਲ ਭੁਗਤਾਨ ਜਾਂ ਗੇਟ ਪਾਸ ਦੀ ਨਿੱਜੀ ਸਮੱਸਿਆ ਦਰਜ ਕਰੋ'
+          : 'Record weighment discrepancies, delayed payments or gate-pass issues for your personal records',
       icon: FileText,
-      badge: 'APMC Redressal',
-      color: 'harvest',
+      badge: language === 'hi' ? 'समस्या रिकॉर्ड' : language === 'pa' ? 'ਸਮੱਸਿਆ ਰਿਕਾਰਡ' : 'Issue Record',
     },
     {
       id: 'settings',
       title: t('navSettings'),
-      subtitle: language === 'hi' ? 'भाषा (हिन्दी, पंजाबी, अंग्रेजी) एवं बड़े अक्षरों की सुगमता' : language === 'pa' ? 'ਬੋਲੀ (ਪੰਜਾਬੀ, ਹਿੰਦੀ, ਅੰਗਰੇਜ਼ੀ) ਅਤੇ ਅੱਖਰਾਂ ਦਾ ਆਕਾਰ' : 'Regional dialects, sunlight font scaling & audio synthesis preferences',
+      subtitle:
+        language === 'hi'
+          ? 'भाषा (हिन्दी, पंजाबी, अंग्रेजी) एवं बड़े अक्षरों की सुगमता'
+          : language === 'pa'
+          ? 'ਬੋਲੀ (ਪੰਜਾਬੀ, ਹਿੰਦੀ, ਅੰਗਰੇਜ਼ੀ) ਅਤੇ ਅੱਖਰਾਂ ਦਾ ਆਕਾਰ'
+          : 'Regional dialect selection and high-visibility text sizing',
       icon: Sliders,
-      badge: 'Language & Display',
-      color: 'forest',
+      badge: language === 'hi' ? 'भाषा व डिस्प्ले' : language === 'pa' ? 'ਬੋਲੀ ਅਤੇ ਡਿਸਪਲੇ' : 'Display & Sound',
     },
+  ];
+
+  const systemServices = [
     {
       id: 'offline',
       title: language === 'hi' ? 'ऑफलाइन डेटा और स्टोरेज' : language === 'pa' ? 'ਆਫਲਾਈਨ ਡਾਟਾ ਸਟੋਰੇਜ' : 'Offline Storage & Cache',
-      subtitle: language === 'hi' ? 'बिना इंटरनेट मंडी भाव देखने के लिए स्थानीय IndexedDB कैश प्रबंधन' : language === 'pa' ? 'ਬਿਨਾਂ ਇੰਟਰਨੈੱਟ ਮੰਡੀ ਭਾਅ ਵੇਖਣ ਲਈ ਲੋਕਲ ਕੈਸ਼ ਪ੍ਰਬੰਧਨ' : 'Client-side IndexedDB caching telemetry and offline storage controls',
+      subtitle:
+        language === 'hi'
+          ? 'बिना इंटरनेट मंडी भाव देखने के लिए डिवाइस पर सुरक्षित डेटा'
+          : language === 'pa'
+          ? 'ਬਿਨਾਂ ਇੰਟਰਨੈੱਟ ਮੰਡੀ ਭਾਅ ਵੇਖਣ ਲਈ ਡਿਵਾਈਸ ਤੇ ਸੁਰੱਖਿਅਤ ਡਾਟਾ'
+          : 'Manage locally saved mandi prices stored on your device for field use',
       icon: Database,
-      badge: `${cacheCount} Cached Records`,
-      color: 'default',
+      badge: `${cacheCount} ${language === 'hi' ? 'रिकॉर्ड सहेजे' : language === 'pa' ? 'ਰਿਕਾਰਡ ਸੁਰੱਖਿਅਤ' : 'Cached Records'}`,
     },
     {
       id: 'about',
       title: language === 'hi' ? 'मंडी साथी के बारे में' : language === 'pa' ? 'ਮੰਡੀ ਸਾਥੀ ਬਾਰੇ' : 'About MandiSaathi',
-      subtitle: language === 'hi' ? 'सत्यापित एगमार्कनेट टेलीमेट्री एवं ज्ञानी एआई आर्किटेक्चर' : language === 'pa' ? 'ਪ੍ਰਮਾਣਿਤ ਐਗਮਾਰਕਨੈੱਟ ਡਾਟਾ ਅਤੇ ਗਿਆਨੀ ਏਆਈ ਢਾਂਚਾ' : 'Platform governance, statutory disclaimers & Gnani AI voice architecture',
+      subtitle:
+        language === 'hi'
+          ? 'सत्यापित एगमार्कनेट रिकॉर्ड, डिस्क्लेमर और तकनीक विवरण'
+          : language === 'pa'
+          ? 'ਪ੍ਰਮਾਣਿਤ ਐਗਮਾਰਕਨੈੱਟ ਰਿਕਾਰਡ, ਡਿਸਕਲੇਮਰ ਅਤੇ ਤਕਨੀਕੀ ਵੇਰਵੇ'
+          : 'Verified Agmarknet records, platform disclaimers & voice architecture',
       icon: Info,
-      badge: 'v1.0-RC1',
-      color: 'default',
+      badge: language === 'hi' ? 'प्लेटफ़ॉर्म विवरण' : language === 'pa' ? 'ਪਲੇਟਫਾਰਮ ਜਾਣਕਾਰੀ' : 'Platform Info',
     },
   ];
 
@@ -303,41 +326,95 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
         </div>
       </section>
 
-      {/* Directory Grid */}
-      <div className="space-y-3">
-        {sections.map((sec) => {
-          const Icon = sec.icon;
-          return (
-            <button
-              key={sec.id}
-              type="button"
-              onClick={() => setTab(sec.id)}
-              className="w-full text-left p-4 sm:p-5 rounded-xl border border-hairline bg-surface-white hover:border-forest/40 hover:bg-forest-50/15 transition-all shadow-subtle flex items-center justify-between group cursor-pointer"
-            >
-              <div className="flex items-start space-x-3.5">
-                <div className="w-10 h-10 rounded-lg bg-surface border border-hairline group-hover:border-forest/30 flex items-center justify-center shrink-0 text-forest transition-colors">
-                  <Icon className="w-5 h-5 stroke-[2]" />
-                </div>
-                <div className="space-y-0.5">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-sm text-charcoal group-hover:text-forest transition-colors">
-                      {sec.title}
-                    </span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface border border-hairline text-charcoal-muted">
-                      {sec.badge}
-                    </span>
-                  </div>
-                  <p className="text-xs text-charcoal-muted leading-relaxed max-w-xl">
-                    {sec.subtitle}
-                  </p>
-                </div>
-              </div>
+      {/* Group 1: Farmer Services */}
+      <section className="space-y-3">
+        <div className="flex items-center space-x-2 px-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-charcoal-muted">
+            {language === 'hi' ? 'किसान सेवाएं' : language === 'pa' ? 'ਕਿਸਾਨ ਸੇਵਾਵਾਂ' : 'Farmer Services'}
+          </span>
+          <div className="flex-1 h-px bg-hairline" />
+        </div>
 
-              <ChevronRight className="w-5 h-5 text-charcoal-subtle group-hover:text-forest group-hover:translate-x-0.5 transition-all shrink-0 ml-3" />
-            </button>
-          );
-        })}
-      </div>
+        <div className="space-y-3">
+          {farmerServices.map((sec) => {
+            const Icon = sec.icon;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => setTab(sec.id)}
+                className="w-full text-left p-4 sm:p-5 rounded-xl border border-hairline bg-surface-white hover:border-forest/40 hover:bg-forest-50/15 transition-all shadow-subtle flex items-center justify-between group cursor-pointer"
+              >
+                <div className="flex items-start space-x-3.5">
+                  <div className="w-10 h-10 rounded-lg bg-surface border border-hairline group-hover:border-forest/30 flex items-center justify-center shrink-0 text-forest transition-colors">
+                    <Icon className="w-5 h-5 stroke-[2]" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-sm text-charcoal group-hover:text-forest transition-colors">
+                        {sec.title}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface border border-hairline text-charcoal-muted">
+                        {sec.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs text-charcoal-muted leading-relaxed max-w-xl">
+                      {sec.subtitle}
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-5 h-5 text-charcoal-subtle group-hover:text-forest group-hover:translate-x-0.5 transition-all shrink-0 ml-3" />
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Group 2: System Information & Diagnostics */}
+      <section className="space-y-3 pt-1">
+        <div className="flex items-center space-x-2 px-1">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-charcoal-muted">
+            {language === 'hi' ? 'सिस्टम व स्थानीय स्टोरेज' : language === 'pa' ? 'ਸਿਸਟਮ ਅਤੇ ਲੋਕਲ ਸਟੋਰੇਜ' : 'System & Diagnostics'}
+          </span>
+          <div className="flex-1 h-px bg-hairline" />
+        </div>
+
+        <div className="space-y-3">
+          {systemServices.map((sec) => {
+            const Icon = sec.icon;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => setTab(sec.id)}
+                className="w-full text-left p-4 sm:p-5 rounded-xl border border-hairline bg-surface-white hover:border-forest/40 hover:bg-forest-50/15 transition-all shadow-subtle flex items-center justify-between group cursor-pointer"
+              >
+                <div className="flex items-start space-x-3.5">
+                  <div className="w-10 h-10 rounded-lg bg-surface border border-hairline group-hover:border-forest/30 flex items-center justify-center shrink-0 text-charcoal-muted group-hover:text-forest transition-colors">
+                    <Icon className="w-5 h-5 stroke-[2]" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-sm text-charcoal group-hover:text-forest transition-colors">
+                        {sec.title}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface border border-hairline text-charcoal-muted">
+                        {sec.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs text-charcoal-muted leading-relaxed max-w-xl">
+                      {sec.subtitle}
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-5 h-5 text-charcoal-subtle group-hover:text-forest group-hover:translate-x-0.5 transition-all shrink-0 ml-3" />
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {/* Institutional Provenance Notice */}
       <footer className="rounded-xl border border-hairline bg-surface p-4 flex items-start space-x-3">

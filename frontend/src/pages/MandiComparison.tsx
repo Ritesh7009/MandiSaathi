@@ -25,6 +25,8 @@ import {
   Check,
   AlertCircle,
   ShieldCheck,
+  Truck,
+  Info,
 } from 'lucide-react';
 
 export const MandiComparison: React.FC = () => {
@@ -36,6 +38,8 @@ export const MandiComparison: React.FC = () => {
     'SIRSA_HR',
     'KARNAL_HR',
   ]);
+  const [transportRatePerQtl, setTransportRatePerQtl] = useState<number>(35);
+  const [isCustomTransport, setIsCustomTransport] = useState<boolean>(false);
 
   // Fetch commodities list
   const { data: commodities = [] } = useQuery({
@@ -105,6 +109,18 @@ export const MandiComparison: React.FC = () => {
     const spread = best.modalPrice - lowest.modalPrice;
     return { best, lowest, spread, count: records.length };
   }, [comparison]);
+
+  const transportCalc = useMemo(() => {
+    if (!analytics) return null;
+    const grossSpread50Qtl = analytics.spread * 50;
+    const transportTotal = transportRatePerQtl * 50;
+    const netEstimatedSpread = grossSpread50Qtl - transportTotal;
+    return {
+      grossSpread50Qtl,
+      transportTotal,
+      netEstimatedSpread,
+    };
+  }, [analytics, transportRatePerQtl]);
 
   // Chart data formatting
   const chartData = useMemo(() => {
@@ -292,11 +308,105 @@ export const MandiComparison: React.FC = () => {
 
             <MetricTile
               label="Comparing Markets"
-              value={`${analytics.count} Mandis`}
-              unit="Verified Agmarknet"
-              badge="Live Telemetry"
+              value={`${analytics.count} of ${selectedMandis.length} Mandis`}
+              unit={analytics.count === selectedMandis.length ? 'All Selected Reporting' : 'Active Mandi Filings'}
+              badge="Verified Records"
               icon={<Scale className="w-4 h-4 text-mutedGreen-dark" />}
             />
+          </div>
+
+          {/* 50-Quintal Trolley Transport & Net Arbitrage Estimate Card */}
+          <div className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-hairline">
+              <div className="flex items-center space-x-2">
+                <Truck className="w-4 h-4 text-forest" />
+                <h3 className="font-bold text-sm text-charcoal">
+                  50-Quintal Trolley Transport & Net Arbitrage Estimate
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono text-charcoal-muted bg-surface px-2.5 py-0.5 rounded border border-hairline self-start sm:self-auto">
+                Estimated Net Difference • Non-Guaranteed
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div className="p-3 bg-surface rounded-lg border border-hairline space-y-1">
+                <span className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider block">
+                  1. Gross Price Differential (50 Qtl)
+                </span>
+                <div className="text-lg font-bold text-charcoal font-mono tnum">
+                  ₹{transportCalc ? transportCalc.grossSpread50Qtl.toLocaleString('en-IN') : 0}
+                </div>
+                <p className="text-[11px] text-charcoal-muted">
+                  Spread of ₹{analytics.spread}/qtl across a standard 50-quintal tractor trolley.
+                </p>
+              </div>
+
+              <div className="p-3 bg-surface rounded-lg border border-hairline space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider block">
+                    2. Transport Cost Allowance
+                  </span>
+                  <span className="text-[10px] font-mono font-medium text-forest">
+                    {isCustomTransport ? 'User-Entered' : 'Estimated Default (₹35/qtl)'}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2 mt-1">
+                  <span className="text-xs font-mono font-semibold text-charcoal">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    value={transportRatePerQtl}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setTransportRatePerQtl(val >= 0 ? val : 0);
+                      setIsCustomTransport(true);
+                    }}
+                    className="w-20 bg-surface-white border border-hairline rounded px-2 py-1 font-mono text-xs text-charcoal focus:outline-none focus:border-forest"
+                  />
+                  <span className="text-[11px] text-charcoal-muted">/ qtl</span>
+                  {isCustomTransport && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTransportRatePerQtl(35);
+                        setIsCustomTransport(false);
+                      }}
+                      className="text-[10px] text-forest hover:underline ml-auto cursor-pointer"
+                    >
+                      Reset default
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-charcoal-muted">
+                  Total est. transport cost: ₹{transportCalc ? transportCalc.transportTotal.toLocaleString('en-IN') : 0} for 50 qtl.
+                </p>
+              </div>
+
+              <div className={`p-3 rounded-lg border space-y-1 ${
+                transportCalc && transportCalc.netEstimatedSpread > 0
+                  ? 'bg-forest-50/70 border-forest/30 text-forest-dark'
+                  : 'bg-surface border-hairline text-charcoal'
+              }`}>
+                <span className="text-[10px] font-semibold uppercase tracking-wider block text-charcoal-subtle">
+                  3. Net Estimated Difference
+                </span>
+                <div className="text-lg font-bold font-mono tnum">
+                  {transportCalc && transportCalc.netEstimatedSpread >= 0 ? '+' : ''}₹{transportCalc ? transportCalc.netEstimatedSpread.toLocaleString('en-IN') : 0}
+                </div>
+                <p className="text-[11px] text-charcoal-muted">
+                  Estimated profit after transport deductions; not guaranteed earnings.
+                </p>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-charcoal-muted bg-ivory/60 p-3 rounded-lg border border-hairline leading-relaxed flex items-start space-x-2">
+              <Info className="w-3.5 h-3.5 text-charcoal-subtle shrink-0 mt-0.5" />
+              <span>
+                <strong>Advisory Note:</strong> Market recommendations should never be based solely on modal prices. Net realization depends on produce grading, moisture tests, commission agent fees, weighment charges, and actual distance. Always verify active trading hours and auction schedules before dispatching produce.
+              </span>
+            </div>
           </div>
 
           {/* Multilingual Advisory Callout */}

@@ -393,20 +393,20 @@ export const Home: React.FC = () => {
       <section className="pt-2 sm:pt-4">
         <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-2">
           <span className="w-2 h-2 rounded-full bg-forest animate-pulse" />
-          <span>{getGreeting()} • Official APMC Market Telemetry</span>
+          <span>{getGreeting()} • Verified APMC Market Records</span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-bold text-charcoal tracking-tight max-w-3xl leading-[1.2]">
           {language === 'hi'
-            ? 'बोलकर सटीक मंडी भाव और कृषि आसूचना'
+            ? 'बोलकर सटीक मंडी भाव और कृषि जानकारी'
             : language === 'pa'
             ? 'ਬੋਲ ਕੇ ਸਹੀ ਮੰਡੀ ਭਾਅ ਅਤੇ ਖੇਤੀਬਾੜੀ ਸਹਾਇਤਾ'
-            : 'Multilingual Voice Intelligence Grounded in Verified APMC Telemetry'}
+            : 'Multilingual Voice Intelligence Grounded in Verified APMC Records'}
         </h1>
         <p className="text-xs sm:text-base text-charcoal-muted mt-2 max-w-2xl leading-relaxed">
           {language === 'hi'
-            ? 'अपनी बोली (हिन्दी, पंजाबी, अंग्रेजी) में बोलें और सरकारी एगमार्कनेट पोर्टल से सत्यापित दैनिक नीलामी दरें तुरंत प्राप्त करें।'
+            ? 'अपनी बोली (हिन्दी, पंजाबी, अंग्रेजी) में बोलें और सरकारी एगमार्कनेट पोर्टल से सत्यापित दैनिक बंद नीलामी दरें तुरंत प्राप्त करें।'
             : language === 'pa'
-            ? 'ਆਪਣੀ ਬੋਲੀ (ਪੰਜਾਬੀ, ਹਿੰਦੀ, ਅੰਗਰੇਜ਼ੀ) ਵਿੱਚ ਬੋਲੋ ਅਤੇ ਸਰਕਾਰੀ ਮੰਡੀ ਬੋਰਡ ਤੋਂ ਪ੍ਰਮਾਣਿਤ ਅੱਜ ਦੇ ਭਾਅ ਜਾਣੋ।'
+            ? 'ਆਪਣੀ ਬੋਲੀ (ਪੰਜਾਬੀ, ਹਿੰਦੀ, ਅੰਗਰੇਜ਼ੀ) ਵਿੱਚ ਬੋਲੋ ਅਤੇ ਸਰਕਾਰੀ ਮੰਡੀ ਬੋਰਡ ਤੋਂ ਪ੍ਰਮਾਣਿਤ ਬੰਦ ਬੋਲੀ ਭਾਅ ਜਾਣੋ।'
             : 'Speak naturally in Hindi, Punjabi, or English to access verified daily closed auction prices from APMC markets across India.'}
         </p>
 
@@ -456,9 +456,9 @@ export const Home: React.FC = () => {
       </section>
 
       {/* Primary Voice Interaction Centerpiece (Merged Voice Studio) */}
-      <section className="rounded-2xl border border-hairline bg-surface-white p-6 sm:p-10 shadow-card text-center relative overflow-hidden">
+      <section className="rounded-2xl border border-hairline bg-surface-white p-5 sm:p-8 shadow-card text-center relative overflow-hidden">
         {/* State Status Indicator Pill */}
-        <div className="mb-4">
+        <div className="mb-3">
           <span
             className={`inline-flex items-center space-x-2 text-xs font-semibold px-3.5 py-1.5 rounded-full transition-all duration-200 ${
               state === 'recording'
@@ -515,7 +515,7 @@ export const Home: React.FC = () => {
         />
 
         {/* Big Interactive Action Button */}
-        <div className="my-6 flex justify-center">
+        <div className="my-4 sm:my-5 flex justify-center">
           {state === 'recording' ? (
             <button
               type="button"
@@ -794,7 +794,7 @@ export const Home: React.FC = () => {
         )}
 
         {/* Fallback Text Input Form */}
-        <div className="mt-6 pt-5 border-t border-hairline max-w-xl mx-auto">
+        <div className="mt-4 pt-4 border-t border-hairline max-w-xl mx-auto">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -822,7 +822,7 @@ export const Home: React.FC = () => {
         </div>
 
         {/* Suggested Queries Chips */}
-        <div className="mt-6 pt-5 border-t border-hairline max-w-3xl mx-auto">
+        <div className="mt-4 pt-4 border-t border-hairline max-w-3xl mx-auto">
           <div className="text-[11px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-2.5 flex items-center justify-center space-x-1.5">
             <Sparkles className="w-3.5 h-3.5 text-harvest-dark" />
             <span>{t('suggestedQueriesLabel')}</span>
@@ -849,10 +849,10 @@ export const Home: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base sm:text-lg font-bold text-charcoal tracking-tight">
-              Live Benchmark APMC Rates
+              Benchmark APMC Rates (Latest Closed Auctions)
             </h2>
             <p className="text-xs text-charcoal-muted">
-              Official closed auction records from Agmarknet / State Mandi Boards
+              Reference rates from recent Agmarknet closed auction filings. Ask above for your local mandi.
             </p>
           </div>
           <button
@@ -860,7 +860,7 @@ export const Home: React.FC = () => {
             onClick={() => navigate('/prices')}
             className="text-xs font-semibold text-forest hover:text-forest-dark inline-flex items-center space-x-1 cursor-pointer"
           >
-            <span>View All Mandis</span>
+            <span>View All in Prices</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -868,7 +868,7 @@ export const Home: React.FC = () => {
         {/* Compact Clean Data Stream */}
         <div className="border border-hairline rounded-xl bg-surface-white overflow-hidden shadow-subtle">
           <div className="divide-y divide-hairline">
-            {priceRecords.slice(0, 4).map((record) => {
+            {priceRecords.slice(0, 3).map((record) => {
               const commName =
                 language === 'hi'
                   ? record.commodityNameHi

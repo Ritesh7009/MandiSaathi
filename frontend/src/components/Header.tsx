@@ -50,7 +50,7 @@ export const Header: React.FC = () => {
               <XCircle className="w-3.5 h-3.5 text-red-600" />
             )}
             <span className="text-[10px] font-mono font-medium text-forest-dark">
-              APMC Telemetry: {isUp ? 'LIVE' : 'STANDALONE'}
+              Backend: {isUp ? 'Connected' : 'Offline'}
             </span>
           </span>
         </div>

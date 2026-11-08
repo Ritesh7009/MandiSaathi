@@ -148,7 +148,7 @@ export const ComplaintRegistration: React.FC = () => {
 
         <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
           <Building2 className="w-3.5 h-3.5 text-forest" />
-          <span>APMC Dispute Protocol</span>
+          <span>Platform Issue Record</span>
         </div>
       </section>
 
@@ -178,7 +178,7 @@ export const ComplaintRegistration: React.FC = () => {
                     <span className="w-5 h-5 rounded-full bg-forest text-white text-[10px] flex items-center justify-center font-bold">
                       1
                     </span>
-                    <span>Fill Complaint Details</span>
+                    <span>Fill Issue Details</span>
                   </h2>
                   <span className="text-[11px] text-charcoal-muted font-mono">
                     Step 1 of 2: Details
@@ -329,7 +329,7 @@ export const ComplaintRegistration: React.FC = () => {
                     <span className="w-5 h-5 rounded-full bg-harvest-dark text-white text-[10px] flex items-center justify-center font-bold">
                       2
                     </span>
-                    <span>Review Complaint Before Submission</span>
+                    <span>Review Issue Report Before Saving</span>
                   </h2>
                   <span className="text-[11px] text-charcoal-muted font-mono">
                     Step 2 of 2: Confirmation

@@ -7,9 +7,6 @@ import {
   Scale,
   LayoutGrid,
   Globe,
-  Landmark,
-  FileText,
-  Sliders,
 } from 'lucide-react';
 import { Language } from '../types';
 
@@ -33,12 +30,6 @@ export const Sidebar: React.FC = () => {
     { to: '/prices', label: t('navPrices'), icon: TrendingUp },
     { to: '/compare', label: t('navCompare'), icon: Scale },
     { to: '/more', label: t('navMore'), icon: LayoutGrid, isActiveCustom: isMoreActive },
-  ];
-
-  const secondaryNavItems = [
-    { to: '/schemes', label: t('navSchemes'), icon: Landmark },
-    { to: '/complaints', label: t('navComplaints'), icon: FileText },
-    { to: '/settings', label: t('navSettings'), icon: Sliders },
   ];
 
   const languages: { code: Language; label: string }[] = [
@@ -106,32 +97,6 @@ export const Sidebar: React.FC = () => {
             </NavLink>
           );
         })}
-
-        {/* Secondary Services (Sub-grouped under More) */}
-        <div className="pt-4 mt-4 border-t border-hairline/60">
-          <div className="px-2 mb-2 text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">
-            More Services
-          </div>
-          {secondaryNavItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `flex items-center space-x-2.5 px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
-                    isActive
-                      ? 'text-forest font-semibold bg-forest-50/60'
-                      : 'text-charcoal-muted hover:text-charcoal hover:bg-black/[0.02]'
-                  }`
-                }
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0 stroke-[1.8] text-charcoal-muted" />
-                <span className="truncate">{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </div>
       </nav>
 
       {/* Language Dialect Selector */}

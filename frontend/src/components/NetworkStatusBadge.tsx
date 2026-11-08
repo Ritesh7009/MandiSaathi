@@ -10,7 +10,7 @@ export const NetworkStatusBadge: React.FC = () => {
     return (
       <div
         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-forest-50 text-forest border border-forest/20 shadow-subtle"
-        title="Live APMC Network Connected"
+        title="Network Online — Backend Connected"
         data-testid="network-status-online"
       >
         <span className="w-1.5 h-1.5 rounded-full bg-forest animate-pulse" />

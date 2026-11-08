@@ -79,7 +79,7 @@ export const Settings: React.FC = () => {
         <div>
           <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
             <Sliders className="w-3.5 h-3.5 text-harvest-dark" />
-            <span>Preferences & Diagnostics</span>
+            <span>Preferences & Display</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
             {t('settingsTitle')}
@@ -91,7 +91,7 @@ export const Settings: React.FC = () => {
 
         <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
           <Globe className="w-3.5 h-3.5 text-forest" />
-          <span>Multilingual Engine v2.0</span>
+          <span>Regional Dialects & Display</span>
         </div>
       </section>
 

@@ -246,7 +246,7 @@ export const PriceIntelligence: React.FC = () => {
         <div>
           <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
             <TrendingUp className="w-3.5 h-3.5 text-harvest-dark" />
-            <span>Market Price Telemetry</span>
+            <span>Verified Market Records</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
             {t('priceTitle')}
@@ -356,7 +356,7 @@ export const PriceIntelligence: React.FC = () => {
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center space-x-1.5 font-semibold text-charcoal">
             <Filter className="w-3.5 h-3.5 text-forest" />
-            <span className="uppercase tracking-wider text-[11px] text-charcoal-muted">Filter Telemetry</span>
+            <span className="uppercase tracking-wider text-[11px] text-charcoal-muted">Active Filters</span>
           </div>
           {(selectedCommodity || selectedState || selectedDistrict || selectedMandi) && (
             <button
@@ -522,7 +522,7 @@ export const PriceIntelligence: React.FC = () => {
               <span>
                 {isUsingCache
                   ? `Offline Structured Cache • ${lastSyncedAt ? new Date(lastSyncedAt).toLocaleDateString() : 'Local'}`
-                  : 'Agmarknet Verified Telemetry'}
+                  : 'Agmarknet Verified Records'}
               </span>
             </div>
           </div>
