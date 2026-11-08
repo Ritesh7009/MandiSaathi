@@ -91,3 +91,23 @@ python3 scripts/test-mobile-browser.py
 3. **Hindi Voice Query Execution**: Executes `"आज पंजाब में गेहूं का भाव क्या चल रहा है?"`, verifying response card rendering and live audio playback.
 4. **Punjabi District Resolution**: Executes `"ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?"` and validates that the UI renders the prompt identifying Khanna Mandi as the APMC yard for Ludhiana district.
 5. **Slow Network Throttling**: Implements Chrome DevTools Protocol network throttling (300kbps download, 150kbps upload, 200ms latency) to simulate rural 3G connectivity. Verifies that the application renders loading states gracefully without timing out.
+
+---
+
+## 4. Phase 4B PWA & Offline Experience Verification Suite
+
+Validates Progressive Web App installability, Service Worker shell caching, structured IndexedDB price caching, offline transition, stale data warnings (>24 hours), and online reconnection.
+
+### Run Command:
+```bash
+python3 scripts/test-pwa-offline.py
+```
+
+### Automated Verification Scenarios:
+1. **Web App Manifest Validation**: Validates `/manifest.webmanifest` JSON structure (`name`, `short_name`, `theme_color`, `background_color`, `display: standalone`), and verifies PNG and SVG icon assets.
+2. **Service Worker Registration & Pre-cache**: Confirms browser registration of `/sw.js`, active lifecycle state, and caching of core shell assets and Google Fonts.
+3. **Structured IndexedDB Caching**: Evaluates real-time persistence of fetched price records and metadata timestamps into `mandisaathi_offline_db` (`price_records` and `metadata` object stores).
+4. **Offline Mode Simulation**: Simulates network disconnection via browser offline event, validating the header offline badge, top alert banner, and fallback rendering of cached APMC records with reporting dates.
+5. **Stale Data Warning (>24 Hours)**: Artificially ages the cached sync timestamp in IndexedDB to 26 hours, verifying that the prominent **Stale Data Warning (>24 hrs)** badge is displayed.
+6. **Online Recovery**: Restores network connectivity and verifies immediate transition back to the live connection state and active APMC telemetry feed.
+

@@ -137,7 +137,7 @@ flowchart TD
 - **Controllers**:
   - `HealthController`: Exposes `/api/v1/health` reporting status of database, Gnani STT, Gnani TTS, and data source.
   - `VoiceAssistantController`: Exposes `/api/v1/voice/query` and `/api/v1/voice/audio`.
-  - `PriceRecordController`: Exposes `/api/v1/prices`, `/api/v1/prices/sync`, and `/api/v1/prices/compare`.
+  - `PriceRecordController`: Exposes `/api/v1/prices`, `/api/v1/prices/sync`, `/api/v1/prices/sync/status`, and `/api/v1/prices/compare`.
   - `CommodityController` & `MandiController`: Reference master data catalogs.
   - `GovernmentSchemeController`: Scheme catalog search and detail retrieval.
   - `ComplaintController`: Grievance submission and lookup by reference number.
@@ -145,13 +145,20 @@ flowchart TD
   - `VoiceAssistantService`: Implements intent determination (`MANDI_PRICE_LOOKUP`, `MANDI_COMPARISON`, `COMMODITY_SEARCH`, `GENERAL_HELP`), entity extraction, district-aware location resolution, and response generation.
   - `GnaniSttServiceImpl` / `GnaniTtsServiceImpl`: Production HTTP clients integrating with `api.vachana.ai` using RestClient.
   - `GnaniSttStubService` / `GnaniTtsStubService`: Offline sandbox fallback generating synthetic 16kHz PCM audio for credential-free development.
-  - `MandiDataIngestionService`: Ingests and normalizes live Agmarknet market data.
+  - `MandiDataIngestionService`: Ingests and normalizes live Agmarknet market data, manages scheduled cron runs in `Asia/Kolkata`, concurrency control via `AtomicBoolean`, and records execution runs.
+
+### Progressive Web App & Offline Architecture (Phase 4B)
+- **Web App Manifest (`/manifest.webmanifest`)**: Provides installability as a native mobile and desktop PWA, specifying `#174B35` theme color, `#F5F3EA` background color, adaptive icons (192px, 512px, SVG), and `standalone` display mode.
+- **Service Worker (`/sw.js`)**: Pre-caches application shell (`/`, `/index.html`, `/manifest.webmanifest`, fonts, icons). Applies cache-first strategy for static assets, network-first falling back to `/index.html` for navigation, and enforces network-only bypass for non-GET voice audio and grievance submissions.
+- **Client-Side Structured Price Cache (`IndexedDB`)**: Stores price records, commodities, and mandis in `mandisaathi_offline_db` with `cachedAt` epoch timestamps. Enforces a 24-hour freshness window; records exceeding 24 hours trigger an explicit **Stale Data Warning (>24 hrs)** badge.
+- **Network State Detection (`NetworkContext`)**: Listens to browser `online` and `offline` events, rendering persistent status indicators and offline banners without blocking cached price discovery.
 
 ### Database Layer (PostgreSQL 16)
 - **Entity Tables**:
   - `commodities`: Code, category, default unit, localized names (`name_en`, `name_hi`, `name_pa`).
   - `mandis`: APMC yard code, localized names, district, state, latitude, longitude, active flag.
   - `price_records`: Foreign keys to commodity and mandi, min/max/modal prices, price date, data source, verification status.
+  - `ingestion_runs`: Execution audit trail recording started/completed timestamps, status, counts (fetched, inserted, updated, skipped), error details, and trigger (`MANUAL_SYNC`, `SCHEDULED_CRON`).
   - `government_schemes`: Code, title, category, benefit description, eligibility criteria, required documents, official portal URL.
   - `complaints`: Unique reference number (`MS-YYYY-XXXXX`), farmer details, category, description, status, resolution date.
 

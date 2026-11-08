@@ -117,3 +117,4 @@ When running without a `GNANI_API_KEY` (development mode), the application emplo
 - `GnaniSttStubService`: Inspects query text or provides standard demo query resolution.
 - `GnaniTtsStubService`: Synthesizes a valid 16kHz PCM WAV audio tone in memory, base64-encoded, ensuring that client audio playback logic is fully exercised.
 - **Labeling Rule**: In sandbox mode, audio is labeled in the UI as **`Local Sandbox Synthetic Audio`**, never as `Gnani Timbre Voice`.
+

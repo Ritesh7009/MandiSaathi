@@ -107,3 +107,41 @@ In the baseline seed migration (`V1__initial_schema.sql` and `V2__phase2_schema.
 1. **Reporting Date vs Live Auction**: Mandi prices reflect the daily closed auction session as reported by the APMC secretary. They are **not** real-time stock-ticker feeds.
 2. **Missing Crop Coverage**: Niche, seasonal, or minor crops (e.g., medicinal plants, regional pulses) may not report daily auctions during off-season periods.
 3. **Mandi Geographic Scope**: While the schema accommodates all 2,700+ APMCs across India, the current local verification baseline focuses on 8 major primary and terminal markets across Punjab, Haryana, Rajasthan, MP, Maharashtra, UP, and Delhi.
+
+---
+
+## 6. Automated Scheduling, Ingestion History & Offline Caching (Phase 4B)
+
+### A. Spring Boot `@Scheduled` Ingestion Cron
+To support automated nightly synchronization of official Agmarknet auction bulletins, the platform provides automated scheduling anchored to Indian Standard Time (`Asia/Kolkata`):
+- **Cron Expression**: `0 0 19 * * *` (Daily at 7:00 PM IST, following the close and filing of evening APMC auctions).
+- **Configuration Toggle**: Configurable via `MANDI_DATA_SCHEDULE_ENABLED=true/false` (default: `false` for development safety).
+- **Concurrency Guard**: Synchronized via thread-safe `AtomicBoolean isSyncRunning`. If a manual sync is executing, scheduled cron executions gracefully skip rather than creating overlapping write contention.
+
+### B. Ingestion Run Audit Table (`ingestion_runs`)
+Every ingestion execution (manual or scheduled) is persistently tracked in PostgreSQL:
+```sql
+CREATE TABLE ingestion_runs (
+    id BIGSERIAL PRIMARY KEY,
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(50) NOT NULL, -- SUCCESS, FAILED, SKIPPED, IN_PROGRESS
+    total_fetched INT DEFAULT 0,
+    inserted_count INT DEFAULT 0,
+    updated_count INT DEFAULT 0,
+    skipped_count INT DEFAULT 0,
+    message TEXT,
+    error_details TEXT,
+    triggered_by VARCHAR(50) NOT NULL, -- MANUAL_SYNC, SCHEDULED_CRON
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### C. Client-Side Offline Caching (IndexedDB)
+When rural internet connectivity is unavailable, the frontend serves cached price intelligence stored in browser IndexedDB:
+- **Database**: `mandisaathi_offline_db`
+- **Object Stores**: `price_records`, `commodities`, `mandis`, `metadata`
+- **Freshness Window**: 24 hours (86,400,000 ms). Records older than 24 hours render with an explicit **Stale Data Warning (>24 hrs)** badge.
+- **Reporting Attribution**: Every offline record visibly displays its official APMC auction date and last synchronized client timestamp.
+
+

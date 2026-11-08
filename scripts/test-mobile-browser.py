@@ -63,15 +63,14 @@ async def run_mobile_tests():
         # [4/5] Test Punjabi District Resolution (Ludhiana -> Khanna Mandi prompt)
         print("\n[4/5] Testing Punjabi Voice Query: 'ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?'...")
         # Switch language to Punjabi
-        pa_btn = page.locator("button:has-text('ਪੰਜਾਬੀ')").first
+        pa_btn = page.locator("header button:has-text('ਪੰਜਾਬੀ')")
         if await pa_btn.is_visible():
             await pa_btn.click()
             await page.wait_for_timeout(500)
 
         input_box = page.locator("input[type='text']")
         await input_box.fill("ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?")
-        submit_btn = page.locator("button:has-text('ਭੇਜੋ'), button:has-text('Send'), button[type='submit']").first
-        await submit_btn.click()
+        await input_box.press("Enter")
 
         await page.wait_for_selector("text=Ludhiana", timeout=15000)
         await page.screenshot(path="/tmp/mandisaathi_screenshots/03_mobile_punjabi_ludhiana.png")
@@ -91,8 +90,7 @@ async def run_mobile_tests():
 
         input_box = page.locator("input[type='text']")
         await input_box.fill("गेहूं का भाव क्या है?")
-        submit_btn = page.locator("button:has-text('ਭੇਜੋ'), button:has-text('Send'), button:has-text('भेजें'), button[type='submit']").first
-        await submit_btn.click()
+        await input_box.press("Enter")
 
         # Check for loading spinner during throttled network
         print("  Throttled query submitted. Waiting for graceful resolution under slow network...")

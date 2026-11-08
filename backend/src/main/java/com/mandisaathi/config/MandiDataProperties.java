@@ -8,7 +8,10 @@ public record MandiDataProperties(
         String apiKey,
         String apiUrl,
         int limit,
-        int timeoutMs
+        int timeoutMs,
+        boolean scheduleEnabled,
+        String cron,
+        String zone
 ) {
     public MandiDataProperties {
         if (apiUrl == null || apiUrl.isBlank()) {
@@ -20,10 +23,15 @@ public record MandiDataProperties(
         if (timeoutMs <= 0) {
             timeoutMs = 15000;
         }
+        if (cron == null || cron.isBlank()) {
+            cron = "0 0 19 * * *";
+        }
+        if (zone == null || zone.isBlank()) {
+            zone = "Asia/Kolkata";
+        }
     }
 
     public boolean isConfigured() {
         return enabled && apiKey != null && !apiKey.isBlank();
     }
 }
-

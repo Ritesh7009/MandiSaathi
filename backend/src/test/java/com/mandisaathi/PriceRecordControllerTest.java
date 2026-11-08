@@ -87,5 +87,28 @@ class PriceRecordControllerTest {
                 .andExpect(jsonPath("$.commodity.code", is("WHEAT")))
                 .andExpect(jsonPath("$.records", hasSize(1)));
     }
+
+    @Test
+    void shouldTriggerManualSyncAndReturnSummary() throws Exception {
+        mockMvc.perform(post("/api/v1/prices/sync"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").exists())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void shouldReturnSyncStatusAndHistory() throws Exception {
+        // Trigger a sync first to generate a run
+        mockMvc.perform(post("/api/v1/prices/sync"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/prices/sync/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cron", is("0 0 19 * * *")))
+                .andExpect(jsonPath("$.zone", is("Asia/Kolkata")))
+                .andExpect(jsonPath("$.isRunning", is(false)))
+                .andExpect(jsonPath("$.latestRun").exists())
+                .andExpect(jsonPath("$.recentRuns", hasSize(greaterThanOrEqualTo(1))));
+    }
 }
 

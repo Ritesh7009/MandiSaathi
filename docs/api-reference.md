@@ -233,6 +233,50 @@ Triggers synchronization with the official `data.gov.in` Agmarknet feed.
 
 ---
 
+### `GET /api/v1/prices/sync/status`
+Retrieves the automated cron ingestion schedule configuration, execution lock state, and recent ingestion execution runs stored in the `ingestion_runs` table.
+
+- **Success Response** (`200 OK`): `SyncStatusDto`:
+```json
+{
+  "scheduleEnabled": false,
+  "cron": "0 0 19 * * *",
+  "zone": "Asia/Kolkata",
+  "isRunning": false,
+  "upstreamStatus": "STUBBED",
+  "latestRun": {
+    "id": 1,
+    "startedAt": "2026-11-08T07:40:38.495Z",
+    "completedAt": "2026-11-08T07:40:38.517Z",
+    "status": "SKIPPED",
+    "totalFetched": 0,
+    "insertedCount": 0,
+    "updatedCount": 0,
+    "skippedCount": 0,
+    "message": "data.gov.in Agmarknet API key not configured. Retaining verified Agmarknet baseline telemetry.",
+    "errorDetails": null,
+    "triggeredBy": "MANUAL_SYNC"
+  },
+  "recentRuns": [
+    {
+      "id": 1,
+      "startedAt": "2026-11-08T07:40:38.495Z",
+      "completedAt": "2026-11-08T07:40:38.517Z",
+      "status": "SKIPPED",
+      "totalFetched": 0,
+      "insertedCount": 0,
+      "updatedCount": 0,
+      "skippedCount": 0,
+      "message": "data.gov.in Agmarknet API key not configured. Retaining verified Agmarknet baseline telemetry.",
+      "errorDetails": null,
+      "triggeredBy": "MANUAL_SYNC"
+    }
+  ]
+}
+```
+
+---
+
 ## 4. Commodity & Mandi Reference Catalogs
 
 ### `GET /api/v1/commodities`
@@ -319,3 +363,4 @@ Lists all submitted grievances.
 
 ### `GET /api/v1/complaints/{referenceNumber}`
 Retrieves status and filing details of a specific complaint by reference number (e.g., `MS-2026-89412`).
+

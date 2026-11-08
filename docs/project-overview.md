@@ -73,3 +73,4 @@ This document provides a comprehensive inventory of all screens, backend service
 - [ ] **Direct e-NAM Trading API Integration**: Direct electronic bidding integration with National Agriculture Market portals.
 - [ ] **Expanded Indic Languages**: Adding Gujarati, Marathi, Telugu, and Kannada voice models.
 - [ ] **Automated Daily Cron Ingestion**: Automatic nightly scheduling of Agmarknet delta syncs via Spring `@Scheduled`.
+

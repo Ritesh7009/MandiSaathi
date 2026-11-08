@@ -9,6 +9,7 @@ import {
   ComplaintRequest,
   VoiceQueryResponse,
   IngestionSummary,
+  SyncStatus,
   ApiError,
 } from '../types';
 
@@ -102,6 +103,9 @@ export const api = {
     fetchJson<IngestionSummary>('/api/v1/prices/sync', {
       method: 'POST',
     }),
+
+  getSyncStatus: (): Promise<SyncStatus> =>
+    fetchJson<SyncStatus>('/api/v1/prices/sync/status'),
 
   // Government Schemes
   getSchemes: (category?: string, search?: string): Promise<GovernmentScheme[]> => {

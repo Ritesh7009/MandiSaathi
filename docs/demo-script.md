@@ -99,3 +99,4 @@ This script provides a structured guide for presenting MandiSaathi during evalua
   > *"Beyond price discovery, MandiSaathi integrates a directory of schemes like PM-KISAN and an accessible grievance logging workflow that issues structured tracking numbers for collective advocacy.  
   > For Phase 4B, our roadmap includes offline-first Progressive Web App (PWA) caching for zero-connectivity field use and integration with e-NAM digital trading APIs.  
   > Thank you for your time. We are now open for technical questions."*
+

@@ -5,6 +5,7 @@ import { Sprout, Mic, Globe, Type, CheckCircle2, AlertTriangle, XCircle } from '
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/apiClient';
 import { Language } from '../types';
+import { NetworkStatusBadge } from './NetworkStatusBadge';
 
 export const Header: React.FC = () => {
   const { language, setLanguage, fontSize, setFontSize, t } = useLanguage();
@@ -56,6 +57,9 @@ export const Header: React.FC = () => {
 
         {/* Right Action Utilities */}
         <div className="flex items-center space-x-2 sm:space-x-3 ml-auto">
+          {/* Network Connection Indicator */}
+          <NetworkStatusBadge />
+
           {/* Font Size Accessibility Toggle */}
           <button
             type="button"

@@ -177,7 +177,7 @@ class GnaniClientTest {
     @Test
     void testIndependentAuthenticationReportingInHealthCheck() {
         DataSource mockDataSource = mock(DataSource.class);
-        MandiDataProperties mandiProps = new MandiDataProperties(false, "", "", 100, 10000);
+        MandiDataProperties mandiProps = new MandiDataProperties(false, "", "", 100, 10000, false, "0 0 19 * * *", "Asia/Kolkata");
         MandiDataIngestionService mockIngestion = mock(MandiDataIngestionService.class);
         org.mockito.Mockito.when(mockIngestion.getStatus()).thenReturn("ACTIVE");
 

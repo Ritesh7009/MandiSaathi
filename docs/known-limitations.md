@@ -39,3 +39,20 @@ To ensure complete transparency and engineering integrity, this document enumera
 ### B. Price Advisory Disclaimer
 - Modal prices reported by MandiSaathi are government-reported statistical medians for fair average quality (FAQ) produce.
 - Actual transaction prices at physical mandis vary depending on moisture content, foreign matter percentage, grain luster, and prevailing trader competition during live open outcry or e-NAM bidding.
+
+---
+
+## 4. Offline & PWA Capabilities (Phase 4B)
+
+### A. Voice Processing Network Requirement
+- Real-time Speech-to-Text transcription (Gnani Prisma STT) and Text-to-Speech synthesis (Gnani Timbre TTS) rely on deep neural acoustic models hosted at `api.vachana.ai`.
+- Consequently, **voice recognition and voice synthesis require an active internet connection**. When offline, the application visibly notifies the farmer that voice features require connectivity, while text-based cached price discovery remains fully operational.
+
+### B. Price Data Freshness & Stale Data Threshold
+- Offline price discovery is powered by browser `IndexedDB` caching (`mandisaathi_offline_db`).
+- Cached prices reflect the exact auction reporting date recorded during the most recent synchronization.
+- If cached data is older than **24 hours**, the platform renders an explicit **Stale Data Warning (>24 hrs)** to prevent farmers from relying on outdated market medians. Cached prices are never presented as live market feeds.
+
+### C. Write Requests & Non-GET Operations
+- Non-GET operations—specifically voice query audio uploads (`POST /api/v1/voice/audio`) and grievance submissions (`POST /api/v1/complaints`)—strictly bypass the Service Worker cache. They cannot be filed in zero-connectivity environments without active confirmation.
+

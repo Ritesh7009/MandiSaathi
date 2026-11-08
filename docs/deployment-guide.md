@@ -61,6 +61,9 @@ GNANI_TTS_VOICE_ENGLISH=Kaveri
 
 # Agmarknet / data.gov.in Mandi Data Integration
 MANDI_DATA_ENABLED=false
+MANDI_DATA_SCHEDULE_ENABLED=false
+MANDI_DATA_CRON=0 0 19 * * *
+MANDI_DATA_ZONE=Asia/Kolkata
 DATA_GOV_IN_API_KEY=
 DATA_GOV_IN_URL=https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070
 MANDI_DATA_LIMIT=100
@@ -150,3 +153,4 @@ Access the application at: `http://localhost:5173`.
 # 4. Execute mobile browser Playwright verification suite
 python3 scripts/test-mobile-browser.py
 ```
+

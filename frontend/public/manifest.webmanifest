@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "MandiSaathi — AI Mandi Intelligence",
+  "short_name": "MandiSaathi",
+  "description": "Multilingual AI Voice Mandi Assistant & Real-Time Price Discovery for Indian Farmers",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#174B35",
+  "background_color": "#F5F3EA",
+  "lang": "hi-IN",
+  "dir": "ltr",
+  "categories": ["agriculture", "business", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

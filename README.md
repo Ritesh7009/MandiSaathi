@@ -56,10 +56,11 @@ MandiSaathi resolves these challenges by providing:
 | **Backend Runtime** | Java | 21 (LTS) | Core application platform |
 | **Backend Framework** | Spring Boot | 3.3.5 | REST controllers, services, security |
 | **Database** | PostgreSQL | 16-alpine | Relational persistence |
-| **Database Migrations** | Flyway | 10.x | Schema versioning (V1, V2, V3) |
+| **Database Migrations** | Flyway | 10.x | Schema versioning (V1, V2, V3, V4) |
 | **Frontend Runtime** | React | 19.0.0 | Single-page presentation layer |
 | **Language** | TypeScript | 5.7.2 | Static type safety |
 | **Build Tooling** | Vite | 6.0.0 | Frontend compilation & bundling |
+| **PWA & Offline** | Service Worker & IndexedDB | W3C Standard | Offline app shell, price caching, stale warning |
 | **Styling** | Tailwind CSS | 3.4.17 | Agricultural design system styling |
 | **State Management** | TanStack Query | 5.60.0 | Server state caching & invalidation |
 | **Voice AI (STT)** | Gnani Prisma STT | v2.5 / v3.0 | Cloud speech-to-text transcription |
@@ -77,8 +78,10 @@ flowchart TD
         Farmer(["🧑🌾 Farmer"])
     end
 
-    subgraph Presentation["Frontend Client (React 19 + TypeScript)"]
+    subgraph Presentation["Frontend Client (React 19 + TypeScript + PWA)"]
         UI["Voice Assistant UI (MediaRecorder)"]
+        SW["Service Worker (Cache Storage)"]
+        IDB[("IndexedDB Structured Price Cache")]
         Visualizer["Audio Waveform Visualizer"]
         Player["Spoken Audio Player"]
     end
@@ -88,16 +91,39 @@ flowchart TD
         VoiceSvc["VoiceAssistantService"]
         NLPEngine["Intent & Entity Extraction Engine"]
         PriceSvc["PriceRecordService"]
-        IngestSvc["MandiDataIngestionService"]
+        IngestSvc["MandiDataIngestionService (@Scheduled Cron)"]
     end
 
     subgraph Data["Persistence Layer"]
-        Postgres[("PostgreSQL 16 Database")]
+        Postgres[("PostgreSQL 16 Database\n(Flyway V1..V4)")]
     end
 
     subgraph External["External Cloud Services"]
         PrismaSTT["Gnani Prisma STT (api.vachana.ai)"]
         TimbreTTS["Gnani Timbre TTS (api.vachana.ai)"]
+        Agmarknet["data.gov.in / Agmarknet API"]
+    end
+
+    Farmer -->|Voice Query| UI
+    Farmer -->|Browse Cached Prices| IDB
+    UI -->|Service Worker Intercept| SW
+    SW -->|Fetch Remote| VoiceCtrl
+    VoiceCtrl --> VoiceSvc
+    VoiceSvc -->|Audio Stream| PrismaSTT
+    PrismaSTT -->|Transcript| VoiceSvc
+    VoiceSvc --> NLPEngine
+    NLPEngine --> PriceSvc
+    PriceSvc --> Postgres
+    PriceSvc -->|Price Records| VoiceSvc
+    VoiceSvc -->|Response Text| TimbreTTS
+    TimbreTTS -->|Synthesized WAV| VoiceSvc
+    VoiceSvc -->|JSON + Audio Payload| UI
+    UI -->|Persist Prices| IDB
+    UI --> Player
+    Player -->|Audio Playback| Farmer
+    IngestSvc -->|Nightly Delta Ingestion| Agmarknet
+    IngestSvc -->|Persist Ingestion Runs| Postgres
+```
         DataGov["Agmarknet Feed (data.gov.in)"]
     end
 
@@ -310,7 +336,10 @@ MandiSaathi includes comprehensive automated test suites:
 # 3. Run Android mobile emulation Playwright tests
 python3 scripts/test-mobile-browser.py
 
-# 4. Compile full production JAR and Vite bundle
+# 4. Run Phase 4B PWA and IndexedDB offline verification suite
+python3 scripts/test-pwa-offline.py
+
+# 5. Compile full production JAR and Vite bundle
 ./scripts/build.sh
 ```
 
@@ -328,6 +357,7 @@ python3 scripts/test-mobile-browser.py
 ## 20. Known Limitations
 
 - **Reporting Dates vs Real-Time Auctions**: Mandi prices reflect daily closed auction records filed with APMC market committees, not real-time continuous stock-ticker feeds.
+- **Offline Voice Processing Boundary**: Real-time voice recognition (Prisma STT) and voice synthesis (Timbre TTS) require an active network connection to Gnani.ai. When offline, price intelligence remains accessible via structured IndexedDB cache with clear reporting dates and stale warnings, while voice features cleanly display connectivity notices.
 - **Geographic Seed Scope**: The verified baseline seed tracks 8 primary benchmark APMCs across 7 states/UTs; additional mandis are provisioned dynamically during ingestion.
 - **Legal Scope of Grievances**: The tracking identifier issued by MandiSaathi (`MS-2026-XXXXX`) is an internal reference number for community advocacy and is **not** an official Government of India CPGRAMS docket acknowledgement.
 
@@ -337,10 +367,9 @@ python3 scripts/test-mobile-browser.py
 
 ## 21. Future Scope
 
-- **Offline-First PWA**: Service Workers and client-side IndexedDB caching for zero-connectivity field operations.
 - **Direct e-NAM Integration**: Bid placement and trade settlement directly through National Agriculture Market portals.
 - **Indic Language Expansion**: Voice recognition and synthesis support for Marathi, Gujarati, Telugu, and Kannada.
-- **Automated Cron Sync**: Nightly automated delta ingestion of daily Agmarknet market price bulletins.
+- **Automated Weather & Logistics Optimization**: Integrating local weather forecasts and transport route costs into mandi arbitrage recommendations.
 
 ---
 

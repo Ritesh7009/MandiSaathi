@@ -1,7 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '../context/LanguageContext';
+import { useNetwork } from '../context/NetworkContext';
 import { api } from '../services/apiClient';
+import {
+  savePriceRecords,
+  getCachedPrices,
+  saveCommodities,
+  saveMandis,
+} from '../services/offlineStorage';
 import { MetricTile } from '../components/ui/MetricTile';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
@@ -17,11 +24,15 @@ import {
   Info,
   RefreshCw,
   CheckCircle,
+  WifiOff,
+  Database,
+  AlertCircle,
 } from 'lucide-react';
-import { IngestionSummary } from '../types';
+import { IngestionSummary, PriceRecord } from '../types';
 
 export const PriceIntelligence: React.FC = () => {
   const { language, t } = useLanguage();
+  const { isOnline } = useNetwork();
 
   const [selectedCommodity, setSelectedCommodity] = useState<string>('');
   const [selectedState, setSelectedState] = useState<string>('');
@@ -30,6 +41,12 @@ export const PriceIntelligence: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncSummary, setSyncSummary] = useState<IngestionSummary | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Offline caching states
+  const [offlinePrices, setOfflinePrices] = useState<PriceRecord[]>([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [isCacheStale, setIsCacheStale] = useState<boolean>(false);
+  const [isUsingCache, setIsUsingCache] = useState<boolean>(false);
 
   // Fetch commodities list
   const { data: commodities = [] } = useQuery({
@@ -56,7 +73,59 @@ export const PriceIntelligence: React.FC = () => {
     queryKey: ['priceRecords', selectedCommodity, selectedMandi],
     queryFn: () => api.getPrices(selectedCommodity || undefined, selectedMandi || undefined),
     staleTime: 60000,
+    enabled: isOnline,
   });
+
+  // Fetch scheduled cron sync status telemetry
+  const { data: syncStatus } = useQuery({
+    queryKey: ['syncScheduleStatus'],
+    queryFn: () => api.getSyncStatus(),
+    staleTime: 60000,
+    enabled: isOnline,
+  });
+
+  // Persist live commodities into IndexedDB
+  useEffect(() => {
+    if (commodities.length > 0) {
+      saveCommodities(commodities).catch(console.warn);
+    }
+  }, [commodities]);
+
+  // Persist live mandis into IndexedDB
+  useEffect(() => {
+    if (mandis.length > 0) {
+      saveMandis(mandis).catch(console.warn);
+    }
+  }, [mandis]);
+
+  // Persist retrieved live prices into IndexedDB
+  useEffect(() => {
+    if (priceRecords.length > 0 && isOnline) {
+      savePriceRecords(priceRecords).catch(console.warn);
+      setIsUsingCache(false);
+    }
+  }, [priceRecords, isOnline]);
+
+  // If offline or fetch failed, retrieve records from IndexedDB
+  useEffect(() => {
+    if (!isOnline || errorPrices) {
+      getCachedPrices(selectedCommodity || undefined, selectedMandi || undefined)
+        .then((result) => {
+          setOfflinePrices(result.records);
+          setLastSyncedAt(result.lastSyncedAt);
+          setIsCacheStale(result.isStale);
+          setIsUsingCache(true);
+        })
+        .catch((err) => {
+          console.warn('[MandiSaathi Offline] Could not read IndexedDB:', err);
+        });
+    } else {
+      setIsUsingCache(false);
+    }
+  }, [isOnline, errorPrices, selectedCommodity, selectedMandi]);
+
+  // Active records: Live API when online, IndexedDB cache when offline
+  const activeRecords = isUsingCache || !isOnline ? offlinePrices : priceRecords;
 
   // Unique states from mandis
   const states = useMemo(() => {
@@ -108,9 +177,9 @@ export const PriceIntelligence: React.FC = () => {
 
   // Filter records by district if selected
   const displayedRecords = useMemo(() => {
-    if (!selectedDistrict) return priceRecords;
-    return priceRecords.filter((r) => r.district.toLowerCase() === selectedDistrict.toLowerCase());
-  }, [priceRecords, selectedDistrict]);
+    if (!selectedDistrict) return activeRecords;
+    return activeRecords.filter((r) => r.district.toLowerCase() === selectedDistrict.toLowerCase());
+  }, [activeRecords, selectedDistrict]);
 
   // Summary figures across displayed records
   const summary = useMemo(() => {
@@ -123,8 +192,9 @@ export const PriceIntelligence: React.FC = () => {
     return { avgModal, minOverall, maxOverall, totalArrivals };
   }, [displayedRecords]);
 
-  // Handle real Agmarknet data synchronization
+  // Handle manual Agmarknet data synchronization
   const handleSyncAgmarknet = async () => {
+    if (!isOnline) return;
     setIsSyncing(true);
     setSyncError(null);
     setSyncSummary(null);
@@ -142,6 +212,33 @@ export const PriceIntelligence: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8">
+      {/* Offline Status Alert Banner */}
+      {!isOnline && (
+        <div
+          data-testid="offline-alert-banner"
+          className="p-4 bg-amber-50 border-2 border-amber-300 rounded-lg text-amber-900 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in"
+        >
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-200/80 flex items-center justify-center shrink-0">
+              <WifiOff className="w-4 h-4 text-amber-800" />
+            </div>
+            <div>
+              <p className="font-bold text-xs sm:text-sm text-amber-950">
+                {t('offlineBannerText')}
+              </p>
+              <p className="text-[11px] sm:text-xs text-amber-800 mt-0.5">
+                {t('offlineVoiceNotice')}
+              </p>
+            </div>
+          </div>
+          {lastSyncedAt && (
+            <div className="text-[11px] text-amber-800 font-mono self-start sm:self-auto bg-amber-100/70 px-2.5 py-1 rounded border border-amber-200">
+              {t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="bg-white border border-ivory-dark rounded-md p-5 sm:p-6 shadow-subtle">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -158,21 +255,66 @@ export const PriceIntelligence: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center space-x-2 self-start sm:self-center">
-            <button
-              type="button"
-              onClick={handleSyncAgmarknet}
-              disabled={isSyncing}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? t('dataSyncInProgress') : t('dataSyncButton')}</span>
-            </button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            {/* Live vs Offline Cache Telemetry Badges */}
+            {isUsingCache || !isOnline ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  data-testid="offline-cached-badge"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold shadow-xs"
+                >
+                  <Database className="w-3.5 h-3.5 text-amber-800" />
+                  <span>{t('offlineCachedBadge')}</span>
+                  {lastSyncedAt && (
+                    <span className="text-[11px] font-normal text-amber-800 hidden md:inline">
+                      • {t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
 
-            <div className="flex items-center space-x-2 text-xs font-mono bg-ivory border border-ivory-dark px-3 py-1.5 rounded text-charcoal-muted">
-              <ShieldCheck className="w-4 h-4 text-forest" />
-              <span>Agmarknet Direct Feed</span>
-            </div>
+                {isCacheStale && (
+                  <div
+                    data-testid="stale-data-badge"
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-red-100 text-red-900 border border-red-300 text-xs font-bold"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 text-red-700" />
+                    <span>{t('staleDataWarning')}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                data-testid="live-feed-badge"
+                className="flex items-center space-x-2 text-xs font-semibold bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded text-emerald-800 shadow-xs"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>{t('liveFeedBadge')}</span>
+              </div>
+            )}
+
+            {/* Sync Trigger Button */}
+            {isOnline && (
+              <button
+                type="button"
+                onClick={handleSyncAgmarknet}
+                disabled={isSyncing}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? t('dataSyncInProgress') : t('dataSyncButton')}</span>
+              </button>
+            )}
+
+            {/* Nightly Scheduled Cron Telemetry */}
+            {syncStatus && (
+              <div
+                title={`Nightly Ingestion Cron: ${syncStatus.cron} (${syncStatus.zone})`}
+                className="hidden lg:flex items-center space-x-1.5 text-[11px] font-mono bg-ivory border border-ivory-dark px-2.5 py-1.5 rounded text-charcoal-muted"
+              >
+                <Clock className="w-3.5 h-3.5 text-forest" />
+                <span>Cron: {syncStatus.cron} ({syncStatus.zone})</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -313,13 +455,13 @@ export const PriceIntelligence: React.FC = () => {
       </div>
 
       {/* Loading & Error States */}
-      {loadingPrices && (
+      {loadingPrices && isOnline && !isUsingCache && (
         <div className="bg-white border border-ivory-dark rounded-md p-10 flex justify-center">
           <LoadingSpinner />
         </div>
       )}
 
-      {errorPrices && (
+      {errorPrices && !isUsingCache && (
         <ErrorMessage
           message={priceError instanceof Error ? priceError.message : t('error')}
           onRetry={() => refetchPrices()}
@@ -327,7 +469,7 @@ export const PriceIntelligence: React.FC = () => {
       )}
 
       {/* Aggregate Metric Tiles (Cult UI Pattern) */}
-      {!loadingPrices && !errorPrices && summary && displayedRecords.length > 0 && (
+      {summary && displayedRecords.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <MetricTile
             label={t('modalPrice')}
@@ -356,25 +498,29 @@ export const PriceIntelligence: React.FC = () => {
             label={t('arrivals')}
             value={summary.totalArrivals.toLocaleString('en-IN')}
             unit="Quintals"
-            badge="Verified"
+            badge={isUsingCache ? 'Cached' : 'Verified'}
             icon={<Clock className="w-4 h-4 text-mutedGreen-dark" />}
           />
         </div>
       )}
 
       {/* Price Records Table / List (Watermelon UI Structured Data Grid) */}
-      {!loadingPrices && !errorPrices && displayedRecords.length > 0 && (
+      {displayedRecords.length > 0 && (
         <div className="bg-white border border-ivory-dark rounded-md overflow-hidden shadow-subtle">
-          <div className="px-5 py-4 border-b border-ivory-dark flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-ivory-dark flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-charcoal flex items-center space-x-2">
-              <span>Verified Market Filings</span>
+              <span>{isUsingCache ? 'Cached Local Market Filings' : 'Verified Market Filings'}</span>
               <span className="text-xs font-normal text-charcoal-muted">
                 ({displayedRecords.length} records)
               </span>
             </h2>
-            <div className="text-xs text-charcoal-muted flex items-center space-x-1">
+            <div className="text-xs text-charcoal-muted flex items-center space-x-2 font-mono">
               <Calendar className="w-3.5 h-3.5 text-forest" />
-              <span>Agmarknet Verified Telemetry</span>
+              <span>
+                {isUsingCache
+                  ? `Offline Structured Cache • ${lastSyncedAt ? new Date(lastSyncedAt).toLocaleDateString() : 'Local'}`
+                  : 'Agmarknet Verified Telemetry'}
+              </span>
             </div>
           </div>
 
@@ -389,7 +535,7 @@ export const PriceIntelligence: React.FC = () => {
                   <th className="py-3 px-4 text-right font-bold text-forest">{t('modalPrice')}</th>
                   <th className="py-3 px-4 text-right">{t('maxPrice')}</th>
                   <th className="py-3 px-4 text-right">{t('arrivals')}</th>
-                  <th className="py-3 px-4 text-center">Filing Date</th>
+                  <th className="py-3 px-4 text-center">{t('reportingDateLabel')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ivory-dark text-charcoal">
@@ -436,8 +582,11 @@ export const PriceIntelligence: React.FC = () => {
                       <td className="py-3 px-4 text-right font-mono">
                         {r.arrivalQuantity ? `${r.arrivalQuantity} qtl` : '—'}
                       </td>
-                      <td className="py-3 px-4 text-center font-mono text-charcoal-muted">
-                        {r.priceDate}
+                      <td className="py-3 px-4 text-center font-mono">
+                        <span className="text-charcoal font-medium">{r.priceDate}</span>
+                        {isUsingCache && (
+                          <div className="text-[10px] text-amber-700">Cached</div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -448,15 +597,19 @@ export const PriceIntelligence: React.FC = () => {
         </div>
       )}
 
-      {/* Empty State (Explicit requirement: show proper empty state when no price data exists) */}
-      {!loadingPrices && !errorPrices && displayedRecords.length === 0 && (
+      {/* Empty State */}
+      {displayedRecords.length === 0 && (
         <div className="bg-white border border-ivory-dark rounded-md p-8 text-center max-w-xl mx-auto shadow-subtle">
           <div className="w-12 h-12 bg-ivory rounded-full flex items-center justify-center mx-auto mb-3 text-charcoal-muted border border-ivory-dark">
             <Clock className="w-6 h-6 text-forest" />
           </div>
-          <h3 className="font-bold text-charcoal text-base mb-1">{t('noPriceData')}</h3>
+          <h3 className="font-bold text-charcoal text-base mb-1">
+            {!isOnline ? t('offlineNoDataMsg') : t('noPriceData')}
+          </h3>
           <p className="text-xs text-charcoal-muted leading-relaxed mb-4">
-            {t('noPriceNotice')}
+            {!isOnline
+              ? t('offlineBannerText')
+              : t('noPriceNotice')}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button

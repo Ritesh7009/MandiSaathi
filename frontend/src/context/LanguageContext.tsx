@@ -169,6 +169,22 @@ const translations: Record<Language, Record<string, string>> = {
     close: 'Close',
     details: 'View Details',
     footerNotice: 'MandiSaathi — Production Agritech Foundation. Governed by authentic data provenance.',
+
+    // Phase 4B: PWA & Offline
+    liveFeedBadge: 'Live APMC Feed',
+    offlineCachedBadge: 'Offline Cached Mode',
+    staleDataWarning: 'Stale Data Warning (>24 hrs)',
+    reportingDateLabel: 'Auction Reporting Date',
+    lastSyncedLabel: 'Last Synchronized',
+    offlineBannerText: 'You are currently offline. Showing local cached mandi rates.',
+    offlineVoiceNotice: 'Voice recognition (STT) and voice responses (TTS) require an active internet connection.',
+    offlineNoDataMsg: 'No offline cached prices available for this selection. Connect to the internet to update your local feed.',
+    installAppTitle: 'Install MandiSaathi',
+    installAppSubtitle: 'Install on your device for fast access and offline price discovery in the field.',
+    installBtnText: 'Install App',
+    dismissBtnText: 'Dismiss',
+    syncStatusSchedule: 'Nightly Sync Schedule',
+    syncStatusCron: 'Cron Schedule (IST)',
   },
   hi: {
     // Brand & Nav
@@ -329,6 +345,22 @@ const translations: Record<Language, Record<string, string>> = {
     close: 'बंद करें',
     details: 'विवरण देखें',
     footerNotice: 'मंडी साथी — किसानों के लिए प्रमाणित कृषि मंच।',
+
+    // Phase 4B: PWA & Offline
+    liveFeedBadge: 'ताज़ा एपीएमसी भाव',
+    offlineCachedBadge: 'ऑफ़लाइन सहेजा गया डेटा',
+    staleDataWarning: 'पुराना डेटा चेतावनी (>24 घंटे)',
+    reportingDateLabel: 'नीलामी रिपोर्टिंग तिथि',
+    lastSyncedLabel: 'अंतिम सिंक्रनाइज़ेशन',
+    offlineBannerText: 'आप वर्तमान में ऑफ़लाइन हैं। पहले सहेजे गए स्थानीय मंडी भाव दिखाए जा रहे हैं।',
+    offlineVoiceNotice: 'वॉयस असिस्टेंट (बोलकर पूछना) के लिए सक्रिय इंटरनेट कनेक्शन आवश्यक है।',
+    offlineNoDataMsg: 'इस चयन के लिए कोई ऑफ़लाइन डेटा उपलब्ध नहीं है। स्थानीय डेटा अपडेट करने के लिए इंटरनेट से कनेक्ट करें।',
+    installAppTitle: 'मंडी साथी ऐप इंस्टॉल करें',
+    installAppSubtitle: 'खेत में बिना रुकावट और ऑफ़लाइन भाव देखने के लिए अपने फ़ोन पर MandiSaathi इंस्टॉल करें।',
+    installBtnText: 'ऐप इंस्टॉल करें',
+    dismissBtnText: 'हटाएं',
+    syncStatusSchedule: 'दैनिक सिंक्रनाइज़ेशन अनुसूची',
+    syncStatusCron: 'क्रॉन शेड्यूल (भारतीय समय)',
   },
   pa: {
     // Brand & Nav
@@ -489,6 +521,22 @@ const translations: Record<Language, Record<string, string>> = {
     close: 'ਬੰਦ ਕਰੋ',
     details: 'ਵੇਰਵੇ ਦੇਖੋ',
     footerNotice: 'ਮੰਡੀ ਸਾਥੀ — ਕਿਸਾਨਾਂ ਲਈ ਪ੍ਰਮਾਣਿਤ ਖੇਤੀ ਮੰਚ।',
+
+    // Phase 4B: PWA & Offline
+    liveFeedBadge: 'ਤਾਜ਼ਾ ਏਪੀਐਮਸੀ ਭਾਅ',
+    offlineCachedBadge: 'ਔਫਲਾਈਨ ਕੈਸ਼ ਕੀਤਾ ਡਾਟਾ',
+    staleDataWarning: 'ਪੁਰਾਣਾ ਡਾਟਾ ਚੇਤਾਵਨੀ (>24 ਘੰਟੇ)',
+    reportingDateLabel: 'ਬੋਲੀ ਰਿਪੋਰਟਿੰਗ ਮਿਤੀ',
+    lastSyncedLabel: 'ਆਖਰੀ ਸਿੰਕ੍ਰੋਨਾਈਜ਼ੇਸ਼ਨ',
+    offlineBannerText: 'ਤੁਸੀਂ ਇਸ ਵੇਲੇ ਔਫਲਾਈਨ ਹੋ। ਪਹਿਲਾਂ ਸੁਰੱਖਿਅਤ ਕੀਤੇ ਸਥਾਨਕ ਮੰਡੀ ਭਾਅ ਦਿਖਾਏ ਜਾ ਰਹੇ ਹਨ।',
+    offlineVoiceNotice: 'ਵੌਇਸ ਅਸਿਸਟੈਂਟ (ਬੋਲ ਕੇ ਪੁੱਛਣ) ਲਈ ਇੰਟਰਨੈੱਟ ਕੁਨੈਕਸ਼ਨ ਲਾਜ਼ਮੀ ਹੈ।',
+    offlineNoDataMsg: 'ਇਸ ਚੋਣ ਲਈ ਕੋਈ ਔਫਲਾਈਨ ਡਾਟਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਸਥਾਨਕ ਡਾਟਾ ਅੱਪਡੇਟ ਕਰਨ ਲਈ ਇੰਟਰਨੈੱਟ ਨਾਲ ਜੁੜੋ।',
+    installAppTitle: 'ਮੰਡੀ ਸਾਥੀ ਐਪ ਇੰਸਟੌਲ ਕਰੋ',
+    installAppSubtitle: 'ਖੇਤਾਂ ਵਿੱਚ ਬਿਨਾਂ ਰੁਕਾਵਟ ਅਤੇ ਔਫਲਾਈਨ ਭਾਅ ਦੇਖਣ ਲਈ ਆਪਣੇ ਫੋਨ ਤੇ MandiSaathi ਇੰਸਟੌਲ ਕਰੋ।',
+    installBtnText: 'ਐਪ ਇੰਸਟੌਲ ਕਰੋ',
+    dismissBtnText: 'ਹਟਾਓ',
+    syncStatusSchedule: 'ਰਾਤ ਦੀ ਸਿੰਕ੍ਰੋਨਾਈਜ਼ੇਸ਼ਨ ਅਨੁਸੂਚੀ',
+    syncStatusCron: 'ਕ੍ਰੋਨ ਅਨੁਸੂਚੀ (ਭਾਰਤੀ ਸਮਾਂ)',
   },
 };
 

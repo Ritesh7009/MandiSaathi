@@ -29,6 +29,11 @@ public class PriceRecordController {
         return ResponseEntity.ok(mandiDataIngestionService.ingestLatestMandiPrices());
     }
 
+    @GetMapping("/sync/status")
+    public ResponseEntity<com.mandisaathi.dto.SyncStatusDto> getSyncStatus() {
+        return ResponseEntity.ok(mandiDataIngestionService.getSyncStatus());
+    }
+
     @GetMapping
     public ResponseEntity<List<PriceRecordDto>> getPrices(
             @RequestParam(required = false) String commodityCode,

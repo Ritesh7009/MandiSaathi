@@ -167,6 +167,30 @@ export interface IngestionSummary {
   timestamp: string;
 }
 
+export interface IngestionRun {
+  id: number;
+  startedAt: string;
+  completedAt: string | null;
+  status: string;
+  totalFetched: number;
+  insertedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  message: string | null;
+  errorDetails: string | null;
+  triggeredBy: string;
+}
+
+export interface SyncStatus {
+  scheduleEnabled: boolean;
+  cron: string;
+  zone: string;
+  isRunning: boolean;
+  upstreamStatus: string;
+  latestRun: IngestionRun | null;
+  recentRuns: IngestionRun[];
+}
+
 export interface RecentConversation {
   id: string;
   query: string;
