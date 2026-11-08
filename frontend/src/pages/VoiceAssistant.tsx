@@ -465,8 +465,10 @@ export const VoiceAssistant: React.FC = () => {
 
               {/* Spoken Audio Controls */}
               <div className="flex items-center space-x-2">
-                <span className="text-[11px] text-charcoal-muted hidden sm:inline">
-                  {response.audioBase64 ? t('audioSourceGnani') : t('audioSourceBrowser')}
+                <span className="text-[10px] sm:text-[11px] text-charcoal-muted">
+                  {response.audioBase64
+                    ? (response.isLiveGnaniConnected ? t('audioSourceGnani') : t('audioSourceSandbox'))
+                    : t('audioSourceBrowser')}
                 </span>
 
                 <button

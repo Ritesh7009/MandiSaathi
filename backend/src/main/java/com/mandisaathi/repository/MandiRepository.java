@@ -11,6 +11,7 @@ import java.util.Optional;
 public interface MandiRepository extends JpaRepository<Mandi, Long> {
     Optional<Mandi> findByCode(String code);
     List<Mandi> findByStateIgnoreCaseAndActiveTrue(String state);
+    List<Mandi> findByDistrictIgnoreCaseAndActiveTrue(String district);
     List<Mandi> findByActiveTrue();
 }
 

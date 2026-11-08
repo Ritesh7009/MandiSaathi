@@ -151,7 +151,29 @@ class VoicePipelineIntegrationTest {
     void testValidMandiPriceQueryInPunjabi_LudhianaWheat() throws Exception {
         String json = """
             {
-                "queryText": "ਲੁਧਿਆਣਾ ਮੰਡੀ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?",
+                "queryText": "ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?",
+                "language": "pa"
+            }
+            """;
+
+        mockMvc.perform(post("/api/v1/voice/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent", is("MANDI_PRICE_LOOKUP")))
+                .andExpect(jsonPath("$.detectedLanguage", is("pa-IN")))
+                .andExpect(jsonPath("$.extractedEntities.commodity", is("WHEAT")))
+                .andExpect(jsonPath("$.extractedEntities.district", is("Ludhiana")))
+                .andExpect(jsonPath("$.responseTextPa", containsString("ਖੰਨਾ")))
+                .andExpect(jsonPath("$.responseTextPa", containsString("2450")))
+                .andExpect(jsonPath("$.priceRecords", hasSize(greaterThanOrEqualTo(1))));
+    }
+
+    @Test
+    void testExplicitKhannaMandiPriceQueryInPunjabi() throws Exception {
+        String json = """
+            {
+                "queryText": "ਖੰਨਾ ਮੰਡੀ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?",
                 "language": "pa"
             }
             """;

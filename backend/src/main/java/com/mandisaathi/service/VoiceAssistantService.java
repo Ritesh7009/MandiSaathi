@@ -115,6 +115,7 @@ public class VoiceAssistantService {
 
         String commodityCode = entities.get("commodity");
         String state = entities.get("state");
+        String district = entities.get("district");
         String mandiCode = entities.get("mandi");
 
         List<PriceRecordDto> matchedPriceRecords = new ArrayList<>();
@@ -132,7 +133,7 @@ public class VoiceAssistantService {
                     String commNameHi = commodity != null ? commodity.getNameHi() : commodityCode;
                     String commNamePa = commodity != null && commodity.getNamePa() != null ? commodity.getNamePa() : commNameEn;
 
-                    if (mandiCode == null && state == null) {
+                    if (mandiCode == null && district == null && state == null) {
                         // User did not specify market: ask clarification while listing markets
                         List<PriceRecord> allCommodityRecords = priceRecordRepository.findByCommodityCodeOrderByPriceDateDesc(commodityCode);
                         if (!allCommodityRecords.isEmpty()) {
@@ -155,8 +156,58 @@ public class VoiceAssistantService {
                             responseHi = String.format("%s के लिए वर्तमान में कोई सत्यापित भाव दर्ज नहीं है। दैनिक नीलामी के बाद शाम 4 बजे भाव अपडेट होते हैं।", commNameHi);
                             responsePa = String.format("%s ਲਈ ਕੋਈ ਤਾਜ਼ਾ ਭਾਅ ਨਹੀਂ ਮਿਲਿਆ।", commNamePa);
                         }
+                    } else if (district != null && mandiCode == null) {
+                        // Location specified as district (e.g. Ludhiana). Do not silently resolve to an arbitrary mandi.
+                        List<Mandi> districtMandis = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district);
+                        if (districtMandis.isEmpty()) {
+                            responseEn = String.format("No registered APMC mandis found in %s district. Please specify a nearby district or state.", district);
+                            responseHi = String.format("%s जिले में कोई पंजीकृत एपीएमसी मंडी नहीं मिली। कृपया किसी निकटवर्ती जिले या राज्य का चयन करें।", district);
+                            responsePa = String.format("%s ਜ਼ਿਲ੍ਹੇ ਵਿੱਚ ਕੋਈ ਰਜਿਸਟਰਡ ਏਪੀਐਮਸੀ ਮੰਡੀ ਨਹੀਂ ਮਿਲੀ। ਕਿਰਪਾ ਕਰਕੇ ਨੇੜਲੇ ਜ਼ਿਲ੍ਹੇ ਜਾਂ ਰਾਜ ਦੀ ਚੋਣ ਕਰੋ।", district);
+                        } else if (districtMandis.size() == 1) {
+                            Mandi singleMandi = districtMandis.get(0);
+                            List<PriceRecord> records = priceRecordRepository.findByCommodityCodeAndMandiCodeOrderByPriceDateDesc(commodityCode, singleMandi.getCode());
+                            if (!records.isEmpty()) {
+                                matchedPriceRecords = priceRecordService.getPrices(commodityCode, singleMandi.getCode());
+                                PriceRecord latest = records.get(0);
+                                reportingDate = latest.getPriceDate().toString();
+                                sourceProvenance = latest.getDataSource();
+
+                                String mEn = singleMandi.getNameEn();
+                                String mHi = singleMandi.getNameHi() != null ? singleMandi.getNameHi() : mEn;
+                                String mPa = singleMandi.getNamePa() != null ? singleMandi.getNamePa() : mEn;
+
+                                responseEn = String.format("In %s district, the registered APMC market is %s. Verified Agmarknet modal rate for %s is ₹%s per quintal (Min: ₹%s, Max: ₹%s, Reported %s). Would you like to select %s or check another market?",
+                                        district, mEn, commNameEn, latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, mEn);
+                                responseHi = String.format("%s जिले में पंजीकृत एपीएमसी मंडी '%s' है। %s में %s का प्रमाणित मॉडल भाव ₹%s प्रति क्विंटल है (न्यूनतम: ₹%s, अधिकतम: ₹%s, दिनांक: %s)। क्या आप %s का विवरण देखना चाहते हैं या किसी अन्य मंडी का भाव पूछना चाहते हैं?",
+                                        district, mHi, mHi, commNameHi, latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, mHi);
+                                responsePa = String.format("%s ਜ਼ਿਲ੍ਹੇ ਵਿੱਚ ਰਜਿਸਟਰਡ ਏਪੀਐਮਸੀ ਮੰਡੀ '%s' ਹੈ। %s ਵਿੱਚ %s ਦਾ ਪ੍ਰਮਾਣਿਤ ਮਾਡਲ ਭਾਅ ₹%s ਪ੍ਰਤੀ ਕੁਇੰਟਲ ਹੈ (ਘੱਟੋ-ਘੱਟ: ₹%s, ਵੱਧ ਤੋਂ ਵੱਧ: ₹%s, ਮਿਤੀ: %s)। ਕੀ ਤੁਸੀਂ %s ਦੀ ਜਾਣਕਾਰੀ ਲੈਣੀ ਹੈ ਜਾਂ ਕਿਸੇ ਹੋਰ ਮੰਡੀ ਦਾ ਭਾਅ ਪੁੱਛਣਾ ਚਾਹੁੰਦੇ ਹੋ?",
+                                        district, mPa, mPa, commNamePa, latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, mPa);
+                            } else {
+                                String mEn = singleMandi.getNameEn();
+                                String mHi = singleMandi.getNameHi() != null ? singleMandi.getNameHi() : mEn;
+                                String mPa = singleMandi.getNamePa() != null ? singleMandi.getNamePa() : mEn;
+
+                                responseEn = String.format("In %s district, %s is registered but no current verified price record was found for %s.", district, mEn, commNameEn);
+                                responseHi = String.format("%s जिले में %s पंजीकृत है, परंतु %s के लिए आज कोई आधिकारिक भाव दर्ज नहीं है।", district, mHi, commNameHi);
+                                responsePa = String.format("%s ਜ਼ਿਲ੍ਹੇ ਵਿੱਚ %s ਰਜਿਸਟਰਡ ਹੈ, ਪਰ %s ਦਾ ਅੱਜ ਕੋਈ ਭਾਅ ਦਰਜ ਨਹੀਂ ਹੈ।", district, mPa, commNamePa);
+                            }
+                        } else {
+                            matchedPriceRecords = priceRecordService.getPrices(commodityCode, null).stream()
+                                    .filter(p -> district.equalsIgnoreCase(p.district()))
+                                    .toList();
+                            String namesEn = districtMandis.stream().map(Mandi::getNameEn).collect(Collectors.joining(", "));
+                            String namesHi = districtMandis.stream().map(m -> m.getNameHi() != null ? m.getNameHi() : m.getNameEn()).collect(Collectors.joining(", "));
+                            String namesPa = districtMandis.stream().map(m -> m.getNamePa() != null ? m.getNamePa() : m.getNameEn()).collect(Collectors.joining(", "));
+
+                            responseEn = String.format("In %s district, %d mandis are available: %s. Please select a specific mandi to view verified rates for %s.",
+                                    district, districtMandis.size(), namesEn, commNameEn);
+                            responseHi = String.format("%s जिले में %d मंडियां उपलब्ध हैं: %s। %s का प्रमाणित भाव देखने के लिए कृपया एक मंडी का चयन करें।",
+                                    district, districtMandis.size(), namesHi, commNameHi);
+                            responsePa = String.format("%s ਜ਼ਿਲ੍ਹੇ ਵਿੱਚ %d ਮੰਡੀਆਂ ਉਪਲਬਧ ਹਨ: %s। ਕਿਰਪਾ ਕਰਕੇ %s ਦਾ ਭਾਅ ਦੇਖਣ ਲਈ ਇੱਕ ਮੰਡੀ ਚੁਣੋ।",
+                                    district, districtMandis.size(), namesPa, commNamePa);
+                        }
                     } else {
-                        List<PriceRecord> records = fetchPriceRecords(commodityCode, state, mandiCode);
+                        List<PriceRecord> records = fetchPriceRecords(commodityCode, state, district, mandiCode);
                         if (!records.isEmpty()) {
                             matchedPriceRecords = priceRecordService.getPrices(commodityCode, mandiCode);
                             PriceRecord latest = records.get(0);
@@ -174,12 +225,12 @@ public class VoiceAssistantService {
                             responsePa = String.format("%s ਮੰਡੀ ਵਿੱਚ %s ਦਾ ਪ੍ਰਮਾਣਿਤ ਮਾਡਲ ਭਾਅ ₹%s ਪ੍ਰਤੀ ਕੁਇੰਟਲ ਹੈ (ਘੱਟੋ-ਘੱਟ: ₹%s, ਵੱਧ ਤੋਂ ਵੱਧ: ₹%s, ਮਿਤੀ: %s)।",
                                     mandiNamePa, commNamePa, latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate);
                         } else {
-                            String locDesc = mandiCode != null ? getMandiName(mandiCode, "en") : state;
+                            String locDesc = mandiCode != null ? getMandiName(mandiCode, "en") : (district != null ? district : state);
                             responseEn = String.format("No current verified price record found for %s in %s. Check back after daily APMC auction closure.", commNameEn, locDesc);
                             responseHi = String.format("%s में %s के लिए आज कोई आधिकारिक भाव दर्ज नहीं है। कृपया मंडी नीलामी समाप्त होने के बाद जांचें।",
-                                    mandiCode != null ? getMandiName(mandiCode, "hi") : state, commNameHi);
+                                    mandiCode != null ? getMandiName(mandiCode, "hi") : (district != null ? district : state), commNameHi);
                             responsePa = String.format("%s ਵਿੱਚ %s ਦਾ ਅੱਜ ਦਾ ਭਾਅ ਦਰਜ ਨਹੀਂ ਹੈ।",
-                                    mandiCode != null ? getMandiName(mandiCode, "pa") : state, commNamePa);
+                                    mandiCode != null ? getMandiName(mandiCode, "pa") : (district != null ? district : state), commNamePa);
                         }
                     }
                 } else {
@@ -194,8 +245,13 @@ public class VoiceAssistantService {
                 Commodity commodity = commodityRepository.findByCode(targetComm).orElse(null);
                 List<PriceRecordDto> allPrices = priceRecordService.getPrices(targetComm, null);
 
-                // If state is specified, filter mandis by that state
-                if (state != null && !state.isBlank()) {
+                // If district is specified, filter mandis by district
+                if (district != null && !district.isBlank()) {
+                    allPrices = allPrices.stream()
+                            .filter(p -> p.district() != null && p.district().equalsIgnoreCase(district))
+                            .toList();
+                } else if (state != null && !state.isBlank()) {
+                    // If state is specified, filter mandis by that state
                     allPrices = allPrices.stream()
                             .filter(p -> p.state() != null && p.state().equalsIgnoreCase(state))
                             .toList();
@@ -237,8 +293,8 @@ public class VoiceAssistantService {
                             commodity != null && commodity.getNamePa() != null ? commodity.getNamePa() : targetComm, consistentDateRecords.size(), reportingDate,
                             best.modalPrice(), best.mandiNamePa() != null ? best.mandiNamePa() : best.mandiNameEn(),
                             lowest.modalPrice(), lowest.mandiNamePa() != null ? lowest.mandiNamePa() : lowest.mandiNameEn(), spread);
-                } else if (state != null && !state.isBlank()) {
-                    String stateName = state;
+                } else if ((district != null && !district.isBlank()) || (state != null && !state.isBlank())) {
+                    String regionName = (district != null && !district.isBlank()) ? district : state;
                     String singleMandiInfo = !consistentDateRecords.isEmpty()
                             ? String.format(" (वर्तमान में केवल %s दर्ज है, भाव: ₹%s)", consistentDateRecords.get(0).mandiNameHi(), consistentDateRecords.get(0).modalPrice())
                             : "";
@@ -250,11 +306,11 @@ public class VoiceAssistantService {
                             : "";
 
                     responseEn = String.format("Insufficient comparative records for %s in %s%s. Market recommendation requires verified price filings from at least two mandis on the same reporting date.",
-                            commodity != null ? commodity.getNameEn() : targetComm, stateName, singleMandiInfoEn);
+                            commodity != null ? commodity.getNameEn() : targetComm, regionName, singleMandiInfoEn);
                     responseHi = String.format("%s में %s के लिए तुलनात्मक डेटा अपर्याप्त है%s। विश्वसनीय तुलना और मंडी सिफारिश के लिए एक ही तारीख पर कम से कम दो मंडियों के भाव दर्ज होने आवश्यक हैं।",
-                            stateName, commodity != null ? commodity.getNameHi() : targetComm, singleMandiInfo);
+                            regionName, commodity != null ? commodity.getNameHi() : targetComm, singleMandiInfo);
                     responsePa = String.format("%s ਵਿੱਚ %s ਲਈ ਤੁਲਨਾਤਮਕ ਡਾਟਾ ਨਾਕਾਫ਼ੀ ਹੈ%s। ਮੰਡੀ ਦੀ ਸਿਫ਼ਾਰਸ਼ ਲਈ ਘੱਟੋ-ਘੱਟ ਦੋ ਮੰਡੀਆਂ ਦੇ ਭਾਅ ਚਾਹੀਦੇ ਹਨ।",
-                            stateName, commodity != null && commodity.getNamePa() != null ? commodity.getNamePa() : targetComm, singleMandiInfoPa);
+                            regionName, commodity != null && commodity.getNamePa() != null ? commodity.getNamePa() : targetComm, singleMandiInfoPa);
                 } else {
                     responseEn = "Need price filings from at least two mandis with consistent reporting dates to calculate comparison spread.";
                     responseHi = "तुलना देखने के लिए एक ही तारीख पर कम से कम दो मंडियों के भाव दर्ज होने आवश्यक हैं।";
@@ -336,9 +392,17 @@ public class VoiceAssistantService {
         );
     }
 
-    private List<PriceRecord> fetchPriceRecords(String commCode, String state, String mandiCode) {
+    private List<PriceRecord> fetchPriceRecords(String commCode, String state, String district, String mandiCode) {
         if (mandiCode != null && !mandiCode.isBlank()) {
             return priceRecordRepository.findByCommodityCodeAndMandiCodeOrderByPriceDateDesc(commCode, mandiCode);
+        }
+        if (district != null && !district.isBlank()) {
+            List<Mandi> districtMandis = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district);
+            if (!districtMandis.isEmpty()) {
+                List<String> codes = districtMandis.stream().map(Mandi::getCode).toList();
+                return priceRecordRepository.findByCommodityCodeAndMandiCodeInOrderByPriceDateDesc(commCode, codes);
+            }
+            return List.of();
         }
         if (state != null && !state.isBlank()) {
             List<Mandi> stateMandis = mandiRepository.findByStateIgnoreCaseAndActiveTrue(state);
@@ -357,17 +421,17 @@ public class VoiceAssistantService {
         String lower = text.toLowerCase();
 
         // 1. Commodity Extraction
-        if (lower.contains("wheat") || lower.contains("gehun") || lower.contains("गेहूं") || lower.contains("कनक") || lower.contains("ਕਣਕ")) {
+        if (lower.contains("wheat") || lower.contains("gehun") || lower.contains("gehu") || lower.contains("गेहूं") || lower.contains("गेहूँ") || lower.contains("कनक") || lower.contains("ਕਣਕ")) {
             entities.put("commodity", "WHEAT");
-        } else if (lower.contains("mustard") || lower.contains("sarson") || lower.contains("सरसों") || lower.contains("ਸਰ੍ਹੋਂ") || lower.contains("राई")) {
+        } else if (lower.contains("mustard") || lower.contains("sarson") || lower.contains("सरसों") || lower.contains("सरसो") || lower.contains("ਸਰ੍ਹੋਂ") || lower.contains("ਸਰੋਂ") || lower.contains("राई")) {
             entities.put("commodity", "MUSTARD");
         } else if (lower.contains("paddy") || lower.contains("rice") || lower.contains("dhan") || lower.contains("धान") || lower.contains("चावल") || lower.contains("ਝੋਨਾ") || lower.contains("ਚੌਲ")) {
             entities.put("commodity", "PADDY");
-        } else if (lower.contains("onion") || lower.contains("pyaz") || lower.contains("प्याज") || lower.contains("ਪਿਆਜ਼") || lower.contains("ਗੰਢਾ")) {
+        } else if (lower.contains("onion") || lower.contains("pyaz") || lower.contains("प्याज") || lower.contains("प्यास") || lower.contains("ਪਿਆਜ਼") || lower.contains("ਗੰਢਾ")) {
             entities.put("commodity", "ONION");
         } else if (lower.contains("cotton") || lower.contains("kapas") || lower.contains("कपास") || lower.contains("ਕਪਾਹ")) {
             entities.put("commodity", "COTTON");
-        } else if (lower.contains("maize") || lower.contains("corn") || lower.contains("makka") || lower.contains("मक्का") || lower.contains("ਮੱਕੀ")) {
+        } else if (lower.contains("maize") || lower.contains("corn") || lower.contains("makka") || lower.contains("मक्का") || lower.contains("मक्की") || lower.contains("ਮੱਕੀ")) {
             entities.put("commodity", "MAIZE");
         }
 
@@ -388,8 +452,15 @@ public class VoiceAssistantService {
             entities.put("state", "Uttar Pradesh");
         }
 
-        // 3. Mandi Extraction
-        if (lower.contains("khanna") || lower.contains("खन्ना") || lower.contains("ਖੰਨਾ") || lower.contains("ludhiana") || lower.contains("लुधियाना") || lower.contains("ਲੁਧਿਆਣਾ")) {
+        // 3. District Extraction
+        if (lower.contains("ludhiana") || lower.contains("लुधियाना") || lower.contains("ਲੁਧਿਆਣਾ")) {
+            entities.put("district", "Ludhiana");
+        } else if (lower.contains("nashik") || lower.contains("नासिक")) {
+            entities.put("district", "Nashik");
+        }
+
+        // 4. Mandi Extraction
+        if (lower.contains("khanna") || lower.contains("खन्ना") || lower.contains("ਖੰਨਾ")) {
             entities.put("mandi", "KHANNA_PB");
         } else if (lower.contains("sirsa") || lower.contains("सिरसा") || lower.contains("ਸਿਰਸਾ")) {
             entities.put("mandi", "SIRSA_HR");
@@ -403,6 +474,8 @@ public class VoiceAssistantService {
             entities.put("mandi", "LASALGAON_MH");
         } else if (lower.contains("azadpur") || lower.contains("आजादपुर")) {
             entities.put("mandi", "AZADPUR_DL");
+        } else if (lower.contains("hapur") || lower.contains("हापुड़")) {
+            entities.put("mandi", "HAPUR_UP");
         }
 
         return entities;
@@ -419,7 +492,7 @@ public class VoiceAssistantService {
             return "MANDI_COMPARISON";
         }
         if (lower.contains("भाव") || lower.contains("रेट") || lower.contains("मूल्य") || lower.contains("ਦਰ") || lower.contains("ਕੀ ਭਾਅ") || lower.contains("rate") || lower.contains("price")) {
-            if (entities.containsKey("commodity") || entities.containsKey("mandi") || entities.containsKey("state") || lower.contains("मंडी") || lower.contains("ਮੰਡੀ") || lower.contains("mandi")) {
+            if (entities.containsKey("commodity") || entities.containsKey("mandi") || entities.containsKey("state") || entities.containsKey("district") || lower.contains("मंडी") || lower.contains("ਮੰਡੀ") || lower.contains("mandi")) {
                 return "MANDI_PRICE_LOOKUP";
             }
             return "UNKNOWN";

@@ -43,6 +43,7 @@ export const App: React.FC = () => {
                 <Routes>
                   <Route path="/" element={<Home />} />
                   <Route path="/assistant" element={<VoiceAssistant />} />
+                  <Route path="/voice" element={<VoiceAssistant />} />
                   <Route path="/prices" element={<PriceIntelligence />} />
                   <Route path="/compare" element={<MandiComparison />} />
                   <Route path="/schemes" element={<GovernmentSchemes />} />
