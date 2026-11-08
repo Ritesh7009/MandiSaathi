@@ -9,14 +9,14 @@ export default {
       colors: {
         forest: {
           DEFAULT: '#174B35',
-          dark: '#0D2B1E',
+          dark: '#103C2B',
           light: '#216347',
           50: '#F0F7F3',
           100: '#D9EBE1',
           200: '#B8DAC7',
           700: '#1F5E43',
           800: '#174B35',
-          900: '#0D2B1E',
+          900: '#103C2B',
         },
         harvest: {
           DEFAULT: '#D7B66A',
@@ -38,11 +38,11 @@ export default {
           400: '#DDD8CB',
         },
         charcoal: {
-          DEFAULT: '#1B2620',
-          light: '#2D3D34',
-          dark: '#121A16',
+          DEFAULT: '#25352C',
+          light: '#35483D',
+          dark: '#16211B',
           muted: '#5A6B62',
-          subtle: '#829289',
+          subtle: '#7E9186',
         },
         mutedGreen: {
           DEFAULT: '#78917E',

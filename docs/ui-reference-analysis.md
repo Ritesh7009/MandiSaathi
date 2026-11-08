@@ -90,3 +90,4 @@ The redesigned interface embodies an **Editorial AgriTech** aesthetic:
 - **Canvas**: Warm ivory (`#F5F3EA`) grounding the experience in natural organic paper/earth tones, avoiding clinical SaaS white or harsh dark modes.
 - **Accent**: Deep Forest Green (`#174B35`) for brand foundation and primary interactive elements; Harvest Gold (`#D7B66A`) strictly reserved for verified badges, price spread differentials, and active audio pulses.
 - **Typography**: Inter for crisp numerical and tabular data; Noto Sans Devanagari and Noto Sans Gurmukhi for culturally authentic regional scripts.
+

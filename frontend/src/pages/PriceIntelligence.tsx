@@ -10,6 +10,7 @@ import {
   saveMandis,
 } from '../services/offlineStorage';
 import { MetricTile } from '../components/ui/MetricTile';
+import { PriceSpreadBar } from '../components/ui/PriceSpreadBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import {
@@ -639,6 +640,14 @@ export const PriceIntelligence: React.FC = () => {
                     <span>Range: ₹{r.minPrice} – ₹{r.maxPrice}</span>
                     <span>Date: {r.priceDate}</span>
                   </div>
+
+                  <PriceSpreadBar
+                    minPrice={r.minPrice}
+                    modalPrice={r.modalPrice}
+                    maxPrice={r.maxPrice}
+                    unit="₹/Qtl"
+                    className="pt-1"
+                  />
                 </div>
               );
             })}

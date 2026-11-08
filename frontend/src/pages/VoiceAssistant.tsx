@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { api } from '../services/apiClient';
 import { VoiceWaveVisualizer } from '../components/ui/VoiceWaveVisualizer';
+import { PriceSpreadBar } from '../components/ui/PriceSpreadBar';
 import {
   Mic,
   Square,
@@ -43,6 +44,8 @@ export const VoiceAssistant: React.FC = () => {
   const [textInput, setTextInput] = useState<string>('');
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
   const [audioLevel, setAudioLevel] = useState<number>(0);
+  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Audio recording & playback references
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -74,6 +77,7 @@ export const VoiceAssistant: React.FC = () => {
     return () => {
       stopAudioRecording();
       stopAudioPlayback();
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
     };
@@ -112,6 +116,11 @@ export const VoiceAssistant: React.FC = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setState('recording');
+      setRecordingSeconds(0);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
 
       // Set up AudioContext Analyser for dynamic wave reactivity
       try {
@@ -185,6 +194,10 @@ export const VoiceAssistant: React.FC = () => {
   };
 
   const stopAudioRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       setState('transcribing');
@@ -411,6 +424,9 @@ export const VoiceAssistant: React.FC = () => {
             >
               <Square className="w-4 h-4 fill-white" />
               <span>Stop & Process Voice</span>
+              <span className="ml-1 px-2 py-0.5 rounded-full bg-red-800/80 text-[11px] font-mono font-medium">
+                00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}
+              </span>
             </button>
           ) : (
             <button
@@ -523,9 +539,11 @@ export const VoiceAssistant: React.FC = () => {
             )}
 
             {/* Response Prose Text */}
-            <p className="text-sm sm:text-base leading-relaxed text-charcoal font-medium">
-              {response.responseText}
-            </p>
+            <div className="border-l-2 border-forest/60 pl-3.5 py-0.5">
+              <p className="text-sm sm:text-base leading-relaxed text-charcoal font-medium">
+                {response.responseText}
+              </p>
+            </div>
 
             {/* Verified Mandi Rate Cards (Grounding) */}
             {response.priceRecords && response.priceRecords.length > 0 && (
@@ -577,6 +595,14 @@ export const VoiceAssistant: React.FC = () => {
                           <div>Max: ₹{rec.maxPrice}</div>
                         </div>
                       </div>
+
+                      <PriceSpreadBar
+                        minPrice={rec.minPrice}
+                        modalPrice={rec.modalPrice}
+                        maxPrice={rec.maxPrice}
+                        unit={rec.unit || 'Quintal'}
+                        className="mt-2.5 pt-2 border-t border-hairline"
+                      />
                     </div>
                   ))}
                 </div>

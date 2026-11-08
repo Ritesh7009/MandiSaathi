@@ -280,6 +280,11 @@ export const MandiComparison: React.FC = () => {
               label={t('differenceSpread')}
               value={`₹${analytics.spread.toLocaleString('en-IN')}`}
               unit="Gain / Quintal"
+              subtext={
+                analytics.spread > 0
+                  ? `≈ +₹${(analytics.spread * 50).toLocaleString('en-IN')} arbitrage gain on a 50-quintal tractor trolley`
+                  : 'Zero spread across selected markets'
+              }
               variant="harvest"
               badge="Differential"
               icon={<ArrowRightLeft className="w-4 h-4 text-forest" />}

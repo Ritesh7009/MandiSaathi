@@ -5,7 +5,16 @@
 @layer base {
   :root {
     --app-bg: #F5F3EA;
-    --app-text: #1B2620;
+    --app-text: #25352C;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html.text-lg {
+    font-size: 18px;
   }
 
   body {
@@ -14,6 +23,7 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
   }
 
   /* Universal Tabular Figures for currency & statistics */
@@ -47,4 +57,16 @@
 *:focus-visible {
   outline: 2px solid #174B35;
   outline-offset: 2px;
+}
+
+/* Reduced Motion Safety */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

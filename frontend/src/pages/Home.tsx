@@ -6,6 +6,7 @@ import { api } from '../services/apiClient';
 import { PromptChip } from '../components/ui/PromptChip';
 import {
   Mic,
+  Search,
   ArrowRight,
   ShieldCheck,
   Sparkles,
@@ -20,6 +21,7 @@ export const Home: React.FC = () => {
   const navigate = useNavigate();
 
   const [recentQueries, setRecentQueries] = useState<RecentConversation[]>([]);
+  const [homeQuery, setHomeQuery] = useState<string>('');
 
   useEffect(() => {
     try {
@@ -127,6 +129,39 @@ export const Home: React.FC = () => {
           <span className="text-[11px] font-mono font-medium text-charcoal-muted mt-4">
             Tap mic to begin voice query
           </span>
+
+          {/* Quick Search Input Fallback */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (homeQuery.trim()) {
+                navigate(`/assistant?q=${encodeURIComponent(homeQuery.trim())}`);
+              }
+            }}
+            className="mt-5 w-full max-w-md mx-auto flex items-center bg-surface border border-hairline rounded-full px-3.5 py-1.5 shadow-subtle focus-within:border-forest focus-within:ring-2 focus-within:ring-forest/20 transition-all"
+          >
+            <Search className="w-4 h-4 text-forest-light ml-1 mr-2 shrink-0" />
+            <input
+              type="text"
+              value={homeQuery}
+              onChange={(e) => setHomeQuery(e.target.value)}
+              placeholder={
+                language === 'hi'
+                  ? 'या टाइप करके पूछें: आज गेहूं का भाव क्या है?'
+                  : language === 'pa'
+                  ? 'ਜਾਂ ਲਿਖ ਕੇ ਪੁੱਛੋ: ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?'
+                  : 'Or type: What is the wheat price in Punjab today?'
+              }
+              className="w-full bg-transparent text-xs text-charcoal placeholder-charcoal-muted focus:outline-none py-1"
+            />
+            <button
+              type="submit"
+              className="p-1.5 rounded-full bg-forest hover:bg-forest-light text-white transition-all cursor-pointer shrink-0 ml-1.5"
+              aria-label="Submit Search"
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </form>
         </div>
 
         {/* Suggested Queries Chips */}

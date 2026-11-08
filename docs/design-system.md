@@ -12,7 +12,7 @@ MandiSaathi uses a three-layer color architecture: **Primitive $\rightarrow$ Sem
 
 | Token Name | Hex Code | Swatch & Context |
 | :--- | :--- | :--- |
-| `forest-900` | `#0D2B1E` | Deepest brand baseline, high-contrast dark text |
+| `forest-900` | `#103C2B` | Deepest brand baseline, high-contrast dark text |
 | `forest-800` | `#174B35` | **Primary Brand Forest Green**, active controls, key buttons |
 | `forest-700` | `#1F5E43` | Hover states for primary buttons |
 | `forest-100` | `#D9EBE1` | Subtle tint for active badges, selection fills |
@@ -25,10 +25,10 @@ MandiSaathi uses a three-layer color architecture: **Primitive $\rightarrow$ Sem
 | `ivory-100` | `#F5F3EA` | **Warm Ivory Background Canvas** (organic paper tone) |
 | `ivory-200` | `#E8E5DC` | Hairline divider border, clean table grid rules |
 | `ivory-300` | `#DDD8CB` | Inactive control borders, outline states |
-| `charcoal-900` | `#1B2620` | Primary headings, highest legibility body text |
-| `charcoal-700` | `#2D3D34` | Standard body copy |
+| `charcoal-900` | `#25352C` | Primary headings, highest legibility body text |
+| `charcoal-700` | `#35483D` | Standard body copy |
 | `charcoal-500` | `#5A6B62` | Secondary metadata, timestamps, units |
-| `charcoal-400` | `#829289` | Placeholder text, subtle icons |
+| `charcoal-400` | `#7E9186` | Placeholder text, subtle icons |
 
 ### 1.2 Semantic Application Tokens
 
@@ -131,6 +131,12 @@ MandiSaathi pairs modern sans-serif typography with dedicated Indic typefaces an
   - Line 2: Mandi location + Auction reporting date + Arrival volume.
   - Zero awkward horizontal scrollbars.
 
+### 4.5 Price Spread Gauge (`PriceSpreadBar`)
+- Visualizes where the APMC modal price falls between the day's auction floor (minimum price) and ceiling (maximum price).
+- Dynamic percentage positioning: `((modal - min) / (max - min)) * 100%`.
+- Hairline track with soft fill and high-contrast marker dot.
+- Gives farmers instantaneous visual comprehension of auction price distributions.
+
 ---
 
 ## 5. Responsive Breakpoints & Thumb-Zone Guidelines
@@ -142,3 +148,4 @@ MandiSaathi pairs modern sans-serif typography with dedicated Indic typefaces an
 
 ### Thumb-Zone Accessibility:
 - On mobile, the primary voice action is anchored in the bottom navigation center (`MobileBottomNav.tsx`), elevated by 12px for effortless one-handed thumb reach during field use.
+

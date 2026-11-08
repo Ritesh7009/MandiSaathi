@@ -113,6 +113,7 @@ Rather than importing heavyweight UI libraries that could introduce bundle bloat
 | **Apple Top Bar** | iOS / macOS navigation | `Header.tsx`: Translucent glassmorphism (`backdrop-blur-md`), font scaling controls, network indicator. |
 | **Floating Thumb Nav** | Cult UI / Mobile native | `MobileBottomNav.tsx`: Elevated central voice trigger (`harvest-500` orb) within 44px touch target. |
 | **Dynamic Waveform** | Motion Primitives / Skiper UI | `VoiceWaveVisualizer.tsx`: Concentric ripple pulse (`radar`) + 16 dynamic frequency bars. |
+| **Price Spread Gauge** | Bloomberg / Financial Times | `PriceSpreadBar.tsx`: Dynamic floor-to-ceiling slider showing proportional position of modal price. |
 | **Metric Tiles** | Watermelon UI / Financial Times | `MetricTile.tsx`: Hairline border, uppercase micro-label, high-contrast tabular numeral. |
 | **Smooth Accordion** | Radix UI / Tailwind primitives | `AccordionItem.tsx`: Pure CSS grid height transition, rotating chevron, zero external deps. |
 
@@ -188,3 +189,4 @@ The redesigned frontend underwent exhaustive automated testing across unit, inte
 The MandiSaathi UI/UX redesign successfully elevates the product from a proof-of-concept hackathon dashboard into a **distinctive, publication-grade agricultural intelligence tool**.
 
 By honoring the agricultural domain—pairing high-contrast typography and tabular figures with warm organic tones and thumb-first ergonomics—MandiSaathi provides Indian farmers with a fast, dignified, and reliable companion for price discovery and market fairness.
+
