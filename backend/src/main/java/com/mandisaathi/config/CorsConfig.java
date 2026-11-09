@@ -28,8 +28,21 @@ public class CorsConfig {
         }
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept",
+                "Origin",
+                "X-Admin-Key",
+                "X-Tracking-Token"
+        ));
+        configuration.setExposedHeaders(List.of(
+                "Authorization",
+                "Retry-After",
+                "X-Admin-Key",
+                "X-Tracking-Token"
+        ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -38,4 +51,3 @@ public class CorsConfig {
         return source;
     }
 }
-

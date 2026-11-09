@@ -3,6 +3,7 @@ package com.mandisaathi.controller;
 import com.mandisaathi.dto.ComplaintDto;
 import com.mandisaathi.dto.ComplaintRequest;
 import com.mandisaathi.service.ComplaintService;
+import com.mandisaathi.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -26,18 +27,9 @@ public class ComplaintController {
             @Valid @RequestBody ComplaintRequest request,
             HttpServletRequest httpServletRequest
     ) {
-        String clientIp = extractClientIp(httpServletRequest);
+        String clientIp = ClientIpResolver.resolve(httpServletRequest);
         ComplaintDto created = complaintService.registerComplaint(request, clientIp);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
-    }
-
-    private String extractClientIp(HttpServletRequest request) {
-        if (request == null) return "127.0.0.1";
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "127.0.0.1";
     }
 
     @GetMapping

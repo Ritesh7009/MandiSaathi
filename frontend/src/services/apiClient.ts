@@ -101,13 +101,16 @@ export const api = {
       body: JSON.stringify({ commodityCode, mandiCodes: mandiCodes || [] }),
     }),
 
-  syncMandiPrices: (): Promise<IngestionSummary> =>
+  syncMandiPrices: (adminKey?: string): Promise<IngestionSummary> =>
     fetchJson<IngestionSummary>('/api/v1/prices/sync', {
       method: 'POST',
+      headers: adminKey ? { 'X-Admin-Key': adminKey } : {},
     }),
 
-  getSyncStatus: (): Promise<SyncStatus> =>
-    fetchJson<SyncStatus>('/api/v1/prices/sync/status'),
+  getSyncStatus: (adminKey?: string): Promise<SyncStatus> =>
+    fetchJson<SyncStatus>('/api/v1/prices/sync/status', {
+      headers: adminKey ? { 'X-Admin-Key': adminKey } : {},
+    }),
 
   // Government Schemes
   getSchemes: (category?: string, search?: string): Promise<GovernmentScheme[]> => {

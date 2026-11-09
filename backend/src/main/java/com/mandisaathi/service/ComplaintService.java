@@ -7,11 +7,14 @@ import com.mandisaathi.entity.Mandi;
 import com.mandisaathi.exception.ResourceNotFoundException;
 import com.mandisaathi.repository.ComplaintRepository;
 import com.mandisaathi.repository.MandiRepository;
+import com.mandisaathi.util.ClientIpResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
@@ -45,7 +48,9 @@ public class ComplaintService {
     public ComplaintDto registerComplaint(ComplaintRequest request, String clientIp) {
         // Abuse protection check per IP per minute
         long currentMinute = System.currentTimeMillis() / 60000;
-        String safeIp = (clientIp != null && !clientIp.isBlank()) ? clientIp.trim() : "unknown";
+        String safeIp = (clientIp != null && ClientIpResolver.isValidIp(clientIp.trim()))
+                ? clientIp.trim()
+                : "127.0.0.1";
         String rateKey = safeIp + ":" + currentMinute;
 
         submissionRateMap.entrySet().removeIf(e -> {
@@ -122,7 +127,12 @@ public class ComplaintService {
     }
 
     private boolean isAdmin(String providedKey) {
-        return providedKey != null && !providedKey.isBlank() && providedKey.equals(adminApiKey);
+        if (providedKey == null || providedKey.isBlank() || adminApiKey == null || adminApiKey.isBlank()) {
+            return false;
+        }
+        byte[] providedBytes = providedKey.trim().getBytes(StandardCharsets.UTF_8);
+        byte[] actualBytes = adminApiKey.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(providedBytes, actualBytes);
     }
 
     private ComplaintDto toDto(Complaint c, boolean includeTrackingToken, boolean isPrivileged) {

@@ -100,7 +100,8 @@ class PriceRecordControllerTest {
 
     @Test
     void shouldTriggerManualSyncAndReturnSummary() throws Exception {
-        mockMvc.perform(post("/api/v1/prices/sync"))
+        mockMvc.perform(post("/api/v1/prices/sync")
+                        .header("X-Admin-Key", "mandisaathi_admin_secret_2026"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").exists())
                 .andExpect(jsonPath("$.message").exists());
@@ -109,16 +110,32 @@ class PriceRecordControllerTest {
     @Test
     void shouldReturnSyncStatusAndHistory() throws Exception {
         // Trigger a sync first to generate a run
-        mockMvc.perform(post("/api/v1/prices/sync"))
+        mockMvc.perform(post("/api/v1/prices/sync")
+                        .header("X-Admin-Key", "mandisaathi_admin_secret_2026"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/prices/sync/status"))
+        mockMvc.perform(get("/api/v1/prices/sync/status")
+                        .header("X-Admin-Key", "mandisaathi_admin_secret_2026"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cron", is("0 0 19 * * *")))
                 .andExpect(jsonPath("$.zone", is("Asia/Kolkata")))
                 .andExpect(jsonPath("$.isRunning", is(false)))
                 .andExpect(jsonPath("$.latestRun").exists())
                 .andExpect(jsonPath("$.recentRuns", hasSize(greaterThanOrEqualTo(1))));
+    }
+
+    @Test
+    void shouldRejectUnauthenticatedSyncWithForbidden() throws Exception {
+        mockMvc.perform(post("/api/v1/prices/sync"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", containsString("Administrative authorization required")));
+    }
+
+    @Test
+    void shouldRejectUnauthenticatedSyncStatusWithForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/prices/sync/status"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", containsString("Administrative authorization required")));
     }
 }
 

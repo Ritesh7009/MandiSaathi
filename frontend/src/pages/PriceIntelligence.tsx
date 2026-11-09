@@ -201,8 +201,13 @@ export const PriceIntelligence: React.FC = () => {
       const summary = await api.syncMandiPrices();
       setSyncSummary(summary);
       await refetchPrices();
-    } catch (err) {
-      setSyncError(err instanceof Error ? err.message : 'Agmarknet synchronization failed');
+    } catch (err: any) {
+      await refetchPrices();
+      if (err?.status === 403) {
+        setSyncError('Live Agmarknet synchronization requires administrative authorization.');
+      } else {
+        setSyncError(err instanceof Error ? err.message : 'Agmarknet synchronization failed');
+      }
     } finally {
       setIsSyncing(false);
     }
