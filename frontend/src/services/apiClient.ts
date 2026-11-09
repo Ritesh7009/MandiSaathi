@@ -128,10 +128,18 @@ export const api = {
       body: JSON.stringify(request),
     }),
 
-  getComplaints: (): Promise<Complaint[]> => fetchJson<Complaint[]>('/api/v1/complaints'),
+  getComplaints: (adminKey?: string): Promise<Complaint[]> =>
+    fetchJson<Complaint[]>('/api/v1/complaints', {
+      headers: adminKey ? { 'X-Admin-Key': adminKey } : {},
+    }),
 
-  getComplaintByRef: (referenceNumber: string): Promise<Complaint> =>
-    fetchJson<Complaint>(`/api/v1/complaints/${encodeURIComponent(referenceNumber)}`),
+  getComplaintByRef: (referenceNumber: string, trackingToken?: string, adminKey?: string): Promise<Complaint> => {
+    const headers: Record<string, string> = {};
+    if (trackingToken) headers['X-Tracking-Token'] = trackingToken;
+    if (adminKey) headers['X-Admin-Key'] = adminKey;
+    const qs = trackingToken ? `?trackingToken=${encodeURIComponent(trackingToken)}` : '';
+    return fetchJson<Complaint>(`/api/v1/complaints/${encodeURIComponent(referenceNumber)}${qs}`, { headers });
+  },
 
   // Voice Assistant
   sendVoiceQuery: (queryText: string, language?: string): Promise<VoiceQueryResponse> =>

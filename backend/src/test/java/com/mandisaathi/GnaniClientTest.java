@@ -49,7 +49,9 @@ class GnaniClientTest {
                 5000,
                 "Nalini",
                 "Nalini",
-                "Kaveri"
+                "Kaveri",
+                5,
+                3000
         );
 
         RestClient.Builder builder = RestClient.builder();
@@ -158,7 +160,7 @@ class GnaniClientTest {
     void testMissingCredentialsReturnsFailure() {
         GnaniProperties unconfigured = new GnaniProperties(
                 true, "", "https://api.vachana.ai/stt/v3", "https://api.vachana.ai/api/v1/tts/inference",
-                "prisma-v2.5", "timbre-v2.5", 5000, "Nalini", "Nalini", "Kaveri"
+                "prisma-v2.5", "timbre-v2.5", 5000, "Nalini", "Nalini", "Kaveri", 5, 3000
         );
         GnaniSttServiceImpl unconfiguredStt = new GnaniSttServiceImpl(unconfigured, restClient, objectMapper);
 

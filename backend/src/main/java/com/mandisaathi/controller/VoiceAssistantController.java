@@ -78,8 +78,9 @@ public class VoiceAssistantController {
         VoiceQueryResponse response = voiceAssistantService.processAudioQuery(audioBytes, language, filename, contentType, durationSec);
         long totalLatencyMs = System.currentTimeMillis() - startTime;
 
-        log.info("Voice audio request finished: filename='{}', totalLatency={}ms, sttLatency={}ms, status={}, transcript='{}', intent='{}'",
-                filename, totalLatencyMs, response.sttLatencyMs(), response.statusCode(), response.transcript(), response.intent());
+        int transcriptLen = response.transcript() != null ? response.transcript().length() : 0;
+        log.info("Voice audio request finished: filename='{}', totalLatency={}ms, sttLatency={}ms, status={}, charCount={}, intent='{}'",
+                filename, totalLatencyMs, response.sttLatencyMs(), response.statusCode(), transcriptLen, response.intent());
 
         if (response.statusCode() != null && response.statusCode() == 429) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);

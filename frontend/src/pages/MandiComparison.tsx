@@ -672,10 +672,10 @@ export const MandiComparison: React.FC = () => {
           <div className="rounded-xl border border-hairline bg-surface-white p-8 text-center max-w-xl mx-auto shadow-subtle">
             <Wheat className="w-10 h-10 text-charcoal-muted mx-auto mb-2" />
             <h3 className="font-bold text-charcoal text-base mb-1">
-              No Comparison Data Available
+              No Common-Date Comparison Data Available
             </h3>
-            <p className="text-xs text-charcoal-muted mb-4">
-              None of the selected mandis have filed price reports for {selectedCommodity} today. Try selecting Khanna (PB), Sirsa (HR), or Karnal (HR).
+            <p className="text-xs text-charcoal-muted mb-4 leading-relaxed">
+              {summaryText || `None of the selected mandis have filed price reports for ${selectedCommodity} on a common reporting date. Try selecting Khanna (PB), Sirsa (HR), or Karnal (HR).`}
             </p>
             <button
               type="button"

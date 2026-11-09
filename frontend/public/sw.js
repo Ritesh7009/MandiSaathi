@@ -4,8 +4,8 @@
  * and passes non-GET voice / grievance requests directly to network.
  */
 
-const CACHE_NAME = 'mandisaathi-core-v1';
-const API_CACHE_NAME = 'mandisaathi-api-v1';
+const CACHE_NAME = 'mandisaathi-core-v2';
+const API_CACHE_NAME = 'mandisaathi-api-v2';
 
 const STATIC_PRECACHE = [
   '/',
@@ -116,8 +116,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API read queries (GET /api/v1/...)
-  if (url.pathname.startsWith('/api/v1/')) {
+  // API read queries: Explicit allowlist of public agricultural endpoints safe for offline caching
+  const isAllowlistedPublicApi =
+    url.pathname.startsWith('/api/v1/commodities') ||
+    url.pathname.startsWith('/api/v1/mandis') ||
+    url.pathname.startsWith('/api/v1/prices') ||
+    url.pathname.startsWith('/api/v1/schemes');
+
+  // Explicitly NEVER cache grievance records, personal data, voice endpoints, or administrative routes
+  const isExcludedFromCache =
+    url.pathname.startsWith('/api/v1/complaints') ||
+    url.pathname.startsWith('/api/v1/voice') ||
+    url.pathname.startsWith('/api/v1/health') ||
+    url.pathname.startsWith('/actuator');
+
+  if (isAllowlistedPublicApi && !isExcludedFromCache) {
     event.respondWith(
       fetch(request)
         .then((networkResponse) => {

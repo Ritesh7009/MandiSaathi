@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLanguage } from '../context/LanguageContext';
 import { api } from '../services/apiClient';
-import { LoadingSpinner } from '../components/LoadingSpinner';
 import {
   FileText,
   AlertOctagon,
@@ -10,18 +9,19 @@ import {
   ArrowRight,
   ArrowLeft,
   Building2,
-  Clock,
   Phone,
   User,
   Info,
   Copy,
   Check,
+  ShieldCheck,
+  Search,
+  Key,
 } from 'lucide-react';
 import { ComplaintRequest, Complaint } from '../types';
 
 export const ComplaintRegistration: React.FC = () => {
   const { language, t } = useLanguage();
-  const queryClient = useQueryClient();
 
   // Form State
   const [category, setCategory] = useState<string>('WEIGHMENT_DISPARITY');
@@ -36,7 +36,25 @@ export const ComplaintRegistration: React.FC = () => {
   const [step, setStep] = useState<'edit' | 'review' | 'success'>('edit');
   const [submittedComplaint, setSubmittedComplaint] = useState<Complaint | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Local device grievances storage (Privacy-preserving)
+  const [complaints, setComplaints] = useState<Complaint[]>(() => {
+    try {
+      const stored = localStorage.getItem('mandisaathi_filed_complaints');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Track Grievance state
+  const [trackRef, setTrackRef] = useState<string>('');
+  const [trackToken, setTrackToken] = useState<string>('');
+  const [trackResult, setTrackResult] = useState<Complaint | null>(null);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState<boolean>(false);
 
   // Mandis list for dropdown
   const { data: mandis = [] } = useQuery({
@@ -45,29 +63,47 @@ export const ComplaintRegistration: React.FC = () => {
     staleTime: 120000,
   });
 
-  // Fetch recorded complaints list
-  const {
-    data: complaints = [],
-    isLoading: loadingComplaints,
-    isError: errorComplaints,
-  } = useQuery({
-    queryKey: ['registeredComplaints'],
-    queryFn: () => api.getComplaints(),
-    staleTime: 30000,
-  });
-
   // Registration Mutation
   const registerMutation = useMutation({
     mutationFn: (request: ComplaintRequest) => api.registerComplaint(request),
     onSuccess: (newComplaint) => {
       setSubmittedComplaint(newComplaint);
       setStep('success');
-      queryClient.invalidateQueries({ queryKey: ['registeredComplaints'] });
+      try {
+        const updated = [newComplaint, ...complaints.filter(c => c.referenceNumber !== newComplaint.referenceNumber)];
+        setComplaints(updated);
+        localStorage.setItem('mandisaathi_filed_complaints', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Failed to save complaint to local storage', err);
+      }
     },
     onError: (err: Error) => {
       setValidationError(err.message || t('errFailedRegisterGrievance'));
     },
   });
+
+  const handleTrackComplaint = async (refToTrack?: string, tokenToTrack?: string) => {
+    const r = (refToTrack || trackRef).trim();
+    const tok = (tokenToTrack || trackToken).trim();
+    if (!r || !tok) {
+      setTrackError('Both Reference Number and Tracking Token are required.');
+      return;
+    }
+    setTrackingLoading(true);
+    setTrackError(null);
+    try {
+      const res = await api.getComplaintByRef(r, tok);
+      setTrackResult(res);
+      // Update locally cached record
+      const updated = complaints.map(c => c.referenceNumber === res.referenceNumber ? { ...c, ...res } : c);
+      setComplaints(updated);
+      localStorage.setItem('mandisaathi_filed_complaints', JSON.stringify(updated));
+    } catch (err: any) {
+      setTrackError(err.message || 'Grievance not found or invalid tracking token.');
+    } finally {
+      setTrackingLoading(false);
+    }
+  };
 
   const categories = [
     { code: 'WEIGHMENT_DISPARITY', labelKey: 'catWeighment' },
@@ -120,6 +156,12 @@ export const ComplaintRegistration: React.FC = () => {
     navigator.clipboard.writeText(ref);
     setCopiedRef(true);
     setTimeout(() => setCopiedRef(false), 2000);
+  };
+
+  const handleCopyToken = (tok: string) => {
+    navigator.clipboard.writeText(tok);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
   };
 
   const getCategoryLabel = (catCode: string) => {
@@ -437,32 +479,50 @@ export const ComplaintRegistration: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Reference Number Card */}
-                <div className="bg-forest-50 border border-forest/25 rounded-xl p-4 max-w-sm mx-auto flex items-center justify-between shadow-subtle">
-                  <span className="font-mono text-base font-bold text-forest tracking-wider">
-                    {submittedComplaint.referenceNumber}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyReference(submittedComplaint.referenceNumber)}
-                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-surface-white text-forest border border-forest/20 text-xs font-semibold hover:bg-forest hover:text-white transition-all cursor-pointer shadow-subtle"
-                  >
-                    {copiedRef ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-forest" />
-                        <span>Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
+                {/* Reference Number & Tracking Token Cards */}
+                <div className="space-y-3 max-w-sm mx-auto">
+                  <div className="bg-forest-50 border border-forest/25 rounded-xl p-3 flex items-center justify-between shadow-subtle">
+                    <div className="text-left">
+                      <div className="text-[10px] uppercase font-bold text-forest">Reference Number</div>
+                      <span className="font-mono text-sm font-bold text-forest tracking-wider">
+                        {submittedComplaint.referenceNumber}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyReference(submittedComplaint.referenceNumber)}
+                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-surface-white text-forest border border-forest/20 text-xs font-semibold hover:bg-forest hover:text-white transition-all cursor-pointer shadow-subtle"
+                    >
+                      {copiedRef ? <Check className="w-3.5 h-3.5 text-forest" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedRef ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+
+                  {submittedComplaint.trackingToken && (
+                    <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between shadow-subtle">
+                      <div className="text-left">
+                        <div className="text-[10px] uppercase font-bold text-amber-800 flex items-center space-x-1">
+                          <Key className="w-3 h-3 text-amber-700" />
+                          <span>Secret Tracking Token</span>
+                        </div>
+                        <span className="font-mono text-xs font-semibold text-amber-900 tracking-wider">
+                          {submittedComplaint.trackingToken}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyToken(submittedComplaint.trackingToken!)}
+                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-surface-white text-amber-900 border border-amber-300 text-xs font-semibold hover:bg-amber-700 hover:text-white transition-all cursor-pointer shadow-subtle"
+                      >
+                        {copiedToken ? <Check className="w-3.5 h-3.5 text-amber-700" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedToken ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-[11px] text-charcoal-muted max-w-md mx-auto leading-relaxed pt-2">
-                  Status: <span className="font-semibold text-forest">RECORDED</span>. Your issue has been stored with official timestamp. Keep this reference number for follow-up and farmer union representation.
+                  Status: <span className="font-semibold text-forest">RECORDED</span>. Your grievance has been recorded and safely saved to your local device. Keep your secret tracking token to track updates privately.
                 </div>
 
                 <div className="pt-3">
@@ -479,43 +539,93 @@ export const ComplaintRegistration: React.FC = () => {
           </div>
         </section>
 
-        {/* Right Column: Previously Recorded Complaints */}
+        {/* Right Column: Local Device Grievances & Private Tracking */}
         <section className="lg:col-span-5 space-y-4">
-          <div className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle">
-            <div className="flex items-center justify-between border-b border-hairline pb-3 mb-3">
+          <div className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle space-y-4">
+            <div className="flex items-center justify-between border-b border-hairline pb-3">
               <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider flex items-center space-x-1.5">
-                <Clock className="w-4 h-4 text-forest" />
-                <span>{t('registeredComplaintsTitle')}</span>
+                <ShieldCheck className="w-4 h-4 text-forest" />
+                <span>My Filed Grievances</span>
               </h2>
               <span className="text-[11px] font-mono text-charcoal-muted">
-                {complaints.length} Records
+                {complaints.length} Saved on Device
               </span>
             </div>
 
-            {loadingComplaints && (
-              <div className="p-8 flex justify-center">
-                <LoadingSpinner />
-              </div>
-            )}
+            {/* Privacy Guarantee Banner */}
+            <div className="p-3 bg-surface rounded-lg text-[11px] text-charcoal-muted flex items-start space-x-2 leading-relaxed">
+              <Info className="w-4 h-4 text-forest flex-shrink-0 mt-0.5" />
+              <span>
+                <strong>Privacy Protected:</strong> Grievance listings are never exposed publicly. Your filings are stored locally on this device, and status lookups require your unguessable tracking token.
+              </span>
+            </div>
 
-            {errorComplaints && (
-              <div className="p-3 bg-surface rounded-lg text-xs text-charcoal-muted">
-                Unable to load recent complaints.
+            {/* Quick Track Input */}
+            <div className="p-3.5 bg-forest-50/40 border border-forest/15 rounded-lg space-y-2.5">
+              <div className="text-xs font-bold text-charcoal flex items-center space-x-1">
+                <Search className="w-3.5 h-3.5 text-forest" />
+                <span>Track a Grievance</span>
               </div>
-            )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  placeholder="Ref (MS-2026-XXXXX)"
+                  value={trackRef}
+                  onChange={(e) => setTrackRef(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs font-mono rounded border border-hairline bg-surface-white focus:outline-none focus:ring-1 focus:ring-forest"
+                />
+                <input
+                  type="text"
+                  placeholder="Secret Tracking Token"
+                  value={trackToken}
+                  onChange={(e) => setTrackToken(e.target.value)}
+                  className="px-2.5 py-1.5 text-xs font-mono rounded border border-hairline bg-surface-white focus:outline-none focus:ring-1 focus:ring-forest"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTrackComplaint()}
+                disabled={trackingLoading || !trackRef.trim() || !trackToken.trim()}
+                className="w-full py-1.5 bg-forest text-surface-white text-xs font-semibold rounded hover:bg-forest-light transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {trackingLoading ? 'Verifying...' : 'Check Status'}
+              </button>
 
-            {!loadingComplaints && !errorComplaints && complaints.length === 0 && (
-              <div className="text-center py-8 text-charcoal-muted text-xs">
+              {trackError && (
+                <div className="text-[11px] text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                  {trackError}
+                </div>
+              )}
+
+              {trackResult && (
+                <div className="p-3 bg-surface-white border border-forest/30 rounded-lg space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-forest">{trackResult.referenceNumber}</span>
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-forest-50 text-forest border border-forest/20">
+                      {trackResult.status}
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-charcoal">{getCategoryLabel(trackResult.category)}</div>
+                  <p className="text-[11px] text-charcoal-muted line-clamp-2">{trackResult.description}</p>
+                  <div className="text-[10px] text-charcoal-muted pt-1 flex justify-between font-mono">
+                    <span>{trackResult.district}, {trackResult.state}</span>
+                    {trackResult.farmerPhone && <span>Phone: {trackResult.farmerPhone}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* List of Grievances Filed on This Device */}
+            {complaints.length === 0 ? (
+              <div className="text-center py-6 text-charcoal-muted text-xs">
                 <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p>{t('noComplaintsRecorded')}</p>
+                <p>No grievances filed on this device yet.</p>
               </div>
-            )}
-
-            {!loadingComplaints && !errorComplaints && complaints.length > 0 && (
-              <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+            ) : (
+              <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
                 {complaints.map((c) => (
                   <div
-                    key={c.id}
+                    key={c.id || c.referenceNumber}
                     className="p-3.5 rounded-lg border border-hairline bg-surface space-y-1.5 hover:bg-forest-50/20 transition-all"
                   >
                     <div className="flex items-center justify-between">
@@ -539,7 +649,15 @@ export const ComplaintRegistration: React.FC = () => {
                       <span>
                         {c.district}, {c.state}
                       </span>
-                      <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                      {c.trackingToken && (
+                        <button
+                          type="button"
+                          onClick={() => handleTrackComplaint(c.referenceNumber, c.trackingToken)}
+                          className="text-forest hover:underline font-sans font-semibold cursor-pointer"
+                        >
+                          Verify Status
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

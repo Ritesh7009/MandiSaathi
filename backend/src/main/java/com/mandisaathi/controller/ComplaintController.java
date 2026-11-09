@@ -3,6 +3,7 @@ package com.mandisaathi.controller;
 import com.mandisaathi.dto.ComplaintDto;
 import com.mandisaathi.dto.ComplaintRequest;
 import com.mandisaathi.service.ComplaintService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,19 +22,39 @@ public class ComplaintController {
     }
 
     @PostMapping
-    public ResponseEntity<ComplaintDto> registerComplaint(@Valid @RequestBody ComplaintRequest request) {
-        ComplaintDto created = complaintService.registerComplaint(request);
+    public ResponseEntity<ComplaintDto> registerComplaint(
+            @Valid @RequestBody ComplaintRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        String clientIp = extractClientIp(httpServletRequest);
+        ComplaintDto created = complaintService.registerComplaint(request, clientIp);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    private String extractClientIp(HttpServletRequest request) {
+        if (request == null) return "127.0.0.1";
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "127.0.0.1";
+    }
+
     @GetMapping
-    public ResponseEntity<List<ComplaintDto>> getAllComplaints() {
-        return ResponseEntity.ok(complaintService.getAllComplaints());
+    public ResponseEntity<List<ComplaintDto>> getAllComplaints(
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey
+    ) {
+        return ResponseEntity.ok(complaintService.getAllComplaints(adminKey));
     }
 
     @GetMapping("/{referenceNumber}")
-    public ResponseEntity<ComplaintDto> getByReferenceNumber(@PathVariable String referenceNumber) {
-        return ResponseEntity.ok(complaintService.getByReferenceNumber(referenceNumber));
+    public ResponseEntity<ComplaintDto> getByReferenceNumber(
+            @PathVariable String referenceNumber,
+            @RequestParam(value = "trackingToken", required = false) String queryToken,
+            @RequestHeader(value = "X-Tracking-Token", required = false) String headerToken,
+            @RequestHeader(value = "X-Admin-Key", required = false) String adminKey
+    ) {
+        String token = (headerToken != null && !headerToken.isBlank()) ? headerToken : queryToken;
+        return ResponseEntity.ok(complaintService.getByReferenceNumber(referenceNumber, token, adminKey));
     }
 }
-

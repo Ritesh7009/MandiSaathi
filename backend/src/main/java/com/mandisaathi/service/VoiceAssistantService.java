@@ -76,8 +76,9 @@ public class VoiceAssistantService {
         TranscriptionResult sttResult = gnaniSttService.transcribe(audioData, defaultLangCode, filename, contentType);
         long sttLatency = sttResult.latencyMs();
 
-        log.info("STT response: status={}, errorCode='{}', transcript='{}', sttLatency={}ms",
-                sttResult.statusCode(), sttResult.errorCode(), sttResult.transcript(), sttLatency);
+        int charCount = sttResult.transcript() != null ? sttResult.transcript().length() : 0;
+        log.info("STT response: status={}, errorCode='{}', charCount={}, sttLatency={}ms",
+                sttResult.statusCode(), sttResult.errorCode(), charCount, sttLatency);
 
         if (!sttResult.success() || sttResult.transcript() == null || sttResult.transcript().isBlank()) {
             String err = sttResult.errorMessage() != null ? sttResult.errorMessage() : "Could not transcribe audio. Please speak clearly.";

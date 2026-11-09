@@ -17,7 +17,8 @@ import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @ConditionalOnProperty(name = "gnani.enabled", havingValue = "true")
@@ -30,14 +31,13 @@ public class GnaniSttServiceImpl implements GnaniSttService {
     private final GnaniProperties gnaniProperties;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
-
-    // Single active request concurrency guard per account
-    private final AtomicBoolean isRequestInFlight = new AtomicBoolean(false);
+    private final Semaphore sttSemaphore;
 
     public GnaniSttServiceImpl(GnaniProperties gnaniProperties, RestClient restClient, ObjectMapper objectMapper) {
         this.gnaniProperties = gnaniProperties;
         this.restClient = restClient;
         this.objectMapper = objectMapper;
+        this.sttSemaphore = new Semaphore(gnaniProperties.maxConcurrentRequests());
     }
 
     @Override
@@ -62,16 +62,26 @@ public class GnaniSttServiceImpl implements GnaniSttService {
             return TranscriptionResult.failure(401, "MISSING_CREDENTIALS", "Gnani AI API credentials are not configured on the server.", 0, null);
         }
 
-        // Enforce one-active-request limit per account
-        if (!isRequestInFlight.compareAndSet(false, true)) {
-            log.warn("Gnani STT: Rejecting concurrent voice request — another request is currently in flight for this account.");
-            return TranscriptionResult.failure(429, "RATE_LIMIT_IN_FLIGHT", "Another voice request is currently in flight. Please wait a moment.", 0, null);
+        // Bounded concurrency with queue timeout
+        boolean acquired;
+        try {
+            acquired = sttSemaphore.tryAcquire(gnaniProperties.acquireTimeoutMs(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            log.warn("Gnani STT: Interrupted while waiting for concurrency permit");
+            return TranscriptionResult.failure(429, "CONCURRENCY_INTERRUPTED", "Voice processing was interrupted. Please try again.", 0, null);
+        }
+
+        if (!acquired) {
+            log.warn("Gnani STT: Concurrency capacity (max={}) reached. Timed out after {}ms waiting for slot.",
+                    gnaniProperties.maxConcurrentRequests(), gnaniProperties.acquireTimeoutMs());
+            return TranscriptionResult.failure(429, "RATE_LIMIT_OVERLOAD", "High voice traffic. Please wait a moment and try speaking again.", 0, null);
         }
 
         try {
             return executeTranscriptionWithRetry(audioData, languageCode, filename, contentType);
         } finally {
-            isRequestInFlight.set(false);
+            sttSemaphore.release();
         }
     }
 
@@ -107,6 +117,7 @@ public class GnaniSttServiceImpl implements GnaniSttService {
                 class ResponseHolder {
                     int statusCode = 200;
                     String bodyString = "";
+                    String retryAfter = null;
                 }
                 ResponseHolder holder = new ResponseHolder();
 
@@ -117,6 +128,7 @@ public class GnaniSttServiceImpl implements GnaniSttService {
                         .body(body)
                         .exchange((req, res) -> {
                             holder.statusCode = res.getStatusCode().value();
+                            holder.retryAfter = res.getHeaders().getFirst("Retry-After");
                             byte[] respBytes = res.getBody().readAllBytes();
                             holder.bodyString = new String(respBytes, StandardCharsets.UTF_8);
                             return holder.bodyString;
@@ -126,11 +138,18 @@ public class GnaniSttServiceImpl implements GnaniSttService {
                 int status = holder.statusCode;
                 String rawBody = holder.bodyString != null ? holder.bodyString : "";
 
-                // Handle HTTP 429 Rate Limit with single short retry
+                // Handle HTTP 429 Rate Limit respecting Retry-After header
                 if (status == 429 && currentAttempt < maxAttempts) {
-                    log.warn("Gnani STT returned HTTP 429 (rate limit). Retrying in 1500ms (attempt {}/{})...", currentAttempt, maxAttempts);
+                    long backoffMs = 1500;
+                    if (holder.retryAfter != null) {
+                        try {
+                            backoffMs = Math.min(5000, Math.max(500, Long.parseLong(holder.retryAfter.trim()) * 1000));
+                        } catch (NumberFormatException ignored) {}
+                    }
+                    log.warn("Gnani STT returned HTTP 429 (rate limit). Backing off for {}ms before retry (attempt {}/{})...",
+                            backoffMs, currentAttempt, maxAttempts);
                     try {
-                        Thread.sleep(1500);
+                        Thread.sleep(backoffMs);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                     }
@@ -156,8 +175,8 @@ public class GnaniSttServiceImpl implements GnaniSttService {
 
                     double confidence = root.has("confidence") ? root.get("confidence").asDouble(0.95) : 0.95;
 
-                    log.info("Gnani STT full response: status={}, latency={}ms, detectedLang='{}', transcript='{}'",
-                            status, latencyMs, detectedLang, transcript);
+                    log.info("Gnani STT response: status={}, latency={}ms, detectedLang='{}', charCount={}, confidence={}",
+                            status, latencyMs, detectedLang, transcript.length(), confidence);
 
                     if (transcript.isBlank()) {
                         log.warn("Gnani STT: Empty transcript returned by speech engine (status={}, latency={}ms)", status, latencyMs);

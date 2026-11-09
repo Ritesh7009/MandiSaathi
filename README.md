@@ -56,14 +56,14 @@ MandiSaathi resolves these challenges by providing:
 | **Backend Runtime** | Java | 21 (LTS) | Core application platform |
 | **Backend Framework** | Spring Boot | 3.3.5 | REST controllers, services, security |
 | **Database** | PostgreSQL | 16-alpine | Relational persistence |
-| **Database Migrations** | Flyway | 10.x | Schema versioning (V1, V2, V3, V4) |
+| **Database Migrations** | Flyway | 10.x | Schema versioning (V1 through V6) |
 | **Frontend Runtime** | React | 19.0.0 | Single-page presentation layer |
 | **Language** | TypeScript | 5.7.2 | Static type safety |
 | **Build Tooling** | Vite | 6.0.0 | Frontend compilation & bundling |
-| **PWA & Offline** | Service Worker & IndexedDB | W3C Standard | Offline app shell, price caching, stale warning |
+| **PWA & Offline** | Service Worker & IndexedDB | W3C Standard (v2) | Offline app shell, public price caching, stale warning |
 | **Styling** | Tailwind CSS | 3.4.17 | Agricultural design system styling |
 | **State Management** | TanStack Query | 5.60.0 | Server state caching & invalidation |
-| **Voice AI (STT)** | Gnani Prisma STT | v2.5 / v3.0 | Cloud speech-to-text transcription |
+| **Voice AI (STT)** | Gnani Prisma STT | v2.5 / v3.0 | Cloud speech-to-text transcription (10 Indic languages) |
 | **Voice AI (TTS)** | Gnani Timbre TTS | v2.5 / v3.0 | Cloud text-to-speech voice synthesis |
 | **Data Source** | data.gov.in (OGD) | Agmarknet Feed | Official daily APMC auction prices |
 | **Containerization** | Docker & Compose | 24+ / Compose v2 | Multi-container orchestration |
@@ -78,9 +78,9 @@ flowchart TD
         Farmer(["🧑🌾 Farmer"])
     end
 
-    subgraph Presentation["Frontend Client (React 19 + TypeScript + PWA)"]
+    subgraph Presentation["Frontend Client (React 19 + TypeScript + PWA v2)"]
         UI["Voice Assistant UI (MediaRecorder)"]
-        SW["Service Worker (Cache Storage)"]
+        SW["Service Worker (Allowlist Public Caching)"]
         IDB[("IndexedDB Structured Price Cache")]
         Visualizer["Audio Waveform Visualizer"]
         Player["Spoken Audio Player"]
@@ -90,12 +90,13 @@ flowchart TD
         VoiceCtrl["VoiceAssistantController"]
         VoiceSvc["VoiceAssistantService"]
         NLPEngine["Intent & Entity Extraction Engine"]
-        PriceSvc["PriceRecordService"]
+        PriceSvc["PriceRecordService (Same-Date Comparison)"]
+        ComplaintSvc["ComplaintService (Token & Admin Auth)"]
         IngestSvc["MandiDataIngestionService (@Scheduled Cron)"]
     end
 
     subgraph Data["Persistence Layer"]
-        Postgres[("PostgreSQL 16 Database\n(Flyway V1..V4)")]
+        Postgres[("PostgreSQL 16 Database\n(Flyway V1..V6)")]
     end
 
     subgraph External["External Cloud Services"]
@@ -104,46 +105,25 @@ flowchart TD
         Agmarknet["data.gov.in / Agmarknet API"]
     end
 
-    Farmer -->|Voice Query| UI
-    Farmer -->|Browse Cached Prices| IDB
-    UI -->|Service Worker Intercept| SW
-    SW -->|Fetch Remote| VoiceCtrl
+    Farmer -->|"Voice Query"| UI
+    Farmer -->|"Browse Cached Prices"| IDB
+    UI -->|"Service Worker Intercept"| SW
+    SW -->|"Fetch Remote"| VoiceCtrl
     VoiceCtrl --> VoiceSvc
-    VoiceSvc -->|Audio Stream| PrismaSTT
-    PrismaSTT -->|Transcript| VoiceSvc
-    VoiceSvc --> NLPEngine
-    NLPEngine --> PriceSvc
-    PriceSvc --> Postgres
-    PriceSvc -->|Price Records| VoiceSvc
-    VoiceSvc -->|Response Text| TimbreTTS
-    TimbreTTS -->|Synthesized WAV| VoiceSvc
-    VoiceSvc -->|JSON + Audio Payload| UI
-    UI -->|Persist Prices| IDB
-    UI --> Player
-    Player -->|Audio Playback| Farmer
-    IngestSvc -->|Nightly Delta Ingestion| Agmarknet
-    IngestSvc -->|Persist Ingestion Runs| Postgres
-```
-        DataGov["Agmarknet Feed (data.gov.in)"]
-    end
-
-    Farmer -->|"Spoken Voice Query"| UI
-    UI -->|"Multipart Audio / JSON"| VoiceCtrl
-    VoiceCtrl --> VoiceSvc
-    VoiceSvc -->|"Audio Stream"| PrismaSTT
+    VoiceSvc -->|"Audio Stream (Bounded Semaphore)"| PrismaSTT
     PrismaSTT -->|"Transcript + Detected Language"| VoiceSvc
     VoiceSvc --> NLPEngine
-    NLPEngine -->|"Extracted Crop, District, State"| PriceSvc
-    PriceSvc -->|"Query Modal Rates"| Postgres
-    PriceSvc -->|"Grounded Response Text"| VoiceSvc
-    VoiceSvc -->|"Vernacular Text"| TimbreTTS
-    TimbreTTS -->|"16kHz Linear PCM WAV"| VoiceSvc
-    VoiceSvc -->|"Base64 Audio + Verified Metrics"| VoiceCtrl
-    VoiceCtrl --> Player
-    Player -->|"Audio Playback + Visual Metric Card"| Farmer
-
-    IngestSvc -->|"Daily Feed Ingestion"| DataGov
-    IngestSvc -->|"Validated Daily Records"| Postgres
+    NLPEngine -->|"Extracted Entity Query"| PriceSvc
+    PriceSvc -->|"Query Grounded Rates"| Postgres
+    PriceSvc -->|"Price Records"| VoiceSvc
+    VoiceSvc -->|"Response Text"| TimbreTTS
+    TimbreTTS -->|"Synthesized WAV"| VoiceSvc
+    VoiceSvc -->|"JSON + Audio Payload"| UI
+    UI -->|"Persist Public Prices"| IDB
+    UI --> Player
+    Player -->|"Audio Playback"| Farmer
+    IngestSvc -->|"Nightly Delta Ingestion"| Agmarknet
+    IngestSvc -->|"Persist Ingestion Runs & LIVE_INGESTED Records"| Postgres
 ```
 
 ---
@@ -160,52 +140,67 @@ flowchart TD
 
 ---
 
-## 9. Gnani AI Integration
+## 9. Gnani AI Integration & Multilingual Architecture
 
 MandiSaathi uses a single `GNANI_API_KEY` authenticated via the `X-API-Key-ID` header:
 
-| Engine | Endpoint URL | Model | Voices |
-| :--- | :--- | :--- | :--- |
-| **Prisma STT** | `https://api.vachana.ai/stt/v3` | `prisma-v2.5` | Multi-speaker adaptive |
-| **Timbre TTS** | `https://api.vachana.ai/api/v1/tts/inference` | `timbre-v2.5` | `Nalini` (Hindi, Punjabi)<br>`Kaveri` (English) |
+| Engine | Endpoint URL | Model | Voices & Locales | Concurrency Controls |
+| :--- | :--- | :--- | :--- | :--- |
+| **Prisma STT** | `https://api.vachana.ai/stt/v3` | `prisma-v2.5` | 10 Indian Languages (`hi`, `pa`, `en`, `bn`, `gu`, `kn`, `ml`, `mr`, `ta`, `te`) | Bounded Semaphore (5 permits), 3s acquire timeout, upstream 429 `Retry-After` backoff |
+| **Timbre TTS** | `https://api.vachana.ai/api/v1/tts/inference` | `timbre-v2.5` | `Nalini` (Hindi, Punjabi, Marathi, Bengali, Tamil, Telugu)<br>`Kaveri` (Indian English, Kannada) | Linear PCM 16kHz WAV streaming |
 
-In offline or sandbox development mode, the application falls back to `GnaniSttStubService` and `GnaniTtsStubService`, generating synthetic 16kHz WAV tones labeled as **`Local Sandbox Synthetic Audio`**.
+In offline or sandbox development mode, the application falls back to `GnaniSttStubService` and `GnaniTtsStubService`, generating synthetic 16kHz WAV tones labeled as **`Local Sandbox Synthetic Audio`**. User voice transcripts are scrubbed from production logs (only latency, character count, and confidence scores are retained).
 
 ---
 
-## 10. Mandi Data Integration
+## 10. Mandi Data Integration & Provenance Integrity
 
 - **Data Provider**: Open Government Data (OGD) Platform India (`data.gov.in`).
 - **Resource ID**: `9ef84268-d588-465a-a308-a864a43d0070` (Daily Mandi Prices of Various Commodities Across India).
-- **Validation Engine**: Guarantees $\text{min\_price} \le \text{modal\_price} \le \text{max\_price}$. Inverted values are corrected, and out-of-range modal prices are clamped.
-- **Deduplication**: Enforced via composite unique index `uq_price_record_daily` on `(commodity_code, mandi_code, price_date)`.
+- **Strict Ingestion Validation**:
+  - **Date Authenticity**: Missing or unparseable arrival dates are rejected immediately; dates are never replaced with `LocalDate.now()`.
+  - **Price Relationship Integrity**: Strictly verifies $\text{min\_price} \le \text{modal\_price} \le \text{max\_price}$ and $\text{price} > 0$. Inverted, zero, or negative prices are discarded with structured error logging—never mutated, inverted, or clamped.
+  - **Composite Market Matching**: Normalized against market name, district, and state together with 24 Indian state mappings. Incomplete market records are rejected.
+- **Provenance Distinction**:
+  - `SEEDED_BASELINE`: 15 initial benchmark records across 8 APMC mandis preserved for offline baselines.
+  - `LIVE_INGESTED`: Verified records ingested from official upstream feeds. Live ingestion never silently overwrites seeded baseline records.
+- **Variety Support**: Accommodates multiple crop varieties (e.g., Sharbati vs Lokwan Wheat) via composite uniqueness `(commodity_code, mandi_code, price_date, variety)`.
+- **Sanitized Execution Runs**: Ingestion histories store sanitized exception summaries without exposing upstream API keys or raw stack traces.
+- **Same-Date Mandi Comparison**: Comparing prices across mandis requires all selected yards to report on a common auction date. When dates diverge, the system transparently indicates insufficient common-date data rather than calculating false arbitrage spreads across different days.
 - **Manual Sync**: Available via `POST /api/v1/prices/sync`.
 
 ---
 
-## 11. Database Architecture
+## 11. Database Architecture & Migrations
 
-Database schema versioning is managed via Flyway:
+Database schema versioning is managed via Flyway across 6 structured migrations:
 - **`V1__initial_schema.sql`**: Core tables: `commodities`, `mandis`, and `price_records`.
 - **`V2__phase2_schema.sql`**: Extended tables: `government_schemes` and `complaints`.
-- **`V3__phase3_mandi_pipeline.sql`**: Deduplication constraint `uq_price_record_daily`.
+- **`V3__phase3_mandi_pipeline.sql`**: Ingestion runs table and composite deduplication index.
+- **`V4__phase4_audit_indexes.sql`**: High-performance indexes for commodity, mandi, and date lookups.
+- **`V5__phase5c_provenance_and_variety.sql`**: Adds `variety` and `provenance_type` columns to price records.
+- **`V6__phase5e_variety_constraint_and_complaint_security.sql`**:
+  - Replaces price unique constraint with `uk_price_commodity_mandi_date_variety` on `(commodity_code, mandi_code, price_date, variety)`.
+  - Adds unguessable 128-bit `tracking_token VARCHAR(64) NOT NULL` to `complaints` for secure, private grievance tracking.
 
 ```sql
--- Core Price Record Table
+-- Production Price Record Table
 CREATE TABLE price_records (
     id BIGSERIAL PRIMARY KEY,
-    commodity_code VARCHAR(50) NOT NULL REFERENCES commodities(code),
-    mandi_code VARCHAR(50) NOT NULL REFERENCES mandis(code),
+    commodity_code VARCHAR(64) NOT NULL REFERENCES commodities(code),
+    mandi_code VARCHAR(64) NOT NULL REFERENCES mandis(code),
     min_price NUMERIC(10,2) NOT NULL,
     max_price NUMERIC(10,2) NOT NULL,
     modal_price NUMERIC(10,2) NOT NULL,
     price_date DATE NOT NULL,
-    arrival_quantity NUMERIC(10,2),
-    unit VARCHAR(20) DEFAULT 'QUINTAL',
-    data_source VARCHAR(100) DEFAULT 'Agmarknet / data.gov.in',
-    verified BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_price_record_daily UNIQUE (commodity_code, mandi_code, price_date)
+    arrival_quantity NUMERIC(12,2),
+    variety VARCHAR(64) NOT NULL DEFAULT 'Standard / FAQ',
+    provenance_type VARCHAR(32) NOT NULL DEFAULT 'LIVE_INGESTED',
+    unit VARCHAR(32) NOT NULL DEFAULT 'QUINTAL',
+    data_source VARCHAR(128) NOT NULL DEFAULT 'Agmarknet / data.gov.in',
+    verified BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_price_commodity_mandi_date_variety UNIQUE (commodity_code, mandi_code, price_date, variety)
 );
 ```
 
@@ -213,22 +208,21 @@ CREATE TABLE price_records (
 
 ## 12. API Endpoint Documentation
 
-| Method | URI Path | Purpose |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/health` | Comprehensive subsystem health and connection status |
-| `POST` | `/api/v1/voice/query` | Vernacular text query processing and speech synthesis |
-| `POST` | `/api/v1/voice/audio` | Multipart audio voice query processing (STT $\rightarrow$ Grounding $\rightarrow$ TTS) |
-| `GET` | `/api/v1/prices` | Query verified price records by `commodityCode` and `mandiCode` |
-| `POST` | `/api/v1/prices/compare` | Multi-mandi price arbitrage and spread comparison |
-| `POST` | `/api/v1/prices/sync` | Trigger synchronization with official `data.gov.in` feed |
-| `GET` | `/api/v1/commodities` | List verified agricultural commodities |
-| `GET` | `/api/v1/commodities/{code}` | Retrieve single commodity details |
-| `GET` | `/api/v1/mandis` | List verified APMC market yards (supports `?state=Punjab`) |
-| `GET` | `/api/v1/mandis/{code}` | Retrieve single mandi details |
-| `GET` | `/api/v1/schemes` | Search and retrieve government schemes |
-| `POST` | `/api/v1/complaints` | Register a farmer grievance and issue reference number |
-| `GET` | `/api/v1/complaints` | List registered grievances |
-| `GET` | `/api/v1/complaints/{ref}` | Retrieve complaint status by reference number |
+| Method | URI Path | Access Level | Purpose |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/health` | Public | Subsystem health, live provenance status, and service connectivity |
+| `GET` | `/actuator/health` | Public | Standard Spring Boot Actuator probe |
+| `POST` | `/api/v1/voice/query` | Public | Vernacular text query processing and speech synthesis |
+| `POST` | `/api/v1/voice/audio` | Public | Multipart audio voice query processing (STT $\rightarrow$ Grounding $\rightarrow$ TTS) |
+| `GET` | `/api/v1/prices` | Public | Query verified price records by `commodityCode` and `mandiCode` |
+| `POST` | `/api/v1/prices/compare` | Public | Strict same-date multi-mandi price arbitrage comparison |
+| `POST` | `/api/v1/prices/sync` | Public | Trigger synchronization with official `data.gov.in` feed |
+| `GET` | `/api/v1/commodities` | Public | List verified agricultural commodities |
+| `GET` | `/api/v1/mandis` | Public | List verified APMC market yards (supports `?state=Punjab`) |
+| `GET` | `/api/v1/schemes` | Public | Search and retrieve government schemes |
+| `POST` | `/api/v1/complaints` | Public (Throttled) | Register grievance; returns reference number, masked phone, & unguessable tracking token |
+| `GET` | `/api/v1/complaints/{ref}?token={token}` | Private / Token | Track grievance status securely using reference number and unguessable token |
+| `GET` | `/api/v1/complaints` | Admin Only | Full grievance registry (requires `X-Admin-Key` header; HTTP 403 Forbidden without key) |
 
 *For complete payload and response schemas, see [`docs/api-reference.md`](docs/api-reference.md).*
 
@@ -260,7 +254,7 @@ Mobile responsive screenshots captured during automated Playwright Android Pixel
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/mandisaathi.git
+git clone https://github.com/Ritesh7009/MandiSaathi.git
 cd mandisaathi
 ```
 
@@ -277,6 +271,9 @@ Edit `.env` to configure your credentials:
 # To enable live Gnani AI voice capabilities:
 GNANI_ENABLED=true
 GNANI_API_KEY=your_gnani_api_key_here
+
+# Administrative key for grievance registry management:
+ADMIN_API_KEY=your_secure_admin_key_here
 ```
 
 ---
@@ -327,41 +324,50 @@ docker compose ps
 MandiSaathi includes comprehensive automated test suites:
 
 ```bash
-# 1. Run all backend JUnit/MockMvc tests (39 tests) & frontend TypeScript checks
-./scripts/test.sh
+# 1. Run all backend JUnit/MockMvc tests (58 tests: security, provenance, same-date comparison, concurrency)
+cd backend && ./mvnw test
 
-# 2. Run Gnani AI upstream authentication verification
-./scripts/verify-gnani.sh
+# 2. Run frontend TypeScript static validation
+cd frontend && npx tsc --noEmit
 
-# 3. Run Android mobile emulation Playwright tests
-python3 scripts/test-mobile-browser.py
+# 3. Compile frontend production bundle
+cd frontend && npm run build
 
-# 4. Run Phase 4B PWA and IndexedDB offline verification suite
-python3 scripts/test-pwa-offline.py
-
-# 5. Run Phase 4C complete 5-Farmer-Journeys verification suite
-python3 scripts/test-farmer-journeys.py
-
-# 6. Compile full production JAR and Vite bundle
-./scripts/build.sh
+# 4. Multi-stage Docker container build
+docker build -t mandisaathi-backend:phase5e ./backend
 ```
 
 ---
 
-## 19. Security Considerations
+## 19. Security & Privacy Architecture
 
-- **Server-Side Secret Isolation**: Third-party API keys (`GNANI_API_KEY`, `DATA_GOV_IN_API_KEY`) reside exclusively on the server and are never exposed in browser bundles.
+- **Server-Side Secret Isolation**: Third-party API keys (`GNANI_API_KEY`, `DATA_GOV_IN_API_KEY`, `ADMIN_API_KEY`) reside exclusively on the backend and are never exposed in browser bundles.
+- **Farmer Grievance Privacy & Enumeration Protection**:
+  - Full grievance registry access (`GET /api/v1/complaints`) requires administrative authentication via `X-Admin-Key` header (HTTP 403 Forbidden without valid key).
+  - Public status lookup (`GET /api/v1/complaints/{ref}?token={token}`) strictly requires a matching unguessable 128-bit cryptographic tracking token generated upon registration.
+  - Personal telephone numbers are masked (`******5678`) in all public responses.
+  - Submission rate limiting throttles requests to 20 submissions per IP per minute.
+  - Browser clients store recent grievances locally in `localStorage`, allowing farmers to check status privately on their own device without public enumeration risks.
+- **Offline Cache Privacy (Service Worker v2)**:
+  - Cache storage strictly allowlists public agricultural datasets (`/api/v1/commodities`, `/mandis`, `/prices`, `/schemes`).
+  - Grievance submissions, tracking endpoints, and audio streams are explicitly blocked from offline caches.
+- **Voice Privacy & Production Telemetry**:
+  - Raw speech transcripts and user voice queries are scrubbed from production logs.
+  - Telemetry retains only request latency, character counts, and model confidence scores.
+- **Voice Concurrency Controls**:
+  - Speech transcription bounded by a configurable `Semaphore` (default 5 concurrent permits) with queue timeouts, preventing resource exhaustion.
+  - Upstream HTTP 429 rate limits automatically respect `Retry-After` headers.
 - **SQL Injection Prevention**: All queries execute via Spring Data JPA and Hibernate with parameterized binding.
-- **CORS Protection**: Access is restricted to trusted local origin domains.
-- **Audio Upload Protection**: Audio payloads are validated and limited to 15 MB to prevent resource exhaustion attacks.
+- **Strict CORS Protection**: Access restricted to trusted frontend origin domains; wildcard origins with credentials are explicitly prohibited.
 
 ---
 
 ## 20. Known Limitations
 
 - **Reporting Dates vs Real-Time Auctions**: Mandi prices reflect daily closed auction records filed with APMC market committees, not real-time continuous stock-ticker feeds.
+- **Same-Date Arbitrage Requirement**: Multi-mandi price comparison requires all selected mandis to have reported on a common auction date. If reporting dates diverge, the system indicates insufficient common-date data rather than misleading farmers with cross-date spreads.
 - **Offline Voice Processing Boundary**: Real-time voice recognition (Prisma STT) and voice synthesis (Timbre TTS) require an active network connection to Gnani.ai. When offline, price intelligence remains accessible via structured IndexedDB cache with clear reporting dates and stale warnings, while voice features cleanly display connectivity notices.
-- **Geographic Seed Scope**: The verified baseline seed tracks 8 primary benchmark APMCs across 7 states/UTs; additional mandis are provisioned dynamically during ingestion.
+- **Baseline Seed Scope**: The verified baseline seed tracks 15 benchmark APMC records across 8 mandis (preserved as `SEEDED_BASELINE`). Live upstream feeds are stored as `LIVE_INGESTED` and never overwrite seeded baselines.
 - **Legal Scope of Grievances**: The tracking identifier issued by MandiSaathi (`MS-2026-XXXXX`) is an internal reference number for community advocacy and is **not** an official Government of India CPGRAMS docket acknowledgement.
 
 *For complete details, see [`docs/known-limitations.md`](docs/known-limitations.md).*

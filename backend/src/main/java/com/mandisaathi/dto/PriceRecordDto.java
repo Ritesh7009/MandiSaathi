@@ -22,6 +22,8 @@ public record PriceRecordDto(
         BigDecimal arrivalQuantity,
         String unit,
         String dataSource,
+        String variety,
+        String provenanceType,
         boolean verified
 ) {}
 

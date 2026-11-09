@@ -40,6 +40,12 @@ public class PriceRecord {
     @Column(name = "data_source", nullable = false, length = 128)
     private String dataSource = "Agmarknet (DAC&FW)";
 
+    @Column(name = "variety", nullable = false, length = 64)
+    private String variety = "Standard / FAQ";
+
+    @Column(name = "provenance_type", nullable = false, length = 32)
+    private String provenanceType = "SEEDED_BASELINE";
+
     @Column(nullable = false)
     private boolean verified = true;
 
@@ -77,6 +83,12 @@ public class PriceRecord {
 
     public String getDataSource() { return dataSource; }
     public void setDataSource(String dataSource) { this.dataSource = dataSource; }
+
+    public String getVariety() { return variety; }
+    public void setVariety(String variety) { this.variety = variety; }
+
+    public String getProvenanceType() { return provenanceType; }
+    public void setProvenanceType(String provenanceType) { this.provenanceType = provenanceType; }
 
     public boolean isVerified() { return verified; }
     public void setVerified(boolean verified) { this.verified = verified; }

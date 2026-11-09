@@ -34,12 +34,21 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
       });
-      const online = res.ok;
-      setIsOnline(online);
-      if (online) {
+      const contentType = res.headers.get('content-type') || '';
+      let isHealthyBackend = false;
+      if (res.ok && contentType.includes('application/json')) {
+        try {
+          const data = await res.json();
+          isHealthyBackend = Boolean(data && (data.status === 'UP' || typeof data === 'object'));
+        } catch {
+          isHealthyBackend = false;
+        }
+      }
+      setIsOnline(isHealthyBackend);
+      if (isHealthyBackend) {
         setLastOnlineAt(new Date());
       }
-      return online;
+      return isHealthyBackend;
     } catch {
       // If probe fails while navigator says offline, mark offline
       if (!navigator.onLine) {

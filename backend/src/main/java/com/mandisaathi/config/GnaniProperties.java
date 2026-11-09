@@ -18,7 +18,9 @@ public record GnaniProperties(
         int timeoutMs,
         String ttsVoiceHindi,
         String ttsVoicePunjabi,
-        String ttsVoiceEnglish
+        String ttsVoiceEnglish,
+        int maxConcurrentRequests,
+        int acquireTimeoutMs
 ) {
     public GnaniProperties {
         if (sttUrl == null || sttUrl.isBlank()) {
@@ -44,6 +46,12 @@ public record GnaniProperties(
         }
         if (ttsVoiceEnglish == null || ttsVoiceEnglish.isBlank()) {
             ttsVoiceEnglish = "Kaveri";
+        }
+        if (maxConcurrentRequests <= 0) {
+            maxConcurrentRequests = 5;
+        }
+        if (acquireTimeoutMs <= 0) {
+            acquireTimeoutMs = 3000;
         }
     }
 

@@ -24,6 +24,13 @@ public interface PriceRecordRepository extends JpaRepository<PriceRecord, Long> 
             LocalDate priceDate
     );
 
+    java.util.Optional<PriceRecord> findByCommodityCodeAndMandiCodeAndPriceDateAndVariety(
+            String commodityCode,
+            String mandiCode,
+            LocalDate priceDate,
+            String variety
+    );
+
     @Query("SELECT p FROM PriceRecord p WHERE (:commodityCode IS NULL OR p.commodityCode = :commodityCode) " +
            "AND (:mandiCode IS NULL OR p.mandiCode = :mandiCode) " +
            "ORDER BY p.priceDate DESC")

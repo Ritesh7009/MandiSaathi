@@ -40,6 +40,9 @@ public class Complaint {
     @Column(name = "farmer_phone", length = 32)
     private String farmerPhone;
 
+    @Column(name = "tracking_token", nullable = false, length = 64)
+    private String trackingToken;
+
     @Column(nullable = false, length = 32)
     private String status = "RECORDED";
 
@@ -48,7 +51,7 @@ public class Complaint {
 
     public Complaint() {}
 
-    public Complaint(String referenceNumber, String category, String description, String state, String district, String mandiCode, String farmerName, String farmerPhone) {
+    public Complaint(String referenceNumber, String category, String description, String state, String district, String mandiCode, String farmerName, String farmerPhone, String trackingToken) {
         this.referenceNumber = referenceNumber;
         this.category = category;
         this.description = description;
@@ -57,6 +60,7 @@ public class Complaint {
         this.mandiCode = mandiCode;
         this.farmerName = farmerName;
         this.farmerPhone = farmerPhone;
+        this.trackingToken = trackingToken;
         this.status = "RECORDED";
         this.createdAt = Instant.now();
     }
@@ -70,6 +74,8 @@ public class Complaint {
     public String getMandiCode() { return mandiCode; }
     public String getFarmerName() { return farmerName; }
     public String getFarmerPhone() { return farmerPhone; }
+    public String getTrackingToken() { return trackingToken; }
+    public void setTrackingToken(String trackingToken) { this.trackingToken = trackingToken; }
     public String getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }
 }

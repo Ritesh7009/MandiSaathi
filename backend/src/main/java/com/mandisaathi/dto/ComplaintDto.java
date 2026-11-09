@@ -5,6 +5,7 @@ import java.time.Instant;
 public record ComplaintDto(
         Long id,
         String referenceNumber,
+        String trackingToken,
         String category,
         String description,
         String state,

@@ -73,6 +73,16 @@ class PriceRecordControllerTest {
 
     @Test
     void shouldComparePricesAcrossMandis() throws Exception {
+        PriceRecord p2 = new PriceRecord();
+        p2.setCommodityCode("WHEAT");
+        p2.setMandiCode("SIRSA_HR");
+        p2.setMinPrice(new BigDecimal("2250.00"));
+        p2.setMaxPrice(new BigDecimal("2350.00"));
+        p2.setModalPrice(new BigDecimal("2300.00"));
+        p2.setPriceDate(LocalDate.now());
+        p2.setArrivalQuantity(new BigDecimal("350.00"));
+        priceRecordRepository.save(p2);
+
         String json = """
             {
                 "commodityCode": "WHEAT",
@@ -85,7 +95,7 @@ class PriceRecordControllerTest {
                         .content(json))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.commodity.code", is("WHEAT")))
-                .andExpect(jsonPath("$.records", hasSize(1)));
+                .andExpect(jsonPath("$.records", hasSize(2)));
     }
 
     @Test

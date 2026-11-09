@@ -185,6 +185,10 @@ public class MandiDataIngestionService {
             int updated = 0;
             int skipped = 0;
 
+            // Pre-load known commodities and mandis once per batch to avoid N+1 queries in the loop
+            List<Commodity> knownCommodities = commodityRepository.findAll();
+            List<Mandi> knownMandis = new ArrayList<>(mandiRepository.findAll());
+
             for (JsonNode node : recordsNode) {
                 try {
                     String rawCommodity = node.path("commodity").asText("").trim();
@@ -193,7 +197,7 @@ public class MandiDataIngestionService {
                     String rawMarket = node.path("market").asText("").trim();
                     String rawDate = node.path("arrival_date").asText("").trim();
 
-                    String commCode = normalizeCommodityCode(rawCommodity);
+                    String commCode = normalizeCommodityCode(rawCommodity, knownCommodities);
                     if (commCode == null) {
                         skipped++;
                         continue;
@@ -201,6 +205,7 @@ public class MandiDataIngestionService {
 
                     LocalDate priceDate = parseDate(rawDate);
                     if (priceDate == null) {
+                        log.debug("Skipping record due to unparseable or missing arrival_date: '{}'", rawDate);
                         skipped++;
                         continue;
                     }
@@ -214,28 +219,53 @@ public class MandiDataIngestionService {
                         continue;
                     }
 
-                    // Enforce price bounds: min <= modal <= max
-                    if (minPrice.compareTo(maxPrice) > 0) {
-                        BigDecimal temp = minPrice;
-                        minPrice = maxPrice;
-                        maxPrice = temp;
+                    // Strict validation: Reject non-positive prices
+                    if (minPrice.compareTo(BigDecimal.ZERO) <= 0 || modalPrice.compareTo(BigDecimal.ZERO) <= 0 || maxPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                        log.debug("Skipping record due to non-positive prices: min={}, modal={}, max={}", minPrice, modalPrice, maxPrice);
+                        skipped++;
+                        continue;
                     }
-                    if (modalPrice.compareTo(minPrice) < 0) modalPrice = minPrice;
-                    if (modalPrice.compareTo(maxPrice) > 0) modalPrice = maxPrice;
 
-                    // Resolve or register Mandi
-                    String mandiCode = resolveOrRegisterMandi(rawMarket, rawDistrict, rawState);
+                    // Strict validation: min <= modal <= max (Reject, do NOT silently mutate or swap)
+                    if (minPrice.compareTo(modalPrice) > 0 || modalPrice.compareTo(maxPrice) > 0) {
+                        log.debug("Skipping record due to inconsistent price relationships: min={} > modal={} or modal={} > max={}",
+                                minPrice, modalPrice, maxPrice);
+                        skipped++;
+                        continue;
+                    }
 
-                    // Duplicate check
+                    String rawVariety = node.path("variety").asText("").trim();
+                    String variety = (rawVariety.isBlank() || rawVariety.equalsIgnoreCase("Other")) ? "Standard / FAQ" : rawVariety;
+
+                    // Resolve or register Mandi with complete identifiers using in-memory batch cache
+                    String mandiCode = resolveOrRegisterMandi(rawMarket, rawDistrict, rawState, knownMandis);
+                    if (mandiCode == null) {
+                        log.debug("Skipping record due to incomplete market identifiers: market='{}', district='{}', state='{}'",
+                                rawMarket, rawDistrict, rawState);
+                        skipped++;
+                        continue;
+                    }
+
+                    // Duplicate check considering commodity, mandi, date, variety
                     Optional<PriceRecord> existing = priceRecordRepository
-                            .findByCommodityCodeAndMandiCodeAndPriceDate(commCode, mandiCode, priceDate);
+                            .findByCommodityCodeAndMandiCodeAndPriceDateAndVariety(commCode, mandiCode, priceDate, variety);
 
                     if (existing.isPresent()) {
                         PriceRecord rec = existing.get();
+                        // NEVER overwrite SEEDED_BASELINE records!
+                        if ("SEEDED_BASELINE".equalsIgnoreCase(rec.getProvenanceType())) {
+                            log.info("Preserving SEEDED_BASELINE record for commodity {} at mandi {} on date {}. Skipping overwrite.",
+                                    commCode, mandiCode, priceDate);
+                            skipped++;
+                            continue;
+                        }
+
                         rec.setMinPrice(minPrice);
                         rec.setMaxPrice(maxPrice);
                         rec.setModalPrice(modalPrice);
                         rec.setDataSource("Agmarknet (data.gov.in API)");
+                        rec.setVariety(variety);
+                        rec.setProvenanceType("LIVE_INGESTED");
                         priceRecordRepository.save(rec);
                         updated++;
                     } else {
@@ -248,6 +278,8 @@ public class MandiDataIngestionService {
                         newRec.setPriceDate(priceDate);
                         newRec.setUnit("QUINTAL");
                         newRec.setDataSource("Agmarknet (data.gov.in API)");
+                        newRec.setVariety(variety);
+                        newRec.setProvenanceType("LIVE_INGESTED");
                         newRec.setVerified(true);
                         priceRecordRepository.save(newRec);
                         inserted++;
@@ -280,17 +312,18 @@ public class MandiDataIngestionService {
             );
 
         } catch (Exception ex) {
-            log.error("Failed to ingest data from data.gov.in: {}", ex.getMessage());
+            String sanitizedErr = sanitizeErrorMessage(ex.getMessage());
+            log.error("Failed to ingest data from data.gov.in: {}", sanitizedErr);
             run.setStatus("FAILED");
-            run.setMessage("Ingestion error: " + ex.getMessage());
-            run.setErrorDetails(ex.toString());
+            run.setMessage("Ingestion error: " + sanitizedErr);
+            run.setErrorDetails(sanitizedErr);
             run.setCompletedAt(Instant.now());
             ingestionRunRepository.save(run);
 
             return new IngestionSummaryDto(
                     0, 0, 0, 0,
                     "FAILED",
-                    "Ingestion error: " + ex.getMessage(),
+                    "Ingestion error: " + sanitizedErr,
                     run.getCompletedAt()
             );
         } finally {
@@ -334,7 +367,7 @@ public class MandiDataIngestionService {
         );
     }
 
-    private String normalizeCommodityCode(String rawCommodity) {
+    private String normalizeCommodityCode(String rawCommodity, List<Commodity> commodities) {
         if (rawCommodity == null || rawCommodity.isBlank()) return null;
         String lower = rawCommodity.toLowerCase();
 
@@ -345,63 +378,137 @@ public class MandiDataIngestionService {
         if (lower.contains("cotton") || lower.contains("kapas") || lower.contains("कपास") || lower.contains("ਨਰਮਾ")) return "COTTON";
         if (lower.contains("maize") || lower.contains("makka") || lower.contains("मक्का") || lower.contains("ਮੱਕੀ")) return "MAIZE";
 
-        // Try exact match with existing commodities
-        return commodityRepository.findAll().stream()
+        // Match with known pre-loaded commodities
+        return commodities.stream()
                 .filter(c -> c.getNameEn().equalsIgnoreCase(rawCommodity) || c.getCode().equalsIgnoreCase(rawCommodity))
                 .map(Commodity::getCode)
                 .findFirst()
                 .orElse(null);
     }
 
-    private String resolveOrRegisterMandi(String market, String district, String state) {
-        // Try lookup by name
-        Optional<Mandi> existing = mandiRepository.findAll().stream()
-                .filter(m -> m.getNameEn().equalsIgnoreCase(market) || m.getNameEn().contains(market))
-                .findFirst();
+    private static final Map<String, String> STATE_CODE_MAP = Map.ofEntries(
+            Map.entry("punjab", "PB"),
+            Map.entry("haryana", "HR"),
+            Map.entry("rajasthan", "RJ"),
+            Map.entry("uttar pradesh", "UP"),
+            Map.entry("delhi", "DL"),
+            Map.entry("nct of delhi", "DL"),
+            Map.entry("madhya pradesh", "MP"),
+            Map.entry("maharashtra", "MH"),
+            Map.entry("gujarat", "GJ"),
+            Map.entry("karnataka", "KA"),
+            Map.entry("bihar", "BR"),
+            Map.entry("west bengal", "WB"),
+            Map.entry("tamil nadu", "TN"),
+            Map.entry("andhra pradesh", "AP"),
+            Map.entry("telangana", "TS"),
+            Map.entry("kerala", "KL"),
+            Map.entry("odisha", "OR"),
+            Map.entry("assam", "AS"),
+            Map.entry("jharkhand", "JH"),
+            Map.entry("chhattisgarh", "CG"),
+            Map.entry("uttarakhand", "UK"),
+            Map.entry("himachal pradesh", "HP"),
+            Map.entry("jammu and kashmir", "JK"),
+            Map.entry("chandigarh", "CH")
+    );
 
-        if (existing.isPresent()) {
-            return existing.get().getCode();
+    private String resolveStateCode(String stateName) {
+        if (stateName == null || stateName.isBlank()) return "IN";
+        String normalized = stateName.trim().toLowerCase();
+        return STATE_CODE_MAP.getOrDefault(normalized,
+                normalized.length() >= 2 ? normalized.substring(0, 2).toUpperCase() : "IN");
+    }
+
+    private String resolveOrRegisterMandi(String market, String district, String state, List<Mandi> knownMandis) {
+        if (market == null || market.isBlank() ||
+            district == null || district.isBlank() ||
+            state == null || state.isBlank()) {
+            return null; // Reject incomplete identifiers
         }
 
-        // Generate clean code: e.g. KHANNA_PB
-        String sanitizedMarket = market.replaceAll("[^a-zA-Z0-9]", "_").toUpperCase();
-        String stateSuffix = state.length() >= 2 ? state.substring(0, 2).toUpperCase() : "IN";
-        String code = sanitizedMarket + "_" + stateSuffix;
+        String normMarket = market.trim();
+        String normDistrict = district.trim();
+        String normState = state.trim();
 
-        // Check if code exists
-        if (mandiRepository.findByCode(code).isPresent()) {
-            return code;
+        // 1. Exact match on name, district, and state from known mandis
+        Optional<Mandi> exactMatch = knownMandis.stream()
+                .filter(m -> m.getNameEn().equalsIgnoreCase(normMarket)
+                        && m.getDistrict().equalsIgnoreCase(normDistrict)
+                        && m.getState().equalsIgnoreCase(normState))
+                .findFirst();
+
+        if (exactMatch.isPresent()) {
+            return exactMatch.get().getCode();
+        }
+
+        // 2. Exact match on name and district from known mandis
+        Optional<Mandi> districtMatch = knownMandis.stream()
+                .filter(m -> m.getNameEn().equalsIgnoreCase(normMarket)
+                        && m.getDistrict().equalsIgnoreCase(normDistrict))
+                .findFirst();
+
+        if (districtMatch.isPresent()) {
+            return districtMatch.get().getCode();
+        }
+
+        // 3. Register new Mandi with clean, explicit Indian state code
+        String sanitizedMarket = normMarket.replaceAll("[^a-zA-Z0-9]", "_").toUpperCase();
+        String stateCode = resolveStateCode(normState);
+        String code = sanitizedMarket + "_" + stateCode;
+
+        Optional<Mandi> existingByCode = knownMandis.stream()
+                .filter(m -> m.getCode().equalsIgnoreCase(code))
+                .findFirst();
+        if (existingByCode.isPresent()) {
+            return existingByCode.get().getCode();
         }
 
         Mandi newMandi = new Mandi();
         newMandi.setCode(code);
-        newMandi.setNameEn(market);
-        newMandi.setNameHi(market);
-        newMandi.setState(state);
-        newMandi.setDistrict(district);
+        newMandi.setNameEn(normMarket);
+        newMandi.setNameHi(normMarket);
+        newMandi.setState(normState);
+        newMandi.setDistrict(normDistrict);
         newMandi.setActive(true);
-        mandiRepository.save(newMandi);
+        Mandi saved = mandiRepository.save(newMandi);
+        knownMandis.add(saved);
 
         return code;
     }
 
     private LocalDate parseDate(String rawDate) {
-        if (rawDate == null || rawDate.isBlank()) return LocalDate.now();
+        if (rawDate == null || rawDate.isBlank()) return null;
+        String clean = rawDate.trim();
         for (DateTimeFormatter dtf : DATE_FORMATTERS) {
             try {
-                return LocalDate.parse(rawDate, dtf);
+                return LocalDate.parse(clean, dtf);
             } catch (Exception ignored) {}
         }
-        return LocalDate.now();
+        return null; // Reject invalid dates rather than substituting LocalDate.now()
     }
 
     private BigDecimal parsePrice(String raw) {
         if (raw == null || raw.isBlank()) return null;
         try {
-            BigDecimal val = new BigDecimal(raw.replaceAll("[^0-9.]", "").trim());
-            return val.compareTo(BigDecimal.ZERO) > 0 ? val : null;
+            String clean = raw.replaceAll("[^0-9.-]", "").trim();
+            return new BigDecimal(clean);
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String sanitizeErrorMessage(String error) {
+        if (error == null || error.isBlank()) return "Unknown upstream ingestion error";
+        String sanitized = error;
+        if (mandiDataProperties.apiKey() != null && !mandiDataProperties.apiKey().isBlank()) {
+            sanitized = sanitized.replace(mandiDataProperties.apiKey(), "[REDACTED_API_KEY]");
+        }
+        sanitized = sanitized.replaceAll("api-key=[^&\\s]+", "api-key=[REDACTED]");
+        sanitized = sanitized.replaceAll("api_key=[^&\\s]+", "api_key=[REDACTED]");
+        if (sanitized.length() > 250) {
+            sanitized = sanitized.substring(0, 250) + "...";
+        }
+        return sanitized;
     }
 }

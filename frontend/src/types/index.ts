@@ -89,6 +89,8 @@ export interface PriceRecord {
   arrivalQuantity: number | null;
   unit: string;
   dataSource: string;
+  variety?: string;
+  provenanceType?: string;
   verified: boolean;
 }
 
@@ -137,6 +139,7 @@ export interface ComplaintRequest {
 export interface Complaint {
   id: number;
   referenceNumber: string;
+  trackingToken?: string;
   category: string;
   description: string;
   state: string;
