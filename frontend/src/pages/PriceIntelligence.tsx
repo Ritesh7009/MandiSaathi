@@ -33,7 +33,7 @@ import {
 import { IngestionSummary, PriceRecord } from '../types';
 
 export const PriceIntelligence: React.FC = () => {
-  const { language, t } = useLanguage();
+  const { language, t, getCommodityName: getLocalizedComm, getMandiName: getLocalizedM } = useLanguage();
   const { isOnline } = useNetwork();
 
   const [selectedCommodity, setSelectedCommodity] = useState<string>('');
@@ -165,16 +165,12 @@ export const PriceIntelligence: React.FC = () => {
     setSelectedMandi('');
   };
 
-  const getCommodityName = (c: { nameEn: string; nameHi: string; namePa: string | null }) => {
-    if (language === 'hi' && c.nameHi) return c.nameHi;
-    if (language === 'pa' && c.namePa) return c.namePa;
-    return c.nameEn;
+  const getCommodityName = (c: { code?: string; nameEn: string; nameHi: string; namePa: string | null }) => {
+    return getLocalizedComm(c.code || c.nameEn, c.nameHi || c.nameEn);
   };
 
-  const getMandiName = (m: { nameEn: string; nameHi: string; namePa: string | null }) => {
-    if (language === 'hi' && m.nameHi) return m.nameHi;
-    if (language === 'pa' && m.namePa) return m.namePa;
-    return m.nameEn;
+  const getMandiName = (m: { code?: string; nameEn: string; nameHi: string; namePa: string | null }) => {
+    return getLocalizedM(m.code || m.nameEn, m.nameHi || m.nameEn);
   };
 
   // Filter records by district if selected
@@ -246,7 +242,7 @@ export const PriceIntelligence: React.FC = () => {
         <div>
           <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
             <TrendingUp className="w-3.5 h-3.5 text-harvest-dark" />
-            <span>Verified Market Records</span>
+            <span>{t('verifiedMarketRecords')}</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
             {t('priceTitle')}
@@ -306,14 +302,14 @@ export const PriceIntelligence: React.FC = () => {
             </button>
           )}
 
-          {/* Nightly Scheduled Cron Telemetry */}
+          {/* Daily Scheduled Ingestion Status */}
           {syncStatus && (
             <div
-              title={`Nightly Ingestion Cron: ${syncStatus.cron} (${syncStatus.zone})`}
-              className="hidden lg:flex items-center space-x-1.5 text-[11px] font-mono bg-surface border border-hairline px-2.5 py-1.5 rounded-lg text-charcoal-muted"
+              title="Official Agmarknet Rates • Daily Sync at 05:00 PM IST"
+              className="hidden lg:flex items-center space-x-1.5 text-xs font-medium bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted"
             >
               <Clock className="w-3.5 h-3.5 text-forest" />
-              <span>Cron: {syncStatus.cron} ({syncStatus.zone})</span>
+              <span>{t('dailySyncNotice')}</span>
             </div>
           )}
         </div>
@@ -331,9 +327,9 @@ export const PriceIntelligence: React.FC = () => {
           <button
             type="button"
             onClick={() => setSyncSummary(null)}
-            className="text-forest hover:text-forest-dark text-[11px] underline ml-2 cursor-pointer"
+            className="text-forest hover:text-forest-dark text-xs underline ml-2 cursor-pointer"
           >
-            Dismiss
+            {t('dismiss')}
           </button>
         </div>
       )}
@@ -344,19 +340,19 @@ export const PriceIntelligence: React.FC = () => {
           <button
             type="button"
             onClick={() => setSyncError(null)}
-            className="text-red-700 hover:text-red-900 text-[11px] underline ml-2 cursor-pointer"
+            className="text-red-700 hover:text-red-900 text-xs underline ml-2 cursor-pointer"
           >
-            Dismiss
+            {t('dismiss')}
           </button>
         </div>
       )}
 
-      {/* High-Density Filter Toolbar (Linear/Watermelon UI inspired) */}
+      {/* High-Density Filter Toolbar */}
       <section className="rounded-xl border border-hairline bg-surface-white p-4 shadow-subtle space-y-3">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center space-x-1.5 font-semibold text-charcoal">
             <Filter className="w-3.5 h-3.5 text-forest" />
-            <span className="uppercase tracking-wider text-[11px] text-charcoal-muted">Active Filters</span>
+            <span className="uppercase tracking-wider text-xs text-charcoal-muted">{t('activeFilters')}</span>
           </div>
           {(selectedCommodity || selectedState || selectedDistrict || selectedMandi) && (
             <button
@@ -368,6 +364,38 @@ export const PriceIntelligence: React.FC = () => {
               <span>{t('filterReset')}</span>
             </button>
           )}
+        </div>
+
+        {/* 1-Tap Quick Commodity Pills for Mobile / Fast Navigation */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 -mx-1 px-1 select-none">
+          <button
+            type="button"
+            onClick={() => setSelectedCommodity('')}
+            className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer tactile-press ${
+              !selectedCommodity
+                ? 'bg-forest text-white shadow-subtle'
+                : 'bg-surface text-charcoal-muted hover:text-charcoal border border-hairline'
+            }`}
+          >
+            {t('allCommodities')}
+          </button>
+          {commodities.slice(0, 8).map((c) => {
+            const isSelected = selectedCommodity === c.code;
+            return (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => setSelectedCommodity(isSelected ? '' : c.code)}
+                className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer tactile-press ${
+                  isSelected
+                    ? 'bg-forest text-white shadow-subtle'
+                    : 'bg-surface text-charcoal border border-hairline hover:bg-surface-white'
+                }`}
+              >
+                {getCommodityName(c)}
+              </button>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
@@ -415,7 +443,7 @@ export const PriceIntelligence: React.FC = () => {
 
           {/* District Selector */}
           <div>
-            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
+            <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
               {t('selectDistrict')}
             </label>
             <select
@@ -438,7 +466,7 @@ export const PriceIntelligence: React.FC = () => {
 
           {/* Mandi Selector */}
           <div>
-            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
+            <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
               {t('selectMandi')}
             </label>
             <select
@@ -471,40 +499,66 @@ export const PriceIntelligence: React.FC = () => {
         />
       )}
 
-      {/* Aggregate Metric Tiles */}
+      {/* Aggregate Metric Tiles & Mobile Compact Ledger */}
       {summary && displayedRecords.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <MetricTile
-            label={t('modalPrice')}
-            value={`₹${summary.avgModal.toLocaleString('en-IN')}`}
-            unit={t('perQuintal')}
-            variant="forest"
-            badge="Avg Rate"
-            icon={<Scale className="w-4 h-4 text-forest" />}
-          />
-          <MetricTile
-            label={t('minPrice')}
-            value={`₹${summary.minOverall.toLocaleString('en-IN')}`}
-            unit={t('perQuintal')}
-            badge="Floor"
-            icon={<TrendingUp className="w-4 h-4 text-charcoal-muted" />}
-          />
-          <MetricTile
-            label={t('maxPrice')}
-            value={`₹${summary.maxOverall.toLocaleString('en-IN')}`}
-            unit={t('perQuintal')}
-            variant="harvest"
-            badge="Peak"
-            icon={<Wheat className="w-4 h-4 text-harvest-dark" />}
-          />
-          <MetricTile
-            label={t('arrivals')}
-            value={summary.totalArrivals.toLocaleString('en-IN')}
-            unit="Quintals"
-            badge={isUsingCache ? 'Cached' : 'Verified'}
-            icon={<Clock className="w-4 h-4 text-mutedGreen-dark" />}
-          />
-        </div>
+        <>
+          {/* Mobile Single-Row Compact Ticker (< 640px) ensuring rates stay above the fold */}
+          <div className="sm:hidden bg-surface-white border border-hairline rounded-xl p-3 shadow-subtle flex items-center justify-between text-xs">
+            <div className="flex flex-col">
+              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('modalPrice')}</span>
+              <span className="text-base font-bold text-forest font-mono tnum">₹{summary.avgModal.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="h-8 w-px bg-hairline" />
+            <div className="flex flex-col">
+              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('minPrice')}</span>
+              <span className="text-xs font-semibold text-charcoal font-mono tnum">₹{summary.minOverall.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="h-8 w-px bg-hairline" />
+            <div className="flex flex-col">
+              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('maxPrice')}</span>
+              <span className="text-xs font-semibold text-charcoal font-mono tnum">₹{summary.maxOverall.toLocaleString('en-IN')}</span>
+            </div>
+            <div className="h-8 w-px bg-hairline" />
+            <div className="flex flex-col text-right">
+              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('arrivals')}</span>
+              <span className="text-xs font-semibold text-charcoal font-mono tnum">{summary.totalArrivals.toLocaleString('en-IN')} Qtl</span>
+            </div>
+          </div>
+
+          {/* Desktop & Tablet Aggregate Metric Tiles (>= 640px) */}
+          <div className="hidden sm:grid sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <MetricTile
+              label={t('modalPrice')}
+              value={`₹${summary.avgModal.toLocaleString('en-IN')}`}
+              unit={t('perQuintal')}
+              variant="forest"
+              badge="Avg Rate"
+              icon={<Scale className="w-4 h-4 text-forest" />}
+            />
+            <MetricTile
+              label={t('minPrice')}
+              value={`₹${summary.minOverall.toLocaleString('en-IN')}`}
+              unit={t('perQuintal')}
+              badge="Floor"
+              icon={<TrendingUp className="w-4 h-4 text-charcoal-muted" />}
+            />
+            <MetricTile
+              label={t('maxPrice')}
+              value={`₹${summary.maxOverall.toLocaleString('en-IN')}`}
+              unit={t('perQuintal')}
+              variant="harvest"
+              badge="Peak"
+              icon={<Wheat className="w-4 h-4 text-harvest-dark" />}
+            />
+            <MetricTile
+              label={t('arrivals')}
+              value={summary.totalArrivals.toLocaleString('en-IN')}
+              unit="Quintals"
+              badge={isUsingCache ? 'Cached' : 'Verified'}
+              icon={<Clock className="w-4 h-4 text-mutedGreen-dark" />}
+            />
+          </div>
+        </>
       )}
 
       {/* Price Records Table / List */}
@@ -531,7 +585,7 @@ export const PriceIntelligence: React.FC = () => {
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-surface border-b border-hairline text-charcoal-subtle uppercase text-[10px] font-semibold tracking-wider">
+                <tr className="bg-surface border-b border-hairline text-charcoal-subtle uppercase text-xs font-semibold tracking-wider">
                   <th className="py-3 px-4">Commodity / फसल</th>
                   <th className="py-3 px-4">APMC Mandi / मंडी</th>
                   <th className="py-3 px-4">Location</th>
@@ -589,7 +643,7 @@ export const PriceIntelligence: React.FC = () => {
                       <td className="py-3 px-4 text-center font-mono">
                         <span className="text-charcoal font-medium">{r.priceDate}</span>
                         {isUsingCache && (
-                          <div className="text-[10px] text-amber-700">Cached</div>
+                          <div className="text-xs text-amber-700 font-sans">Cached</div>
                         )}
                       </td>
                     </tr>
@@ -632,11 +686,11 @@ export const PriceIntelligence: React.FC = () => {
                       <div className="text-base font-bold text-forest tnum font-mono">
                         ₹{r.modalPrice.toLocaleString('en-IN')}
                       </div>
-                      <div className="text-[10px] text-charcoal-muted">Modal / Quintal</div>
+                      <div className="text-xs text-charcoal-muted">Modal / Quintal</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] font-mono text-charcoal-muted pt-1 border-t border-hairline/60">
+                  <div className="flex items-center justify-between text-xs font-mono text-charcoal-muted pt-1 border-t border-hairline/60">
                     <span>Range: ₹{r.minPrice} – ₹{r.maxPrice}</span>
                     <span>Date: {r.priceDate}</span>
                   </div>

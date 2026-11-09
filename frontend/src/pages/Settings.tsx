@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage, ALL_RECOGNIZED_LANGUAGES } from '../context/LanguageContext';
 import { useNetwork } from '../context/NetworkContext';
 import { api } from '../services/apiClient';
-import { Language } from '../types';
 import { clearOfflineCache, getCachedPrices } from '../services/offlineStorage';
 import {
   Sliders,
@@ -14,6 +13,7 @@ import {
   Database,
   Trash2,
   Volume2,
+  Search,
 } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -22,6 +22,7 @@ export const Settings: React.FC = () => {
 
   const [cacheCount, setCacheCount] = useState<number>(0);
   const [cacheCleared, setCacheCleared] = useState<boolean>(false);
+  const [langSearch, setLangSearch] = useState<string>('');
 
   useEffect(() => {
     getCachedPrices()
@@ -42,35 +43,18 @@ export const Settings: React.FC = () => {
     refetchInterval: 30000,
   });
 
-  const supportedLanguages: {
-    code: Language;
-    label: string;
-    script: string;
-    greeting: string;
-    description: string;
-  }[] = [
-    {
-      code: 'hi',
-      label: 'हिन्दी (Hindi)',
-      script: 'Devanagari',
-      greeting: 'राम राम, किसान साथी',
-      description: 'उत्तर एवं मध्य भारत के किसानों के लिए पूर्ण समर्थन',
-    },
-    {
-      code: 'pa',
-      label: 'ਪੰਜਾਬੀ (Punjabi)',
-      script: 'Gurmukhi',
-      greeting: 'ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ, ਕਿਸਾਨ ਸਾਥੀ',
-      description: 'ਪੰਜਾਬ ਅਤੇ ਹਰਿਆਣਾ ਦੇ ਮੰਡੀ ਕਿਸਾਨਾਂ ਲਈ ਵਿਸ਼ੇਸ਼ ਸਹਾਇਤਾ',
-    },
-    {
-      code: 'en',
-      label: 'English (Indian)',
-      script: 'Latin / Inter',
-      greeting: 'Welcome, Farmer Partner',
-      description: 'Pan-India technical and agricultural market interface',
-    },
-  ];
+  const filteredLanguages = useMemo(() => {
+    if (!langSearch.trim()) return ALL_RECOGNIZED_LANGUAGES;
+    const term = langSearch.toLowerCase();
+    return ALL_RECOGNIZED_LANGUAGES.filter(
+      (l) =>
+        l.name.toLowerCase().includes(term) ||
+        l.label.toLowerCase().includes(term) ||
+        l.script.toLowerCase().includes(term) ||
+        l.region.toLowerCase().includes(term) ||
+        l.code.toLowerCase().includes(term)
+    );
+  }, [langSearch]);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-16 lg:pb-8">
@@ -79,7 +63,7 @@ export const Settings: React.FC = () => {
         <div>
           <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
             <Sliders className="w-3.5 h-3.5 text-harvest-dark" />
-            <span>Preferences & Display</span>
+            <span>{t('preferencesAndDisplay')}</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
             {t('settingsTitle')}
@@ -91,51 +75,84 @@ export const Settings: React.FC = () => {
 
         <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
           <Globe className="w-3.5 h-3.5 text-forest" />
-          <span>Regional Dialects & Display</span>
+          <span>{t('regionalDialects')}</span>
         </div>
       </section>
 
-      {/* Group 1: Language & Dialect Selection (Clean Linear/Apple Grouped Rows) */}
+      {/* Group 1: Language & Dialect Selection (10 Gnani-Supported Languages) */}
       <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
-        <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex items-center justify-between">
+        <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
             <Globe className="w-4 h-4 text-forest" />
             <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider">
               {t('languageSectionTitle')}
             </h2>
           </div>
-          <span className="text-[11px] text-charcoal-muted font-mono">
-            {language.toUpperCase()} Active
-          </span>
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-mono text-forest bg-forest-50 border border-forest/20 px-2 py-0.5 rounded-full">
+              {ALL_RECOGNIZED_LANGUAGES.find((l) => l.code === language)?.label} ({language.toUpperCase()}) Active
+            </span>
+            <span className="text-xs font-mono text-charcoal-muted hidden sm:inline">
+              {t('gnaniVoicePowered')}
+            </span>
+          </div>
         </div>
 
-        <div className="divide-y divide-hairline">
-          {supportedLanguages.map((l) => {
+        {/* Search bar for quick language finding */}
+        <div className="p-3 border-b border-hairline bg-surface/20">
+          <div className="relative">
+            <Search className="w-4 h-4 text-charcoal-muted absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={langSearch}
+              onChange={(e) => setLangSearch(e.target.value)}
+              placeholder="Search by language, script, or region (e.g., Marathi, বাংলা, Telugu, தமிழ், Urdu)..."
+              className="w-full pl-9 pr-8 py-2 bg-surface-white border border-hairline rounded-lg text-xs text-charcoal placeholder-charcoal-muted focus:outline-none focus:border-forest"
+            />
+            {langSearch && (
+              <button
+                type="button"
+                onClick={() => setLangSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-charcoal-muted hover:text-charcoal text-xs cursor-pointer font-semibold"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable list of all 23 recognized languages */}
+        <div className="divide-y divide-hairline max-h-[460px] overflow-y-auto">
+          {filteredLanguages.map((l) => {
             const isSelected = language === l.code;
             return (
               <button
                 key={l.code}
                 type="button"
                 onClick={() => setLanguage(l.code)}
-                className={`w-full p-4 text-left flex items-center justify-between transition-colors cursor-pointer ${
-                  isSelected ? 'bg-forest-50/40' : 'hover:bg-surface'
+                className={`w-full p-4 text-left flex items-start justify-between transition-colors cursor-pointer ${
+                  isSelected ? 'bg-forest-50/50' : 'hover:bg-surface'
                 }`}
               >
-                <div className="space-y-0.5">
-                  <div className="flex items-center space-x-2">
+                <div className="space-y-1 pr-3">
+                  <div className="flex items-center flex-wrap gap-2">
                     <span className="font-bold text-sm text-charcoal">{l.label}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface border border-hairline text-charcoal-muted">
+                    <span className="text-xs font-semibold text-charcoal-muted">({l.name})</span>
+                    <span className="text-xs font-mono px-2 py-0.5 rounded bg-surface border border-hairline text-charcoal-muted">
                       {l.script}
+                    </span>
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-forest-50 text-forest text-[11px]">
+                      {l.bcp47}
                     </span>
                   </div>
                   <div className="text-xs text-forest font-medium">"{l.greeting}"</div>
-                  <p className="text-[11px] text-charcoal-muted leading-relaxed">
+                  <p className="text-xs text-charcoal-muted leading-relaxed">
                     {l.description}
                   </p>
                 </div>
 
                 <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border transition-all ${
+                  className={`w-5 h-5 mt-1 rounded-full flex items-center justify-center shrink-0 border transition-all ${
                     isSelected
                       ? 'bg-forest text-white border-forest'
                       : 'border-hairline-dark bg-surface-white'
@@ -146,6 +163,12 @@ export const Settings: React.FC = () => {
               </button>
             );
           })}
+
+          {filteredLanguages.length === 0 && (
+            <div className="p-8 text-center text-xs text-charcoal-muted">
+              No recognized language matching &quot;{langSearch}&quot;.
+            </div>
+          )}
         </div>
       </section>
 
@@ -158,7 +181,7 @@ export const Settings: React.FC = () => {
               {t('fontSizeTitle')}
             </h2>
           </div>
-          <span className="text-[11px] text-charcoal-muted font-mono">
+          <span className="text-xs text-charcoal-muted font-mono">
             {fontSize === 'large' ? 'Large (+2px)' : 'Standard'}
           </span>
         </div>
@@ -210,39 +233,39 @@ export const Settings: React.FC = () => {
         </div>
       </section>
 
-      {/* Group 3: Voice & AI Audio Preferences */}
+      {/* Group 3: Regional Voice Synthesis */}
       <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
         <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Volume2 className="w-4 h-4 text-forest" />
             <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider">
-              Voice Synthesis & AI Stack
+              Regional Voice Synthesis
             </h2>
           </div>
-          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-forest-50 text-forest border border-forest/20">
-            {health?.services.gnaniTimbreTts?.status === 'CONNECTED' ? 'LIVE TIMBRE' : 'SANDBOX'}
+          <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-forest-50 text-forest border border-forest/20">
+            {health?.services.gnaniTimbreTts?.status === 'CONNECTED' ? 'LIVE AUDIO' : 'STANDARD'}
           </span>
         </div>
 
         <div className="p-4 sm:p-5 space-y-3 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-              <div className="text-[10px] uppercase font-semibold text-charcoal-subtle">Hindi Voice</div>
+              <div className="text-xs uppercase font-semibold text-charcoal-subtle">Hindi Voice</div>
               <div className="font-bold text-charcoal text-sm">Nalini (नलिनि)</div>
-              <div className="text-[10px] text-charcoal-muted font-mono">Model: timbre-v2.5</div>
+              <div className="text-xs text-charcoal-muted font-mono">Model: timbre-v2.5</div>
             </div>
             <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-              <div className="text-[10px] uppercase font-semibold text-charcoal-subtle">Punjabi Voice</div>
+              <div className="text-xs uppercase font-semibold text-charcoal-subtle">Punjabi Voice</div>
               <div className="font-bold text-charcoal text-sm">Nalini (ਨਲਿਨੀ)</div>
-              <div className="text-[10px] text-charcoal-muted font-mono">Model: timbre-v2.5</div>
+              <div className="text-xs text-charcoal-muted font-mono">Model: timbre-v2.5</div>
             </div>
             <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-              <div className="text-[10px] uppercase font-semibold text-charcoal-subtle">Indian English</div>
+              <div className="text-xs uppercase font-semibold text-charcoal-subtle">Indian English</div>
               <div className="font-bold text-charcoal text-sm">Kaveri</div>
-              <div className="text-[10px] text-charcoal-muted font-mono">Model: timbre-v2.5</div>
+              <div className="text-xs text-charcoal-muted font-mono">Model: timbre-v2.5</div>
             </div>
           </div>
-          <p className="text-[11px] text-charcoal-muted leading-relaxed">
+          <p className="text-xs text-charcoal-muted leading-relaxed">
             All voice processing operates server-side via Spring Boot proxying to Gnani.ai Prisma STT and Timbre TTS. Audio is streamed as raw 16-bit PCM WAV binaries without exposing client credentials.
           </p>
         </div>
@@ -257,7 +280,7 @@ export const Settings: React.FC = () => {
               Network & Offline Storage
             </h2>
           </div>
-          <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full ${
+          <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${
             isOnline ? 'bg-forest-50 text-forest border border-forest/20' : 'bg-amber-100 text-amber-900'
           }`}>
             {isOnline ? 'CONNECTED' : 'OFFLINE'}
@@ -267,7 +290,7 @@ export const Settings: React.FC = () => {
         <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
           <div>
             <div className="font-bold text-charcoal">IndexedDB Structured Price Cache</div>
-            <p className="text-charcoal-muted text-[11px] mt-0.5 leading-relaxed">
+            <p className="text-charcoal-muted text-xs mt-0.5 leading-relaxed">
               MandiSaathi caches retrieved APMC records in client IndexedDB (`mandisaathi_offline_db`) for zero-connectivity field use. Currently caching <strong>{cacheCount}</strong> price records.
             </p>
           </div>
@@ -284,7 +307,7 @@ export const Settings: React.FC = () => {
         </div>
       </section>
 
-      {/* Group 5: System Telemetry & Provenance Disclosure */}
+      {/* Group 5: System Architecture & Verification */}
       <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
         <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -293,7 +316,7 @@ export const Settings: React.FC = () => {
               {t('systemArchitecturePreview')}
             </h2>
           </div>
-          <span className="text-[10px] font-mono text-charcoal-muted">
+          <span className="text-xs font-mono text-charcoal-muted">
             v{health?.version || '1.0.0-RC1'}
           </span>
         </div>
@@ -302,19 +325,19 @@ export const Settings: React.FC = () => {
           <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
             <div className="font-bold text-forest">Backend Platform</div>
             <div className="text-charcoal text-xs">Java 21 • Spring Boot 3.3.5</div>
-            <p className="text-[10px] text-charcoal-muted">Spring Data JPA, Hibernate, Actuator Health</p>
+            <p className="text-xs text-charcoal-muted">Spring Data JPA, Hibernate, Actuator Health</p>
           </div>
 
           <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
             <div className="font-bold text-forest">Database Architecture</div>
             <div className="text-charcoal text-xs">PostgreSQL 16 • Flyway V1–V4</div>
-            <p className="text-[10px] text-charcoal-muted">Strict composite unique constraints on auction dates</p>
+            <p className="text-xs text-charcoal-muted">Strict composite unique constraints on auction dates</p>
           </div>
 
           <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
             <div className="font-bold text-forest">Data Source Grounding</div>
             <div className="text-charcoal text-xs">Agmarknet / data.gov.in</div>
-            <p className="text-[10px] text-charcoal-muted">Nightly @Scheduled cron at 19:00 IST</p>
+            <p className="text-xs text-charcoal-muted">Nightly @Scheduled cron at 19:00 IST</p>
           </div>
         </div>
       </section>

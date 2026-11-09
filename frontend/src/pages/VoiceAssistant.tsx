@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { api } from '../services/apiClient';
+import { api, ApiClientError } from '../services/apiClient';
+import { convertTo16kHzWav } from '../utils/audioEncoder';
 import { VoiceWaveVisualizer } from '../components/ui/VoiceWaveVisualizer';
 import { PriceSpreadBar } from '../components/ui/PriceSpreadBar';
 import {
@@ -10,7 +11,6 @@ import {
   RotateCcw,
   Send,
   AlertCircle,
-  Sparkles,
   Info,
   Globe,
   Tag,
@@ -46,6 +46,9 @@ export const VoiceAssistant: React.FC = () => {
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartTimeRef = useRef<number>(0);
+  const maxRecordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isRequestInFlight, setIsRequestInFlight] = useState<boolean>(false);
 
   // Audio recording & playback references
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -78,6 +81,7 @@ export const VoiceAssistant: React.FC = () => {
       stopAudioRecording();
       stopAudioPlayback();
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (maxRecordingTimeoutRef.current) clearTimeout(maxRecordingTimeoutRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
     };
@@ -101,7 +105,7 @@ export const VoiceAssistant: React.FC = () => {
     }
   };
 
-  // Start Browser MediaRecorder
+  // Start Browser MediaRecorder (auto-stops at 15s; resamples to 16kHz mono WAV)
   const startAudioRecording = async () => {
     setErrorMessage(null);
     setTranscription('');
@@ -117,10 +121,20 @@ export const VoiceAssistant: React.FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setState('recording');
       setRecordingSeconds(0);
+      recordingStartTimeRef.current = Date.now();
+
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
+
+      // Automatically stop recording at 15 seconds
+      if (maxRecordingTimeoutRef.current) clearTimeout(maxRecordingTimeoutRef.current);
+      maxRecordingTimeoutRef.current = setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          stopAudioRecording();
+        }
+      }, 15000);
 
       // Set up AudioContext Analyser for dynamic wave reactivity
       try {
@@ -174,11 +188,36 @@ export const VoiceAssistant: React.FC = () => {
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        await handleAudioProcessing(audioBlob);
+        if (maxRecordingTimeoutRef.current) {
+          clearTimeout(maxRecordingTimeoutRef.current);
+          maxRecordingTimeoutRef.current = null;
+        }
 
-        // Stop all audio stream tracks
-        stream.getTracks().forEach((track) => track.stop());
+        const durationMs = Date.now() - recordingStartTimeRef.current;
+        if (durationMs < 1000) {
+          setState('error');
+          const shortMsg =
+            language === 'hi'
+              ? 'ऑडियो 1 सेकंड से छोटा है। कृपया कम से कम 1 सेकंड बोलें।'
+              : language === 'pa'
+              ? 'ਆਡੀਓ 1 ਸਕਿੰਟ ਤੋਂ ਛੋਟੀ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਘੱਟੋ-ਘੱਟ 1 ਸਕਿੰਟ ਬੋਲੋ।'
+              : 'Audio clip too short (under 1 second). Please speak for at least 1 second.';
+          setErrorMessage(shortMsg);
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        try {
+          setState('transcribing');
+          const rawBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          const processed = await convertTo16kHzWav(rawBlob);
+          await handleAudioProcessing(processed.blob);
+        } catch (convErr) {
+          setState('error');
+          setErrorMessage('Audio conversion failed: ' + (convErr instanceof Error ? convErr.message : String(convErr)));
+        } finally {
+          stream.getTracks().forEach((track) => track.stop());
+        }
       };
 
       recorder.start(250);
@@ -198,32 +237,80 @@ export const VoiceAssistant: React.FC = () => {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
+    if (maxRecordingTimeoutRef.current) {
+      clearTimeout(maxRecordingTimeoutRef.current);
+      maxRecordingTimeoutRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
-      setState('transcribing');
     }
   };
 
-  // Submit Audio Blob to Backend
-  const handleAudioProcessing = async (blob: Blob) => {
+  // Submit 16kHz WAV Audio Blob to Backend
+  const handleAudioProcessing = async (wavBlob: Blob) => {
+    setIsRequestInFlight(true);
+    setErrorMessage(null);
     try {
       setState('processing');
       const langParam = language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-IN';
-      const result = await api.sendVoiceAudio(blob, langParam);
+      const result = await api.sendVoiceAudio(wavBlob, langParam);
 
-      setTranscription(result.transcript);
+      setTranscription(result.transcript || '');
       setResponse(result);
-      setState('answered');
 
+      if (result.statusCode && result.statusCode !== 200) {
+        setState('error');
+        setErrorMessage(result.engineNotice || result.responseText);
+        return;
+      }
+
+      if (!result.transcript || result.transcript.trim() === '') {
+        setState('error');
+        setErrorMessage(
+          language === 'hi'
+            ? 'कोई आवाज़ पहचानी नहीं जा सकी। कृपया दोबारा बोलें।'
+            : language === 'pa'
+            ? 'ਕੋਈ ਆਵਾਜ਼ ਸਮਝ ਨਹੀਂ ਆਈ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਬੋਲੋ।'
+            : 'No speech was detected or transcript was empty. Please speak clearly.'
+        );
+        return;
+      }
+
+      setState('answered');
       saveConversation(result.transcript, result.responseText, result.detectedLanguage);
 
       if (result.audioBase64) {
         playAudioResponse(result);
       }
     } catch (err: unknown) {
-      const errorObj = err as { message?: string };
       setState('error');
-      setErrorMessage(errorObj.message || 'Failed to process voice query.');
+      if (err instanceof ApiClientError) {
+        if (err.voiceResponse?.transcript) {
+          setTranscription(err.voiceResponse.transcript);
+        }
+        if (err.voiceResponse) {
+          setResponse(err.voiceResponse);
+        }
+        const status = err.status;
+        if (status === 401 || status === 403) {
+          setErrorMessage('Gnani AI authentication failure: Invalid API key or credits exhausted (HTTP ' + status + ').');
+        } else if (status === 402) {
+          setErrorMessage('Gnani AI account credits exhausted (HTTP 402).');
+        } else if (status === 429) {
+          setErrorMessage('Gnani AI STT rate limit reached (HTTP 429). Too many requests in flight.');
+        } else if (status === 504 || status === 0) {
+          setErrorMessage('Voice request timed out (HTTP ' + status + ').');
+        } else if (status >= 500) {
+          setErrorMessage('Server error processing voice query (HTTP ' + status + ').');
+        } else {
+          setErrorMessage(err.message || 'Voice request failed.');
+        }
+      } else {
+        const errorObj = err as { message?: string };
+        setErrorMessage(errorObj.message || 'Failed to process voice query.');
+      }
+    } finally {
+      setIsRequestInFlight(false);
     }
   };
 
@@ -397,7 +484,7 @@ export const VoiceAssistant: React.FC = () => {
                 : state === 'processing'
                 ? t('micProcessing')
                 : state === 'answered'
-                ? 'Query Grounded & Verified'
+                ? t('queryVerifiedStatus')
                 : state === 'permission_denied'
                 ? t('permissionDeniedTitle')
                 : state === 'error'
@@ -432,24 +519,30 @@ export const VoiceAssistant: React.FC = () => {
             <button
               type="button"
               onClick={startAudioRecording}
-              disabled={state === 'transcribing' || state === 'processing'}
-              className="inline-flex items-center space-x-3 px-8 py-4 rounded-full bg-forest hover:bg-forest-light text-harvest font-bold text-base shadow-voice transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
+              disabled={isRequestInFlight || state === 'transcribing' || state === 'processing'}
+              className="inline-flex items-center space-x-3 px-8 py-4 rounded-full bg-forest hover:bg-forest-light text-harvest font-bold text-base shadow-voice transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               <Mic className="w-5 h-5 stroke-[2.4] text-harvest" />
-              <span>{state === 'answered' ? t('tryAgain') : t('micIdle')}</span>
+              <span>
+                {isRequestInFlight || state === 'transcribing' || state === 'processing'
+                  ? (language === 'hi' ? 'प्रक्रिया जारी है...' : language === 'pa' ? 'ਕਾਰਵਾਈ ਜਾਰੀ ਹੈ...' : 'Processing...')
+                  : state === 'answered'
+                  ? t('tryAgain')
+                  : t('micIdle')}
+              </span>
             </button>
           )}
         </div>
 
         {/* Real-time / Completed Transcription Display */}
         {transcription && (
-          <div className="max-w-xl mx-auto my-4 p-4 bg-surface rounded-xl border border-hairline text-left shadow-subtle">
+          <div data-testid="raw-transcript-box" className="max-w-xl mx-auto my-4 p-4 bg-surface rounded-xl border border-hairline text-left shadow-subtle">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-charcoal-muted uppercase tracking-wider">
+              <span className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider">
                 {t('transcriptionLabel')}
               </span>
               {response?.detectedLanguage && (
-                <span className="text-[10px] font-mono text-forest bg-forest-50 px-2 py-0.5 rounded border border-forest/20 font-medium">
+                <span className="text-xs font-mono text-forest bg-forest-50 px-2 py-0.5 rounded border border-forest/20 font-medium">
                   {response.detectedLanguage}
                 </span>
               )}
@@ -466,12 +559,12 @@ export const VoiceAssistant: React.FC = () => {
             {/* Header of Response Box */}
             <div className="flex items-center justify-between border-b border-forest/20 pb-3 flex-wrap gap-2">
               <div className="flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 text-forest" />
+                <CheckCircle className="w-4 h-4 text-forest" />
                 <span className="text-xs font-bold text-forest uppercase tracking-wider">
                   {t('responseLabel')}
                 </span>
                 {response.intent && response.intent !== 'UNKNOWN' && (
-                  <span className="text-[10px] font-semibold bg-surface-white border border-forest/25 text-forest-dark px-2 py-0.5 rounded font-mono">
+                  <span className="text-xs font-semibold bg-surface-white border border-forest/25 text-forest-dark px-2 py-0.5 rounded font-mono">
                     {response.intent}
                   </span>
                 )}

@@ -230,7 +230,7 @@ export const GovernmentSchemes: React.FC = () => {
                       <FileText className="w-3.5 h-3.5 text-harvest-dark" />
                       <span>{t('schemeDocuments')}</span>
                     </div>
-                    <ul className="space-y-1 text-charcoal-muted leading-relaxed whitespace-pre-line pl-1 font-mono text-[11px]">
+                    <ul className="space-y-1 text-charcoal leading-relaxed whitespace-pre-line pl-1 text-xs">
                       {getSchemeDocuments(scheme)}
                     </ul>
                   </div>
@@ -241,7 +241,7 @@ export const GovernmentSchemes: React.FC = () => {
                       <ListOrdered className="w-3.5 h-3.5 text-forest" />
                       <span>{t('schemeApplication')}</span>
                     </div>
-                    <div className="space-y-1 text-charcoal-muted leading-relaxed whitespace-pre-line pl-1 text-[11px]">
+                    <div className="space-y-1 text-charcoal leading-relaxed whitespace-pre-line pl-1 text-xs">
                       {getSchemeSteps(scheme)}
                     </div>
                   </div>
@@ -249,7 +249,7 @@ export const GovernmentSchemes: React.FC = () => {
 
                 {/* Footer with Verified Provenance & Official Portal Button */}
                 <div className="pt-2 border-t border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center space-x-1.5 text-[11px] text-charcoal-muted font-mono">
+                  <div className="flex items-center space-x-1.5 text-xs text-charcoal-muted font-mono">
                     <Calendar className="w-3.5 h-3.5 text-forest" />
                     <span>
                       {t('verifiedOn')}: {scheme.verifiedDate}

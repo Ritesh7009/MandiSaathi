@@ -58,65 +58,40 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
     {
       id: 'schemes',
       title: t('navSchemes'),
-      subtitle:
-        language === 'hi'
-          ? 'पीएम-किसान, फसल बीमा, मृदा स्वास्थ्य एवं कृषि ऋण योजनाएं'
-          : language === 'pa'
-          ? 'ਪੀਐਮ-ਕਿਸਾਨ, ਫ਼ਸਲ ਬੀਮਾ ਅਤੇ ਸਰਕਾਰੀ ਸਹਾਇਤਾ ਸਕੀਮਾਂ'
-          : 'Central & State agricultural subsidies, welfare programs & portals',
+      subtitle: t('moreSchemesSubtitle'),
       icon: Landmark,
-      badge: language === 'hi' ? 'कल्याणकारी योजनाएं' : language === 'pa' ? 'ਸਰਕਾਰੀ ਸਕੀਮਾਂ' : 'Welfare Directory',
+      badge: t('moreSchemesBadge'),
     },
     {
       id: 'complaints',
       title: t('complaintsTitle'),
-      subtitle:
-        language === 'hi'
-          ? 'तौल में कटौती, देरी से भुगतान या गेट पास की व्यक्तिगत समस्या दर्ज करें'
-          : language === 'pa'
-          ? 'ਤੋਲ ਕਟੌਤੀ, ਦੇਰੀ ਨਾਲ ਭੁਗਤਾਨ ਜਾਂ ਗੇਟ ਪਾਸ ਦੀ ਨਿੱਜੀ ਸਮੱਸਿਆ ਦਰਜ ਕਰੋ'
-          : 'Record weighment discrepancies, delayed payments or gate-pass issues for your personal records',
+      subtitle: t('moreComplaintsSubtitle'),
       icon: FileText,
-      badge: language === 'hi' ? 'समस्या रिकॉर्ड' : language === 'pa' ? 'ਸਮੱਸਿਆ ਰਿਕਾਰਡ' : 'Issue Record',
+      badge: t('moreComplaintsBadge'),
     },
     {
       id: 'settings',
       title: t('navSettings'),
-      subtitle:
-        language === 'hi'
-          ? 'भाषा (हिन्दी, पंजाबी, अंग्रेजी) एवं बड़े अक्षरों की सुगमता'
-          : language === 'pa'
-          ? 'ਬੋਲੀ (ਪੰਜਾਬੀ, ਹਿੰਦੀ, ਅੰਗਰੇਜ਼ੀ) ਅਤੇ ਅੱਖਰਾਂ ਦਾ ਆਕਾਰ'
-          : 'Regional dialect selection and high-visibility text sizing',
+      subtitle: t('moreSettingsSubtitle'),
       icon: Sliders,
-      badge: language === 'hi' ? 'भाषा व डिस्प्ले' : language === 'pa' ? 'ਬੋਲੀ ਅਤੇ ਡਿਸਪਲੇ' : 'Display & Sound',
+      badge: t('moreSettingsBadge'),
     },
   ];
 
   const systemServices = [
     {
       id: 'offline',
-      title: language === 'hi' ? 'ऑफलाइन डेटा और स्टोरेज' : language === 'pa' ? 'ਆਫਲਾਈਨ ਡਾਟਾ ਸਟੋਰੇਜ' : 'Offline Storage & Cache',
-      subtitle:
-        language === 'hi'
-          ? 'बिना इंटरनेट मंडी भाव देखने के लिए डिवाइस पर सुरक्षित डेटा'
-          : language === 'pa'
-          ? 'ਬਿਨਾਂ ਇੰਟਰਨੈੱਟ ਮੰਡੀ ਭਾਅ ਵੇਖਣ ਲਈ ਡਿਵਾਈਸ ਤੇ ਸੁਰੱਖਿਅਤ ਡਾਟਾ'
-          : 'Manage locally saved mandi prices stored on your device for field use',
+      title: t('moreOfflineTitle'),
+      subtitle: t('moreOfflineSubtitle'),
       icon: Database,
-      badge: `${cacheCount} ${language === 'hi' ? 'रिकॉर्ड सहेजे' : language === 'pa' ? 'ਰਿਕਾਰਡ ਸੁਰੱਖਿਅਤ' : 'Cached Records'}`,
+      badge: `${cacheCount} ${t('offlineCachedBadge')}`,
     },
     {
       id: 'about',
-      title: language === 'hi' ? 'मंडी साथी के बारे में' : language === 'pa' ? 'ਮੰਡੀ ਸਾਥੀ ਬਾਰੇ' : 'About MandiSaathi',
-      subtitle:
-        language === 'hi'
-          ? 'सत्यापित एगमार्कनेट रिकॉर्ड, डिस्क्लेमर और तकनीक विवरण'
-          : language === 'pa'
-          ? 'ਪ੍ਰਮਾਣਿਤ ਐਗਮਾਰਕਨੈੱਟ ਰਿਕਾਰਡ, ਡਿਸਕਲੇਮਰ ਅਤੇ ਤਕਨੀਕੀ ਵੇਰਵੇ'
-          : 'Verified Agmarknet records, platform disclaimers & voice architecture',
+      title: t('moreAboutTitle'),
+      subtitle: t('moreAboutSubtitle'),
       icon: Info,
-      badge: language === 'hi' ? 'प्लेटफ़ॉर्म विवरण' : language === 'pa' ? 'ਪਲੇਟਫਾਰਮ ਜਾਣਕਾਰੀ' : 'Platform Info',
+      badge: t('moreAboutBadge'),
     },
   ];
 
@@ -130,7 +105,7 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
           className="inline-flex items-center space-x-1.5 text-xs font-semibold text-forest hover:text-forest-dark py-1 cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>{language === 'hi' ? 'सभी सेवाओं पर वापस जाएं' : language === 'pa' ? 'ਸਾਰੀਆਂ ਸੇਵਾਵਾਂ ਤੇ ਵਾਪਸ ਜਾਓ' : 'Back to More Services'}</span>
+          <span>{t('navMore')}</span>
         </button>
         <GovernmentSchemes />
       </div>
@@ -146,7 +121,7 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
           className="inline-flex items-center space-x-1.5 text-xs font-semibold text-forest hover:text-forest-dark py-1 cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>{language === 'hi' ? 'सभी सेवाओं पर वापस जाएं' : language === 'pa' ? 'ਸਾਰੀਆਂ ਸੇਵਾਵਾਂ ਤੇ ਵਾਪਸ ਜਾਓ' : 'Back to More Services'}</span>
+          <span>{t('navMore')}</span>
         </button>
         <ComplaintRegistration />
       </div>
@@ -162,7 +137,7 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
           className="inline-flex items-center space-x-1.5 text-xs font-semibold text-forest hover:text-forest-dark py-1 cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>{language === 'hi' ? 'सभी सेवाओं पर वापस जाएं' : language === 'pa' ? 'ਸਾਰੀਆਂ ਸੇਵਾਵਾਂ ਤੇ ਵਾਪਸ ਜਾਓ' : 'Back to More Services'}</span>
+          <span>{t('navMore')}</span>
         </button>
         <Settings />
       </div>
@@ -178,7 +153,7 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
           className="inline-flex items-center space-x-1.5 text-xs font-semibold text-forest hover:text-forest-dark py-1 cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>{language === 'hi' ? 'सभी सेवाओं पर वापस जाएं' : language === 'pa' ? 'ਸਾਰੀਆਂ ਸੇਵਾਵਾਂ ਤੇ ਵਾਪਸ ਜਾਓ' : 'Back to More Services'}</span>
+          <span>{t('navMore')}</span>
         </button>
 
         <section className="rounded-xl border border-hairline bg-surface-white p-6 shadow-subtle space-y-4">
@@ -198,22 +173,22 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 bg-surface rounded-xl border border-hairline space-y-1">
-              <span className="text-[10px] uppercase font-bold text-charcoal-subtle">Network Status</span>
+              <span className="text-xs uppercase font-bold text-charcoal-subtle">Network Status</span>
               <div className="text-base font-bold text-forest flex items-center space-x-2">
                 <span className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-forest' : 'bg-amber-600'}`} />
                 <span>{isOnline ? 'Online (Connected)' : 'Offline (Field Mode)'}</span>
               </div>
-              <p className="text-[11px] text-charcoal-muted">
+              <p className="text-xs text-charcoal-muted">
                 {isOnline ? 'Directly fetching real-time Agmarknet auction filings.' : 'Operating on client-side IndexedDB structured cache.'}
               </p>
             </div>
 
             <div className="p-4 bg-surface rounded-xl border border-hairline space-y-1">
-              <span className="text-[10px] uppercase font-bold text-charcoal-subtle">IndexedDB Cached Records</span>
+              <span className="text-xs uppercase font-bold text-charcoal-subtle">IndexedDB Cached Records</span>
               <div className="text-2xl font-bold text-charcoal font-mono tnum">
                 {cacheCount} <span className="text-xs font-normal text-charcoal-muted">records stored</span>
               </div>
-              <p className="text-[11px] text-charcoal-muted">
+              <p className="text-xs text-charcoal-muted">
                 Stored in database: <code className="text-forest font-semibold">mandisaathi_offline_db</code>
               </p>
             </div>
@@ -247,7 +222,7 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
           className="inline-flex items-center space-x-1.5 text-xs font-semibold text-forest hover:text-forest-dark py-1 cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>{language === 'hi' ? 'सभी सेवाओं पर वापस जाएं' : language === 'pa' ? 'ਸਾਰੀਆਂ ਸੇਵਾਵਾਂ ਤੇ ਵਾਪਸ ਜਾਓ' : 'Back to More Services'}</span>
+          <span>{t('navMore')}</span>
         </button>
 
         <section className="rounded-xl border border-hairline bg-surface-white p-6 shadow-subtle space-y-5">
@@ -258,39 +233,39 @@ export const More: React.FC<MoreProps> = ({ defaultTab }) => {
             <div>
               <h1 className="text-lg font-bold text-charcoal">MandiSaathi (मंडी साथी / ਮੰਡੀ ਸਾਥੀ)</h1>
               <p className="text-xs text-charcoal-muted">
-                Enterprise-Grade Multilingual Agricultural Market Intelligence Platform
+                National Agricultural Market Information Service for Farmers
               </p>
             </div>
           </div>
 
           <div className="space-y-3 text-xs leading-relaxed text-charcoal">
-            <h2 className="font-bold text-forest text-sm">Platform Provenance Guarantee</h2>
+            <h2 className="font-bold text-forest text-sm">Institutional Market Record Guarantee</h2>
             <p>
-              MandiSaathi connects Indian farmers directly with verified daily closed auction prices from APMC mandis across India. All price telemetry is ingested from the official Open Government Data platform (OGD India / Agmarknet, Ministry of Agriculture & Farmers Welfare).
+              MandiSaathi connects Indian farmers directly with verified daily closed auction records from APMC mandis across India. All market data is ingested directly from the official Open Government Data platform (OGD India / Agmarknet, Ministry of Agriculture & Farmers Welfare).
             </p>
             <p className="font-medium text-forest-dark bg-forest-50 p-3 rounded-lg border border-forest/20">
-              Zero-Fabrication Policy: MandiSaathi strictly enforces deterministic database retrieval. The system never extrapolates, simulates, or hallucinates market prices. When auction records are unavailable for a commodity or date, the platform explicitly communicates the absence of records.
+              Authentic Record Guarantee: MandiSaathi provides strictly authentic auction records received from Agmarknet and State Agricultural Marketing Boards. All rates reflect verified closed transactions recorded by APMC market secretaries, without simulation or estimation. When auction records are unavailable for a commodity or date, the platform explicitly communicates the absence of records.
             </p>
           </div>
 
           <div className="pt-3 border-t border-hairline space-y-2 text-xs">
-            <h3 className="font-bold text-charcoal">Voice Technology Stack</h3>
+            <h3 className="font-bold text-charcoal">Voice Technology Infrastructure</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="p-3 bg-surface rounded-lg border border-hairline space-y-1">
-                <div className="text-[10px] uppercase font-bold text-charcoal-subtle">Speech-to-Text (STT)</div>
-                <div className="font-semibold text-charcoal">Gnani Prisma STT</div>
-                <p className="text-[11px] text-charcoal-muted">Acoustic models optimized for rural Indian Hindi, Punjabi, and Indian English accents.</p>
+                <div className="text-xs uppercase font-bold text-charcoal-subtle">Speech Recognition</div>
+                <div className="font-semibold text-charcoal">Indic Speech Recognition (Gnani Prisma)</div>
+                <p className="text-xs text-charcoal-muted">Acoustic models optimized for rural Indian Hindi, Punjabi, and Indian English speech patterns.</p>
               </div>
               <div className="p-3 bg-surface rounded-lg border border-hairline space-y-1">
-                <div className="text-[10px] uppercase font-bold text-charcoal-subtle">Text-to-Speech (TTS)</div>
-                <div className="font-semibold text-charcoal">Gnani Timbre TTS</div>
-                <p className="text-[11px] text-charcoal-muted">High-naturalness regional voice synthesis producing authentic local pronunciations.</p>
+                <div className="text-xs uppercase font-bold text-charcoal-subtle">Voice Response Synthesis</div>
+                <div className="font-semibold text-charcoal">Natural Regional Voice Synthesis (Gnani Timbre)</div>
+                <p className="text-xs text-charcoal-muted">High-naturalness regional voice synthesis producing authentic local pronunciations for farmers.</p>
               </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-hairline flex items-center justify-between text-[11px] text-charcoal-muted font-mono">
-            <span>Stack: Java 21 • Spring Boot 3.3.5 • React 19 • PostgreSQL 16</span>
+          <div className="pt-3 border-t border-hairline flex items-center justify-between text-xs text-charcoal-muted font-mono">
+            <span>National Agricultural Informatics Division • Agmarknet Verified Feed</span>
             <span>Version: 1.0.0-RC1</span>
           </div>
         </section>

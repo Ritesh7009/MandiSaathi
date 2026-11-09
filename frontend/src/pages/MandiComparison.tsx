@@ -27,10 +27,12 @@ import {
   ShieldCheck,
   Truck,
   Info,
+  Search,
+  X,
 } from 'lucide-react';
 
 export const MandiComparison: React.FC = () => {
-  const { language, t } = useLanguage();
+  const { language, t, getCommodityName: getLocalizedComm, getMandiName: getLocalizedM } = useLanguage();
 
   const [selectedCommodity, setSelectedCommodity] = useState<string>('WHEAT');
   const [selectedMandis, setSelectedMandis] = useState<string[]>([
@@ -40,6 +42,7 @@ export const MandiComparison: React.FC = () => {
   ]);
   const [transportRatePerQtl, setTransportRatePerQtl] = useState<number>(35);
   const [isCustomTransport, setIsCustomTransport] = useState<boolean>(false);
+  const [mandiSearchQuery, setMandiSearchQuery] = useState<string>('');
 
   // Fetch commodities list
   const { data: commodities = [] } = useQuery({
@@ -54,6 +57,19 @@ export const MandiComparison: React.FC = () => {
     queryFn: () => api.getMandis(),
     staleTime: 120000,
   });
+
+  const filteredMandis = useMemo(() => {
+    if (!mandiSearchQuery.trim()) return mandis;
+    const q = mandiSearchQuery.toLowerCase();
+    return mandis.filter(
+      (m) =>
+        m.nameEn.toLowerCase().includes(q) ||
+        m.nameHi?.toLowerCase().includes(q) ||
+        m.namePa?.toLowerCase().includes(q) ||
+        m.district.toLowerCase().includes(q) ||
+        m.state.toLowerCase().includes(q)
+    );
+  }, [mandis, mandiSearchQuery]);
 
   // Fetch price comparison data
   const {
@@ -80,16 +96,12 @@ export const MandiComparison: React.FC = () => {
     });
   };
 
-  const getCommodityName = (c: { nameEn: string; nameHi: string; namePa: string | null }) => {
-    if (language === 'hi' && c.nameHi) return c.nameHi;
-    if (language === 'pa' && c.namePa) return c.namePa;
-    return c.nameEn;
+  const getCommodityName = (c: { code?: string; nameEn: string; nameHi: string; namePa: string | null }) => {
+    return getLocalizedComm(c.code || c.nameEn, c.nameHi || c.nameEn);
   };
 
-  const getMandiName = (m: { nameEn: string; nameHi: string; namePa: string | null }) => {
-    if (language === 'hi' && m.nameHi) return m.nameHi;
-    if (language === 'pa' && m.namePa) return m.namePa;
-    return m.nameEn;
+  const getMandiName = (m: { code?: string; nameEn: string; nameHi: string; namePa: string | null }) => {
+    return getLocalizedM(m.code || m.nameEn, m.nameHi || m.nameEn);
   };
 
   // Find best modal rate & price spread
@@ -168,9 +180,15 @@ export const MandiComparison: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
+        <div className="flex items-center space-x-2 text-xs font-medium bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
           <ArrowRightLeft className="w-3.5 h-3.5 text-forest" />
-          <span>Cross-Mandi Arbitrage Analysis</span>
+          <span>
+            {language === 'hi'
+              ? 'मंडी भाव अंतर एवं ट्रॉली बचत'
+              : language === 'pa'
+              ? 'ਮੰਡੀ ਭਾਅ ਤੁਲਨਾ ਅਤੇ ਬੱਚਤ'
+              : 'Inter-Mandi Price Difference & Net Gain'}
+          </span>
         </div>
       </section>
 
@@ -178,7 +196,7 @@ export const MandiComparison: React.FC = () => {
       <section className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle space-y-4">
         {/* Commodity Choice */}
         <div>
-          <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-2">
+          <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-2">
             1. {t('pickCommodityToCompare')}
           </label>
           <div className="flex flex-wrap gap-2">
@@ -203,28 +221,85 @@ export const MandiComparison: React.FC = () => {
           </div>
         </div>
 
-        {/* Mandi Multi-Selector */}
-        <div className="pt-3 border-t border-hairline">
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">
+        {/* Mandi Multi-Selector with Pinned Strip & Search */}
+        <div className="pt-3 border-t border-hairline space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">
               2. Select Mandis ({selectedMandis.length} SELECTED)
             </label>
-            <span className="text-[11px] text-charcoal-muted font-mono">
-              Choose 2 or more to compare
+            <span className="text-xs text-charcoal-muted font-mono">
+              Choose 2 to 6 to compare
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-            {mandis.map((m) => {
+          {/* Pinned Active Mandis Strip */}
+          {selectedMandis.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 p-2 bg-forest-50/60 rounded-lg border border-forest/20">
+              <span className="text-[10px] font-bold text-forest uppercase tracking-wider mr-1">
+                Active Markets:
+              </span>
+              {selectedMandis.map((code) => {
+                const m = mandis.find((item) => item.code === code);
+                return (
+                  <span
+                    key={code}
+                    className="inline-flex items-center space-x-1.5 text-xs font-semibold bg-surface-white text-forest border border-forest/30 px-2 py-0.5 rounded shadow-xs"
+                  >
+                    <span>{m ? getMandiName(m) : code}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleMandiSelection(code)}
+                      className="text-forest/70 hover:text-red-600 cursor-pointer ml-1"
+                      title="Remove market"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setSelectedMandis([])}
+                className="text-[10px] text-charcoal-muted hover:text-red-600 underline ml-auto cursor-pointer"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {/* Quick Mandi Search Filter */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-charcoal-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Filter mandis by name, district, or state..."
+              value={mandiSearchQuery}
+              onChange={(e) => setMandiSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 bg-surface border border-hairline rounded-lg text-xs text-charcoal focus:outline-none focus:border-forest"
+            />
+            {mandiSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setMandiSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-charcoal-muted hover:text-charcoal cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Compact Scrollable Mandi Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-52 overflow-y-auto pr-1">
+            {filteredMandis.map((m) => {
               const isSelected = selectedMandis.includes(m.code);
               return (
                 <button
                   key={m.code}
                   type="button"
                   onClick={() => toggleMandiSelection(m.code)}
-                  className={`flex items-center justify-between p-2.5 rounded-lg text-left border transition-all duration-150 cursor-pointer ${
+                  className={`flex items-center justify-between p-2 rounded-lg text-left border transition-all duration-150 cursor-pointer tactile-press ${
                     isSelected
-                      ? 'bg-forest-50/60 border-forest text-forest font-semibold shadow-subtle'
+                      ? 'bg-forest-50/80 border-forest text-forest font-semibold shadow-subtle'
                       : 'bg-surface-white border-hairline text-charcoal hover:bg-surface'
                   }`}
                 >
@@ -298,7 +373,7 @@ export const MandiComparison: React.FC = () => {
               unit="Gain / Quintal"
               subtext={
                 analytics.spread > 0
-                  ? `≈ +₹${(analytics.spread * 50).toLocaleString('en-IN')} arbitrage gain on a 50-quintal tractor trolley`
+                  ? t('trolleyNetGainText').replace('{gain}', (analytics.spread * 50).toLocaleString('en-IN'))
                   : 'Zero spread across selected markets'
               }
               variant="harvest"
@@ -310,45 +385,45 @@ export const MandiComparison: React.FC = () => {
               label="Comparing Markets"
               value={`${analytics.count} of ${selectedMandis.length} Mandis`}
               unit={analytics.count === selectedMandis.length ? 'All Selected Reporting' : 'Active Mandi Filings'}
-              badge="Verified Records"
+              badge={t('verifiedRecords')}
               icon={<Scale className="w-4 h-4 text-mutedGreen-dark" />}
             />
           </div>
 
-          {/* 50-Quintal Trolley Transport & Net Arbitrage Estimate Card */}
+          {/* 50-Quintal Trolley Transport & Net Margin Estimate Card */}
           <div className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-hairline">
               <div className="flex items-center space-x-2">
                 <Truck className="w-4 h-4 text-forest" />
                 <h3 className="font-bold text-sm text-charcoal">
-                  50-Quintal Trolley Transport & Net Arbitrage Estimate
+                  {t('trolleyNetMarginTitle')}
                 </h3>
               </div>
-              <span className="text-[11px] font-mono text-charcoal-muted bg-surface px-2.5 py-0.5 rounded border border-hairline self-start sm:self-auto">
-                Estimated Net Difference • Non-Guaranteed
+              <span className="text-xs font-mono text-charcoal-muted bg-surface px-2.5 py-0.5 rounded border border-hairline self-start sm:self-auto">
+                {t('trolleyEstimateBadge')}
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div className="p-3 bg-surface rounded-lg border border-hairline space-y-1">
-                <span className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider block">
-                  1. Gross Price Differential (50 Qtl)
+                <span className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider block">
+                  {t('grossPriceDiff')}
                 </span>
                 <div className="text-lg font-bold text-charcoal font-mono tnum">
                   ₹{transportCalc ? transportCalc.grossSpread50Qtl.toLocaleString('en-IN') : 0}
                 </div>
-                <p className="text-[11px] text-charcoal-muted">
-                  Spread of ₹{analytics.spread}/qtl across a standard 50-quintal tractor trolley.
+                <p className="text-xs text-charcoal-muted">
+                  {t('trolleySpreadExplainer').replace('{spread}', analytics.spread.toString())}
                 </p>
               </div>
 
               <div className="p-3 bg-surface rounded-lg border border-hairline space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider block">
-                    2. Transport Cost Allowance
+                  <span className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider block">
+                    {t('transportAllowance')}
                   </span>
-                  <span className="text-[10px] font-mono font-medium text-forest">
-                    {isCustomTransport ? 'User-Entered' : 'Estimated Default (₹35/qtl)'}
+                  <span className="text-xs font-mono font-medium text-forest">
+                    {isCustomTransport ? t('userEnteredRate') : t('defaultTransportRate')}
                   </span>
                 </div>
                 <div className="flex items-center space-x-2 mt-1">
@@ -375,12 +450,12 @@ export const MandiComparison: React.FC = () => {
                       }}
                       className="text-[10px] text-forest hover:underline ml-auto cursor-pointer"
                     >
-                      Reset default
+                      {t('resetDefault')}
                     </button>
                   )}
                 </div>
                 <p className="text-[11px] text-charcoal-muted">
-                  Total est. transport cost: ₹{transportCalc ? transportCalc.transportTotal.toLocaleString('en-IN') : 0} for 50 qtl.
+                  {t('trolleyTotalTransport').replace('{cost}', (transportCalc ? transportCalc.transportTotal : 0).toLocaleString('en-IN'))}
                 </p>
               </div>
 
@@ -390,7 +465,7 @@ export const MandiComparison: React.FC = () => {
                   : 'bg-surface border-hairline text-charcoal'
               }`}>
                 <span className="text-[10px] font-semibold uppercase tracking-wider block text-charcoal-subtle">
-                  3. Net Estimated Difference
+                  {t('netEstDifference')}
                 </span>
                 <div className="text-lg font-bold font-mono tnum">
                   {transportCalc && transportCalc.netEstimatedSpread >= 0 ? '+' : ''}₹{transportCalc ? transportCalc.netEstimatedSpread.toLocaleString('en-IN') : 0}
@@ -464,15 +539,15 @@ export const MandiComparison: React.FC = () => {
                           return (
                             <div className="bg-surface-white border border-hairline p-3 rounded-lg shadow-float text-xs space-y-1">
                               <div className="font-bold text-forest">{data.name}</div>
-                              <div className="text-[11px] text-charcoal-muted">{data.location}</div>
+                              <div className="text-xs text-charcoal-muted">{data.location}</div>
                               <div className="pt-1.5 border-t border-hairline space-y-0.5">
                                 <div className="text-forest font-semibold tnum font-mono">
-                                  Modal Price: ₹{data.modal?.toLocaleString('en-IN')} / qtl
+                                  {t('modalPrice')}: ₹{data.modal?.toLocaleString('en-IN')} / qtl
                                 </div>
                                 <div className="text-charcoal-muted tnum font-mono">
-                                  Min – Max: ₹{data.min?.toLocaleString('en-IN')} – ₹{data.max?.toLocaleString('en-IN')}
+                                  {t('minPrice')} – {t('maxPrice')}: ₹{data.min?.toLocaleString('en-IN')} – ₹{data.max?.toLocaleString('en-IN')}
                                 </div>
-                                <div className="text-[10px] text-charcoal-muted pt-0.5 font-mono">
+                                <div className="text-xs text-charcoal-muted pt-0.5 font-mono">
                                   Auction Date: {data.date}
                                 </div>
                               </div>
@@ -487,13 +562,13 @@ export const MandiComparison: React.FC = () => {
                       height={36}
                       formatter={(val) => (
                         <span className="text-xs font-semibold text-charcoal capitalize">
-                          {val === 'modal' ? 'Modal Rate (मॉडल भाव)' : val === 'min' ? 'Min Rate (न्यूनतम)' : 'Max Rate (अधिकतम)'}
+                          {val === 'modal' ? t('modalPrice') : val === 'min' ? t('minPrice') : t('maxPrice')}
                         </span>
                       )}
                     />
                     <Bar dataKey="min" fill="#78917E" radius={[4, 4, 0, 0]} name="min" maxBarSize={32} />
                     <Bar dataKey="modal" fill="#174B35" radius={[4, 4, 0, 0]} name="modal" maxBarSize={32} />
-                    <Bar dataKey="max" fill="#D7B66A" radius={[4, 4, 0, 0]} name="max" maxBarSize={32} />
+                    <Bar dataKey="max" fill="#9E6500" radius={[4, 4, 0, 0]} name="max" maxBarSize={32} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -549,7 +624,7 @@ export const MandiComparison: React.FC = () => {
                             <MapPin className="w-3.5 h-3.5 text-harvest-dark shrink-0" />
                             <span className="font-semibold text-charcoal">{mandiName}</span>
                             {isBest && (
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-forest text-harvest uppercase font-mono">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-forest text-white uppercase font-mono shadow-xs">
                                 Best Rate
                               </span>
                             )}

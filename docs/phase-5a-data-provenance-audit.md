@@ -400,3 +400,4 @@ However, in the current deployment environment:
 2. **All 15 displayed mandi rates originate from the Flyway V2 migration seed script.**
 3. **The system safely defaults to these verified baseline records because `DATA_GOV_IN_API_KEY` is not configured.**
 4. **No data fabrication or corruption occurs when upstream synchronization is triggered.**
+

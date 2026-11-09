@@ -1,0 +1,68 @@
+databases:
+  - name: mandisaathi-postgres
+    databaseName: mandisaathi
+    user: mandisaathi
+    plan: free
+    postgresMajorVersion: 16
+
+services:
+  # Backend Web Service (Spring Boot 3.3.5 / Java 21)
+  - type: web
+    name: mandisaathi-backend
+    env: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: PORT
+        value: 8080
+      - key: SERVER_PORT
+        value: 8080
+      - key: DB_HOST
+        fromDatabase:
+          name: mandisaathi-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: mandisaathi-postgres
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: mandisaathi-postgres
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: mandisaathi-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: mandisaathi-postgres
+          property: password
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://mandisaathi-frontend.onrender.com,http://localhost:5173,http://localhost:3000
+      - key: GNANI_ENABLED
+        value: "true"
+      - key: GNANI_API_KEY
+        sync: false
+      - key: MANDI_DATA_ENABLED
+        value: "false"
+
+  # Frontend Static Site (React 19 / TypeScript / Vite 6)
+  - type: web
+    name: mandisaathi-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://mandisaathi-backend.onrender.com
+

@@ -1,18 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage, ALL_RECOGNIZED_LANGUAGES } from '../context/LanguageContext';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../services/apiClient';
+import { api, ApiClientError } from '../services/apiClient';
+import { convertTo16kHzWav } from '../utils/audioEncoder';
 import { VoiceWaveVisualizer } from '../components/ui/VoiceWaveVisualizer';
 import { PriceSpreadBar } from '../components/ui/PriceSpreadBar';
 import { PromptChip } from '../components/ui/PromptChip';
+import { AgriContourBackdrop } from '../components/ui/AgriContourBackdrop';
+import { NumberTicker } from '../components/ui/NumberTicker';
 import {
   Mic,
   Square,
   RotateCcw,
   Send,
   AlertCircle,
-  Sparkles,
+  HelpCircle,
   Globe,
   Tag,
   CheckCircle,
@@ -26,6 +29,7 @@ import {
   Clock,
   ArrowRight,
   Search,
+  Terminal,
 } from 'lucide-react';
 import { VoiceQueryResponse, RecentConversation, PriceRecord } from '../types';
 
@@ -40,7 +44,7 @@ type AssistantState =
   | 'permission_denied';
 
 export const Home: React.FC = () => {
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t, getCommodityName, getMandiName } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -54,7 +58,13 @@ export const Home: React.FC = () => {
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartTimeRef = useRef<number>(0);
+  const maxRecordingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [micTestPassed, setMicTestPassed] = useState<boolean>(false);
+  const [isRequestInFlight, setIsRequestInFlight] = useState<boolean>(false);
+  const [lastAudioDuration, setLastAudioDuration] = useState<number | null>(null);
+  const [lastAudioSize, setLastAudioSize] = useState<number | null>(null);
+  const [clientRoundtripMs, setClientRoundtripMs] = useState<number | null>(null);
 
   // Audio recording & playback references
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -67,13 +77,81 @@ export const Home: React.FC = () => {
   // Recent queries in local storage
   const [recentQueries, setRecentQueries] = useState<RecentConversation[]>([]);
 
-  // Suggested farmer queries
-  const suggestedQueries = [
-    { text: 'आज पंजाब में गेहूं का भाव क्या चल रहा है?', langTag: 'HI' },
-    { text: 'ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?', langTag: 'PA' },
-    { text: 'What is the wheat price in Punjab today?', langTag: 'EN' },
-    { text: 'आज सिरसा में सरसों का क्या भाव है?', langTag: 'HI' },
-  ];
+  // Suggested farmer queries localized for the active dialect
+  const suggestedQueries = useMemo(() => {
+    switch (language) {
+      case 'mr':
+        return [
+          { text: 'आज लासलगावमध्ये कांद्याचा भाव काय आहे?', langTag: 'MR' },
+          { text: 'नाशिक बाजारात सोयाबीनचे दर काय आहेत?', langTag: 'MR' },
+          { text: 'पुणे मंडईत गव्हाचा मॉडेल भाव काय आहे?', langTag: 'MR' },
+          { text: 'पीएम-किसान योजनेसाठी कागदपत्रे कोणती लागतात?', langTag: 'MR' },
+        ];
+      case 'gu':
+        return [
+          { text: 'આજે રાજકોટમાં કપાસનો ભાવ શું છે?', langTag: 'GU' },
+          { text: 'ઊંઝા માર્કેટમાં જીરુંના તાજા ભાવ જણાવો', langTag: 'GU' },
+          { text: 'ગોંડલ મંડીમાં મગફળીનો મોડલ ભાવ શું છે?', langTag: 'GU' },
+          { text: 'પીએમ કિસાન યોજનાની વિગત આપો', langTag: 'GU' },
+        ];
+      case 'bn':
+        return [
+          { text: 'আজ বর্ধমানে ধানের সরকারি দর কত চলছে?', langTag: 'BN' },
+          { text: 'শিলিগুড়ি বাজারে গমের দাম কত?', langTag: 'BN' },
+          { text: 'আলুর আজকের পাইকারি নিলাম দর কত?', langTag: 'BN' },
+          { text: 'পিএম-কিসান প্রকল্পে কি কি নথি লাগে?', langTag: 'BN' },
+        ];
+      case 'te':
+        return [
+          { text: 'ఈరోజు గుంటూరులో మిర్చి ధర ఎంత ఉంది?', langTag: 'TE' },
+          { text: 'వరంగల్ మార్కెట్లో పత్తి ధర చెప్పండి', langTag: 'TE' },
+          { text: 'వరి ధాన్యం ప్రభుత్వ మద్దతు ధర ఎంత?', langTag: 'TE' },
+          { text: 'పీఎం-కిసాన్ పథకానికి దరఖాస్తు ఎలా చేయాలి?', langTag: 'TE' },
+        ];
+      case 'ta':
+        return [
+          { text: 'இன்று ஈரோட்டில் மஞ்சள் விலை என்ன?', langTag: 'TA' },
+          { text: 'மதுரை மார்க்கெட்டில் நெல் விலை என்ன?', langTag: 'TA' },
+          { text: 'பருத்தி இன்றைய மாடல் விலை என்ன?', langTag: 'TA' },
+          { text: 'பிஎம் கிசான் திட்டத்திற்கு என்ன ஆவணங்கள் தேவை?', langTag: 'TA' },
+        ];
+      case 'kn':
+        return [
+          { text: 'ಇಂದು ಹುಬ್ಬಳ್ಳಿಯಲ್ಲಿ ಹತ್ತಿ ಬೆಲೆ ಎಷ್ಟಿದೆ?', langTag: 'KN' },
+          { text: 'ಮೈಸೂರು ಮಾರುಕಟ್ಟೆಯಲ್ಲಿ ಭತ್ತದ ದರ ತಿಳಿಸಿ', langTag: 'KN' },
+          { text: 'ರಾಗಿಯ ಇಂದಿನ ಮಾಡಲ್ ದರ ಎಷ್ಟು?', langTag: 'KN' },
+          { text: 'ಪಿಎಂ ಕಿಸಾನ್ ಯೋಜನೆಗೆ ಬೇಕಾದ ದಾಖಲೆಗಳು ಯಾವುವು?', langTag: 'KN' },
+        ];
+      case 'ml':
+        return [
+          { text: 'ഇന്ന് കൊച്ചിയിൽ ഏലക്കായുടെ വില എത്രയാണ്?', langTag: 'ML' },
+          { text: 'വയനാട് വിപണിയിൽ കുരുമുളകിന്റെ നിരക്ക് പറയൂ', langTag: 'ML' },
+          { text: 'നെല്ലിന്റെ ഇന്നത്തെ വിപണി വില എത്രയാണ്?', langTag: 'ML' },
+          { text: 'പിഎം-കിസാൻ പദ്ധതിക്ക് ആവശ്യമായ രേഖകൾ എന്തൊക്കെ?', langTag: 'ML' },
+        ];
+      case 'pa':
+        return [
+          { text: 'ਲੁਧਿਆਣਾ ਵਿੱਚ ਕਣਕ ਦਾ ਕੀ ਭਾਅ ਹੈ?', langTag: 'PA' },
+          { text: 'ਖੰਨਾ ਮੰਡੀ ਵਿੱਚ ਬਾਸਮਤੀ ਦਾ ਰੇਟ ਕੀ ਚੱਲ ਰਿਹਾ ਹੈ?', langTag: 'PA' },
+          { text: 'ਕਪਾਹ ਦੀ ਤਾਜ਼ਾ ਬੋਲੀ ਦਾ ਭਾਅ ਦੱਸੋ', langTag: 'PA' },
+          { text: 'ਪੀਐਮ-ਕਿਸਾਨ ਸਕੀਮ ਲਈ ਕਿਹੜੇ ਕਾਗਜ਼ ਚਾਹੀਦੇ ਹਨ?', langTag: 'PA' },
+        ];
+      case 'en':
+        return [
+          { text: 'What is the wheat price in Punjab today?', langTag: 'EN' },
+          { text: 'Compare cotton rates between Sirsa and Khanna mandis', langTag: 'EN' },
+          { text: 'What is the modal mustard rate in Sirsa?', langTag: 'EN' },
+          { text: 'What documents are required for PM-KISAN?', langTag: 'EN' },
+        ];
+      default:
+        return [
+          { text: 'आज पंजाब में गेहूं का भाव क्या चल रहा है?', langTag: 'HI' },
+          { text: 'आज सिरसा में सरसों का क्या भाव है?', langTag: 'HI' },
+          { text: 'खन्ना और सिरसा मंडी में गेहूं के भाव की तुलना करें', langTag: 'HI' },
+          { text: 'पीएम-किसान सम्मान निधि के लिए क्या दस्तावेज चाहिए?', langTag: 'HI' },
+        ];
+    }
+  }, [language]);
 
   // Auto-run if query param is passed
   useEffect(() => {
@@ -102,6 +180,7 @@ export const Home: React.FC = () => {
       stopAudioRecording();
       stopAudioPlayback();
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (maxRecordingTimeoutRef.current) clearTimeout(maxRecordingTimeoutRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (audioContextRef.current) audioContextRef.current.close().catch(() => {});
     };
@@ -126,7 +205,7 @@ export const Home: React.FC = () => {
     }
   };
 
-  // Start Browser MediaRecorder
+  // Start Browser MediaRecorder (auto-stops at 15s; resamples to 16kHz mono WAV)
   const startAudioRecording = async () => {
     setErrorMessage(null);
     setTranscription('');
@@ -142,10 +221,20 @@ export const Home: React.FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setState('recording');
       setRecordingSeconds(0);
+      recordingStartTimeRef.current = Date.now();
+
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
+
+      // Automatically stop recording at 15 seconds
+      if (maxRecordingTimeoutRef.current) clearTimeout(maxRecordingTimeoutRef.current);
+      maxRecordingTimeoutRef.current = setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          stopAudioRecording();
+        }
+      }, 15000);
 
       // Set up AudioContext Analyser for dynamic wave reactivity
       try {
@@ -178,7 +267,7 @@ export const Home: React.FC = () => {
         setAudioLevel(0.5);
       }
 
-      // Check supported MIME type
+      // Check supported MIME type for recording
       let mimeType = 'audio/webm';
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         mimeType = 'audio/webm;codecs=opus';
@@ -199,11 +288,43 @@ export const Home: React.FC = () => {
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        await handleAudioProcessing(audioBlob);
+        if (maxRecordingTimeoutRef.current) {
+          clearTimeout(maxRecordingTimeoutRef.current);
+          maxRecordingTimeoutRef.current = null;
+        }
 
-        // Stop all audio stream tracks
-        stream.getTracks().forEach((track) => track.stop());
+        const durationMs = Date.now() - recordingStartTimeRef.current;
+
+        // Reject audio clips under 1 second with a clear message
+        if (durationMs < 1000) {
+          setState('error');
+          const shortMsg =
+            language === 'hi'
+              ? 'ऑडियो 1 सेकंड से छोटा है। कृपया कम से कम 1 सेकंड बोलें।'
+              : language === 'pa'
+              ? 'ਆਡੀਓ 1 ਸਕਿੰਟ ਤੋਂ ਛੋਟੀ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਘੱਟੋ-ਘੱਟ 1 ਸਕਿੰਟ ਬੋਲੋ।'
+              : 'Audio clip too short (under 1 second). Please speak for at least 1 second.';
+          setErrorMessage(shortMsg);
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        try {
+          setState('transcribing');
+          const rawBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+          // Resample to 16 kHz mono 16-bit PCM WAV for Gnani Prisma STT
+          const processed = await convertTo16kHzWav(rawBlob);
+          setLastAudioDuration(processed.durationSeconds);
+          setLastAudioSize(processed.byteSize);
+
+          await handleAudioProcessing(processed.blob);
+        } catch (convErr) {
+          setState('error');
+          setErrorMessage('Audio conversion failed: ' + (convErr instanceof Error ? convErr.message : String(convErr)));
+        } finally {
+          stream.getTracks().forEach((track) => track.stop());
+        }
       };
 
       recorder.start(250);
@@ -223,32 +344,89 @@ export const Home: React.FC = () => {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
+    if (maxRecordingTimeoutRef.current) {
+      clearTimeout(maxRecordingTimeoutRef.current);
+      maxRecordingTimeoutRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
-      setState('transcribing');
     }
   };
 
-  // Submit Audio Blob to Backend
-  const handleAudioProcessing = async (blob: Blob) => {
+  // Submit 16kHz WAV Audio Blob to Backend with Concurrency & Error Distinction
+  const handleAudioProcessing = async (wavBlob: Blob) => {
+    const uploadStart = Date.now();
+    setIsRequestInFlight(true);
+    setErrorMessage(null);
+
     try {
       setState('processing');
       const langParam = language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-IN';
-      const result = await api.sendVoiceAudio(blob, langParam);
+      const result = await api.sendVoiceAudio(wavBlob, langParam);
 
-      setTranscription(result.transcript);
+      const elapsed = Date.now() - uploadStart;
+      setClientRoundtripMs(elapsed);
+
+      setTranscription(result.transcript || '');
       setResponse(result);
-      setState('answered');
 
+      if (result.statusCode && result.statusCode !== 200) {
+        setState('error');
+        setErrorMessage(result.engineNotice || result.responseText);
+        return;
+      }
+
+      if (!result.transcript || result.transcript.trim() === '') {
+        setState('error');
+        const emptyMsg =
+          language === 'hi'
+            ? 'कोई आवाज़ पहचानी नहीं जा सकी। कृपया माइक्रोफ़ोन के पास आकर दोबारा बोलें।'
+            : language === 'pa'
+            ? 'ਕੋਈ ਆਵਾਜ਼ ਸਮਝ ਨਹੀਂ ਆਈ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਬੋਲੋ।'
+            : 'No speech was detected or transcript was empty. Please speak clearly into the microphone.';
+        setErrorMessage(emptyMsg);
+        return;
+      }
+
+      setState('answered');
       saveConversation(result.transcript, result.responseText, result.detectedLanguage);
 
       if (result.audioBase64) {
         playAudioResponse(result);
       }
     } catch (err: unknown) {
-      const errorObj = err as { message?: string };
+      const elapsed = Date.now() - uploadStart;
+      setClientRoundtripMs(elapsed);
       setState('error');
-      setErrorMessage(errorObj.message || 'Failed to process voice query.');
+
+      if (err instanceof ApiClientError) {
+        if (err.voiceResponse?.transcript) {
+          setTranscription(err.voiceResponse.transcript);
+        }
+        if (err.voiceResponse) {
+          setResponse(err.voiceResponse);
+        }
+
+        const status = err.status;
+        if (status === 401 || status === 403) {
+          setErrorMessage('Gnani AI authentication failure: Invalid API key or credits exhausted (HTTP ' + status + ').');
+        } else if (status === 402) {
+          setErrorMessage('Gnani AI account credits exhausted (HTTP 402).');
+        } else if (status === 429) {
+          setErrorMessage('Gnani AI STT rate limit reached (HTTP 429). Too many requests in flight. Please wait a moment.');
+        } else if (status === 504 || status === 0) {
+          setErrorMessage('Voice request timed out (HTTP ' + status + '). Upstream speech server took too long to respond.');
+        } else if (status >= 500) {
+          setErrorMessage('Server error processing voice query (HTTP ' + status + ').');
+        } else {
+          setErrorMessage(err.message || 'Voice request failed.');
+        }
+      } else {
+        const errorObj = err as { message?: string };
+        setErrorMessage(errorObj.message || 'Failed to process voice query.');
+      }
+    } finally {
+      setIsRequestInFlight(false);
     }
   };
 
@@ -260,24 +438,31 @@ export const Home: React.FC = () => {
     setErrorMessage(null);
     setTranscription(queryText);
     setState('processing');
+    setIsRequestInFlight(true);
     stopAudioPlayback();
 
+    const queryStart = Date.now();
     try {
-      const langParam = language === 'hi' ? 'hi-IN' : language === 'pa' ? 'pa-IN' : 'en-IN';
-      const result = await api.sendVoiceQuery(queryText.trim(), langParam);
+      const langParam = language;
+      const result = await api.sendVoiceQuery(queryText, langParam);
 
+      setClientRoundtripMs(Date.now() - queryStart);
+      setTranscription(result.transcript || queryText);
       setResponse(result);
       setState('answered');
 
-      saveConversation(queryText, result.responseText, result.detectedLanguage);
+      saveConversation(result.transcript || queryText, result.responseText, result.detectedLanguage);
 
       if (result.audioBase64) {
         playAudioResponse(result);
       }
     } catch (err: unknown) {
+      setClientRoundtripMs(Date.now() - queryStart);
       const errorObj = err as { message?: string };
       setState('error');
       setErrorMessage(errorObj.message || 'Failed to process query.');
+    } finally {
+      setIsRequestInFlight(false);
     }
   };
 
@@ -356,15 +541,11 @@ export const Home: React.FC = () => {
   };
 
   const getRecordCommodityName = (r: PriceRecord) => {
-    if (language === 'hi') return r.commodityNameHi || r.commodityNameEn;
-    if (language === 'pa') return r.commodityNamePa || r.commodityNameEn;
-    return r.commodityNameEn;
+    return getCommodityName(r.commodityCode, r.commodityNameHi || r.commodityNameEn);
   };
 
   const getRecordMandiName = (r: PriceRecord) => {
-    if (language === 'hi') return r.mandiNameHi || r.mandiNameEn;
-    if (language === 'pa') return r.mandiNamePa || r.mandiNameEn;
-    return r.mandiNameEn;
+    return getMandiName(r.mandiCode, r.mandiNameHi || r.mandiNameEn);
   };
 
   // Background Data Feeds for Benchmark Rates & Mandis
@@ -389,69 +570,53 @@ export const Home: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-16 lg:pb-8">
-      {/* Editorial Hero Header */}
-      <section className="pt-2 sm:pt-4">
-        <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-2">
-          <span className="w-2 h-2 rounded-full bg-forest animate-pulse" />
-          <span>{getGreeting()} • Verified APMC Market Records</span>
-        </div>
-        <h1 className="text-2xl sm:text-4xl font-bold text-charcoal tracking-tight max-w-3xl leading-[1.2]">
-          {language === 'hi'
-            ? 'बोलकर सटीक मंडी भाव और कृषि जानकारी'
-            : language === 'pa'
-            ? 'ਬੋਲ ਕੇ ਸਹੀ ਮੰਡੀ ਭਾਅ ਅਤੇ ਖੇਤੀਬਾੜੀ ਸਹਾਇਤਾ'
-            : 'Multilingual Voice Intelligence Grounded in Verified APMC Records'}
-        </h1>
-        <p className="text-xs sm:text-base text-charcoal-muted mt-2 max-w-2xl leading-relaxed">
-          {language === 'hi'
-            ? 'अपनी बोली (हिन्दी, पंजाबी, अंग्रेजी) में बोलें और सरकारी एगमार्कनेट पोर्टल से सत्यापित दैनिक बंद नीलामी दरें तुरंत प्राप्त करें।'
-            : language === 'pa'
-            ? 'ਆਪਣੀ ਬੋਲੀ (ਪੰਜਾਬੀ, ਹਿੰਦੀ, ਅੰਗਰੇਜ਼ੀ) ਵਿੱਚ ਬੋਲੋ ਅਤੇ ਸਰਕਾਰੀ ਮੰਡੀ ਬੋਰਡ ਤੋਂ ਪ੍ਰਮਾਣਿਤ ਬੰਦ ਬੋਲੀ ਭਾਅ ਜਾਣੋ।'
-            : 'Speak naturally in Hindi, Punjabi, or English to access verified daily closed auction prices from APMC markets across India.'}
-        </p>
+      {/* Editorial Hero Header with Topographic Contour Backdrop */}
+      <section className="relative overflow-hidden rounded-2xl border border-hairline bg-surface-white p-6 sm:p-8 shadow-card">
+        <AgriContourBackdrop className="opacity-60" />
+        <div className="relative z-10">
+          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-forest animate-pulse" />
+            <span>{getGreeting()} • {t('verifiedMarketRecords')}</span>
+          </div>
+          <h1 className="text-2xl sm:text-4xl font-bold text-charcoal tracking-tight max-w-3xl leading-[1.25]">
+            {t('heroHeadline')}
+          </h1>
+          <p className="text-xs sm:text-base text-charcoal-muted mt-2 max-w-2xl leading-relaxed">
+            {t('heroSubtitle')}
+          </p>
 
-        {/* Dialect Fast Selector */}
-        <div className="mt-3 flex items-center space-x-2 text-xs">
-          <Globe className="w-3.5 h-3.5 text-forest" />
-          <span className="text-charcoal-muted">Dialect:</span>
-          <div className="inline-flex items-center bg-surface border border-hairline p-0.5 rounded-lg">
+          {/* Dialect Fast Selector (10 Gnani-Supported Languages) with 38px+ Touch Target */}
+          <div className="mt-4 pt-3 border-t border-hairline/70 flex items-center flex-wrap gap-2 text-xs">
+            <div className="flex items-center space-x-1.5 text-charcoal-muted font-medium">
+              <Globe className="w-4 h-4 text-forest" />
+              <span>{t('languageSectionTitle')}:</span>
+            </div>
+            <div className="flex items-center flex-wrap gap-1">
+              {ALL_RECOGNIZED_LANGUAGES.map((l) => (
+                <button
+                  key={l.code}
+                  type="button"
+                  onClick={() => setLanguage(l.code)}
+                  className={`min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer tactile-press flex items-center justify-center ${
+                    language === l.code
+                      ? 'bg-forest text-white shadow-subtle font-bold ring-1 ring-forest-dark'
+                      : 'bg-surface text-charcoal-muted hover:text-charcoal border border-hairline'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Test Mic utility button for readiness diagnostics */}
             <button
               type="button"
-              onClick={() => setLanguage('hi')}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                language === 'hi' ? 'bg-forest text-white shadow-subtle' : 'text-charcoal-muted hover:text-charcoal'
-              }`}
+              onClick={testMicrophone}
+              className="ml-auto text-xs font-mono text-charcoal-muted hover:text-forest underline cursor-pointer py-1"
             >
-              हिन्दी
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage('pa')}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                language === 'pa' ? 'bg-forest text-white shadow-subtle' : 'text-charcoal-muted hover:text-charcoal'
-              }`}
-            >
-              ਪੰਜਾਬੀ
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage('en')}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                language === 'en' ? 'bg-forest text-white shadow-subtle' : 'text-charcoal-muted hover:text-charcoal'
-              }`}
-            >
-              English
+              {micTestPassed ? `✓ ${t('micReady')}` : t('testMic')}
             </button>
           </div>
-
-          {/* Test Mic utility button for readiness diagnostics */}
-          <button
-            type="button"
-            onClick={testMicrophone}
-            className="ml-auto text-[11px] font-mono text-charcoal-muted hover:text-forest underline cursor-pointer"
-          >
-            {micTestPassed ? '✓ Microphone Ready' : 'Test Mic'}
-          </button>
         </div>
       </section>
 
@@ -497,11 +662,11 @@ export const Home: React.FC = () => {
                 : state === 'processing'
                 ? t('micProcessing')
                 : state === 'answered'
-                ? 'Query Grounded & Verified'
+                ? t('queryVerifiedStatus')
                 : state === 'permission_denied'
                 ? t('permissionDeniedTitle')
                 : state === 'error'
-                ? 'Error'
+                ? t('error')
                 : t('micIdle')}
             </span>
           </span>
@@ -523,8 +688,8 @@ export const Home: React.FC = () => {
               className="inline-flex items-center space-x-2.5 px-7 py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white font-semibold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <Square className="w-4 h-4 fill-white" />
-              <span>Stop & Process Voice</span>
-              <span className="ml-1 px-2 py-0.5 rounded-full bg-red-800/80 text-[11px] font-mono font-medium">
+              <span>{t('stopAndProcessVoice')}</span>
+              <span className="ml-1 px-2 py-0.5 rounded-full bg-red-800/80 text-xs font-mono font-medium">
                 00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}
               </span>
             </button>
@@ -532,25 +697,31 @@ export const Home: React.FC = () => {
             <button
               type="button"
               onClick={startAudioRecording}
-              disabled={state === 'transcribing' || state === 'processing'}
-              className="inline-flex items-center space-x-3 px-8 py-4 rounded-full bg-forest hover:bg-forest-light text-harvest font-bold text-base shadow-voice transition-all hover:scale-105 active:scale-95 disabled:opacity-50 cursor-pointer"
+              disabled={isRequestInFlight || state === 'transcribing' || state === 'processing'}
+              className="inline-flex items-center space-x-3 px-8 py-4 rounded-full bg-forest-900 hover:bg-forest text-white font-bold text-base shadow-voice transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer tactile-press ring-2 ring-forest/30"
               aria-label="Activate Voice Assistant"
             >
-              <Mic className="w-5 h-5 stroke-[2.4] text-harvest" />
-              <span>{state === 'answered' ? t('tryAgain') : t('micIdle')}</span>
+              <Mic className="w-5 h-5 stroke-[2.4] text-white" />
+              <span>
+                {isRequestInFlight || state === 'transcribing' || state === 'processing'
+                  ? t('processing')
+                  : state === 'answered'
+                  ? t('tryAgain')
+                  : t('micIdle')}
+              </span>
             </button>
           )}
         </div>
 
         {/* Real-time / Completed Transcription Display */}
         {transcription && (
-          <div className="max-w-xl mx-auto my-4 p-4 bg-surface rounded-xl border border-hairline text-left shadow-subtle">
+          <div data-testid="raw-transcript-box" className="max-w-xl mx-auto my-4 p-4 bg-surface rounded-xl border border-hairline text-left shadow-subtle">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-charcoal-muted uppercase tracking-wider">
+              <span className="text-xs font-semibold text-charcoal-muted uppercase tracking-wider">
                 {t('transcriptionLabel')}
               </span>
               {response?.detectedLanguage && (
-                <span className="text-[10px] font-mono text-forest bg-forest-50 px-2 py-0.5 rounded border border-forest/20 font-medium">
+                <span className="text-xs font-mono text-forest bg-forest-50 px-2 py-0.5 rounded border border-forest/20 font-medium">
                   {response.detectedLanguage}
                 </span>
               )}
@@ -567,12 +738,12 @@ export const Home: React.FC = () => {
             {/* Header of Response Box */}
             <div className="flex items-center justify-between border-b border-forest/20 pb-3 flex-wrap gap-2">
               <div className="flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 text-forest" />
+                <CheckCircle className="w-4 h-4 text-forest" />
                 <span className="text-xs font-bold text-forest uppercase tracking-wider">
                   {t('responseLabel')}
                 </span>
                 {response.intent && response.intent !== 'UNKNOWN' && (
-                  <span className="text-[10px] font-semibold bg-surface-white border border-forest/25 text-forest-dark px-2 py-0.5 rounded font-mono">
+                  <span className="text-xs font-semibold bg-surface-white border border-forest/25 text-forest-dark px-2 py-0.5 rounded font-mono">
                     {response.intent}
                   </span>
                 )}
@@ -580,7 +751,7 @@ export const Home: React.FC = () => {
 
               {/* Spoken Audio Controls */}
               <div className="flex items-center space-x-2">
-                <span className="text-[11px] text-charcoal-muted">
+                <span className="text-xs text-charcoal-muted">
                   {response.audioBase64
                     ? (response.isLiveGnaniConnected ? t('audioSourceGnani') : t('audioSourceSandbox'))
                     : t('audioSourceBrowser')}
@@ -621,14 +792,14 @@ export const Home: React.FC = () => {
 
             {/* Extracted Entities Tag Row */}
             {response.extractedEntities && Object.keys(response.extractedEntities).length > 0 && (
-              <div className="flex items-center flex-wrap gap-1.5 py-1">
-                <span className="text-[10px] uppercase font-bold text-charcoal-muted mr-1">
+              <div className="flex items-center flex-wrap gap-2 py-1">
+                <span className="text-xs uppercase font-bold text-charcoal-muted mr-1">
                   {t('extractedEntitiesLabel')}:
                 </span>
                 {Object.entries(response.extractedEntities).map(([key, val]) => (
                   <span
                     key={key}
-                    className="inline-flex items-center space-x-1 text-[11px] font-medium bg-surface-white border border-forest/25 text-charcoal px-2 py-0.5 rounded-md"
+                    className="inline-flex items-center space-x-1.5 text-xs font-medium bg-surface-white border border-forest/25 text-charcoal px-2.5 py-1 rounded-md shadow-xs"
                   >
                     <Tag className="w-3 h-3 text-forest" />
                     <span>
@@ -654,7 +825,7 @@ export const Home: React.FC = () => {
                     <CheckCircle className="w-3.5 h-3.5 text-forest" />
                     <span>{t('mandiRateCardTitle')}</span>
                   </span>
-                  <span className="text-[10px] text-charcoal-muted bg-surface-white px-2 py-0.5 rounded border border-forest/15 font-mono">
+                  <span className="text-xs text-charcoal-muted bg-surface-white px-2 py-0.5 rounded border border-forest/15 font-mono">
                     {response.source || 'Agmarknet (data.gov.in)'}
                   </span>
                 </div>
@@ -670,7 +841,7 @@ export const Home: React.FC = () => {
                           <span className="font-bold text-charcoal text-sm">
                             {getRecordCommodityName(rec)}
                           </span>
-                          <span className="text-[10px] text-charcoal-muted font-mono">
+                          <span className="text-xs text-charcoal-muted font-mono">
                             {rec.priceDate}
                           </span>
                         </div>
@@ -681,19 +852,19 @@ export const Home: React.FC = () => {
 
                       <div className="pt-2 border-t border-hairline flex items-baseline justify-between">
                         <div>
-                          <span className="text-[10px] text-charcoal-muted uppercase block font-semibold">
-                            Modal Rate
+                          <span className="text-xs text-charcoal-muted uppercase block font-semibold">
+                            {t('modalPrice')}
                           </span>
                           <span className="text-lg font-bold text-forest tnum font-mono">
-                            ₹{rec.modalPrice.toLocaleString('en-IN')}{' '}
-                            <span className="text-[11px] font-normal text-charcoal-muted">
-                              / {rec.unit || 'Quintal'}
+                            <NumberTicker value={rec.modalPrice} prefix="₹" />{' '}
+                            <span className="text-xs font-normal text-charcoal-muted">
+                              / {rec.unit || t('perQuintal')}
                             </span>
                           </span>
                         </div>
-                        <div className="text-right text-[11px] text-charcoal-muted font-mono">
-                          <div>Min: ₹{rec.minPrice}</div>
-                          <div>Max: ₹{rec.maxPrice}</div>
+                        <div className="text-right text-xs text-charcoal-muted font-mono">
+                          <div>{t('minPrice')}: ₹{rec.minPrice}</div>
+                          <div>{t('maxPrice')}: ₹{rec.maxPrice}</div>
                         </div>
                       </div>
 
@@ -701,7 +872,7 @@ export const Home: React.FC = () => {
                         minPrice={rec.minPrice}
                         modalPrice={rec.modalPrice}
                         maxPrice={rec.maxPrice}
-                        unit={rec.unit || 'Quintal'}
+                        unit={rec.unit || t('perQuintal')}
                         className="mt-2.5 pt-2 border-t border-hairline"
                       />
                     </div>
@@ -711,20 +882,16 @@ export const Home: React.FC = () => {
             )}
 
             {/* Provenance & Engine notice */}
-            <div className="pt-2 border-t border-forest/15 flex items-center justify-between text-[11px] text-charcoal-muted">
+            <div className="pt-2 border-t border-forest/15 flex items-center justify-between text-xs text-charcoal-muted">
               <span>{response.engineNotice}</span>
-              {response.isLiveGnaniConnected ? (
-                <span className="text-forest font-semibold">● Live Gnani AI Connected</span>
-              ) : (
-                <span className="text-amber-800 font-semibold">● Development AI Sandbox</span>
-              )}
+              <span className="text-forest font-semibold">● {t('queryVerifiedStatus')}</span>
             </div>
 
             {/* Follow-up / Related prompt pills */}
             {response.relatedQueries && response.relatedQueries.length > 0 && (
               <div className="pt-2 border-t border-forest/15">
-                <span className="text-[11px] text-charcoal-muted font-semibold block mb-2">
-                  Follow-up queries:
+                <span className="text-xs text-charcoal-muted font-semibold block mb-2">
+                  {t('suggestedQueriesLabel')}:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {response.relatedQueries.map((rq, i) => (
@@ -793,6 +960,71 @@ export const Home: React.FC = () => {
           </div>
         )}
 
+        {/* Collapsible Diagnostics & Debug Panel (Accessible via ?debug=1) */}
+        {searchParams.get('debug') === '1' && (
+          <div className="max-w-xl mx-auto my-3 text-left">
+            <details className="group border border-hairline rounded-xl bg-surface/70 open:bg-surface transition-all text-xs overflow-hidden">
+              <summary className="flex items-center justify-between px-4 py-2.5 cursor-pointer font-mono text-xs text-charcoal-muted hover:text-forest select-none">
+                <div className="flex items-center space-x-2">
+                  <Terminal className="w-3.5 h-3.5 text-forest" />
+                  <span className="font-semibold uppercase tracking-wider">Voice Gateway Diagnostics (Debug)</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  {response?.backendLatencyMs !== undefined && (
+                    <span className="bg-forest-50 text-forest border border-forest/20 px-1.5 py-0.5 rounded text-xs">
+                      Backend: {response.backendLatencyMs} ms
+                    </span>
+                  )}
+                  <span className="text-charcoal-muted text-xs group-open:rotate-180 transition-transform">▼</span>
+                </div>
+              </summary>
+              <div className="px-4 py-3 border-t border-hairline font-mono text-xs space-y-2 text-charcoal bg-surface-white/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">LAST RAW TRANSCRIPT:</span>
+                    <span className="font-semibold text-charcoal break-words">{transcription || 'None'}</span>
+                  </div>
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">DETECTED INTENT:</span>
+                    <span className="font-semibold text-forest">{response?.intent || 'None'}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-hairline/60">
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">BACKEND LATENCY:</span>
+                    <span className="font-semibold">{response?.backendLatencyMs !== undefined ? `${response.backendLatencyMs} ms` : 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">GNANI STT LATENCY:</span>
+                    <span className="font-semibold">{response?.sttLatencyMs !== undefined ? `${response.sttLatencyMs} ms` : 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">CLIENT ROUNDTRIP:</span>
+                    <span className="font-semibold">{clientRoundtripMs !== null ? `${clientRoundtripMs} ms` : 'N/A'}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-hairline/60">
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">AUDIO DURATION:</span>
+                    <span>{lastAudioDuration !== null ? `${lastAudioDuration.toFixed(2)}s` : 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">AUDIO SIZE:</span>
+                    <span>{lastAudioSize !== null ? `${(lastAudioSize / 1024).toFixed(1)} KB (16kHz WAV)` : 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-charcoal-muted block text-xs">STATUS / ERROR:</span>
+                    <span className={response?.errorCode || state === 'error' ? 'text-red-600 font-semibold' : 'text-forest font-semibold'}>
+                      {response?.statusCode ? `HTTP ${response.statusCode}` : state === 'error' ? 'ERROR' : 'OK'}
+                      {response?.errorCode ? ` (${response.errorCode})` : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </details>
+          </div>
+        )}
+
         {/* Fallback Text Input Form */}
         <div className="mt-4 pt-4 border-t border-hairline max-w-xl mx-auto">
           <form
@@ -823,8 +1055,8 @@ export const Home: React.FC = () => {
 
         {/* Suggested Queries Chips */}
         <div className="mt-4 pt-4 border-t border-hairline max-w-3xl mx-auto">
-          <div className="text-[11px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-2.5 flex items-center justify-center space-x-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-harvest-dark" />
+          <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-2.5 flex items-center justify-center space-x-1.5">
+            <HelpCircle className="w-3.5 h-3.5 text-forest" />
             <span>{t('suggestedQueriesLabel')}</span>
           </div>
 
@@ -849,10 +1081,10 @@ export const Home: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base sm:text-lg font-bold text-charcoal tracking-tight">
-              Benchmark APMC Rates (Latest Closed Auctions)
+              {t('benchmarkTitle')}
             </h2>
             <p className="text-xs text-charcoal-muted">
-              Reference rates from recent Agmarknet closed auction filings. Ask above for your local mandi.
+              {t('benchmarkSubtitle')}
             </p>
           </div>
           <button
@@ -860,7 +1092,7 @@ export const Home: React.FC = () => {
             onClick={() => navigate('/prices')}
             className="text-xs font-semibold text-forest hover:text-forest-dark inline-flex items-center space-x-1 cursor-pointer"
           >
-            <span>View All in Prices</span>
+            <span>{t('viewAllRates')}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -869,18 +1101,8 @@ export const Home: React.FC = () => {
         <div className="border border-hairline rounded-xl bg-surface-white overflow-hidden shadow-subtle">
           <div className="divide-y divide-hairline">
             {priceRecords.slice(0, 3).map((record) => {
-              const commName =
-                language === 'hi'
-                  ? record.commodityNameHi
-                  : language === 'pa'
-                  ? record.commodityNamePa || record.commodityNameEn
-                  : record.commodityNameEn;
-              const mandiName =
-                language === 'hi'
-                  ? record.mandiNameHi
-                  : language === 'pa'
-                  ? record.mandiNamePa || record.mandiNameEn
-                  : record.mandiNameEn;
+              const commName = getRecordCommodityName(record);
+              const mandiName = getRecordMandiName(record);
 
               return (
                 <div
@@ -898,21 +1120,21 @@ export const Home: React.FC = () => {
                       </span>
                     </div>
                     <div className="text-[11px] text-charcoal-muted flex items-center space-x-3">
-                      <span>Arrival: {record.arrivalQuantity} Qtl</span>
+                      <span>{t('arrivals')}: {record.arrivalQuantity} {record.unit || t('perQuintal')}</span>
                       <span>•</span>
                       <span className="flex items-center space-x-1">
                         <Calendar className="w-3 h-3 text-charcoal-subtle" />
-                        <span>Date: {record.priceDate}</span>
+                        <span>{t('reportingDate')}: {record.priceDate}</span>
                       </span>
                     </div>
                   </div>
 
                   <div className="text-right">
                     <div className="text-base sm:text-lg font-bold text-forest tnum font-mono">
-                      ₹{record.modalPrice.toLocaleString('en-IN')}
+                      <NumberTicker value={record.modalPrice} prefix="₹" />
                     </div>
                     <div className="text-[10px] text-charcoal-muted">
-                      Range: ₹{record.minPrice} – ₹{record.maxPrice} / Qtl
+                      {t('minPrice')}: ₹{record.minPrice} – {t('maxPrice')}: ₹{record.maxPrice} / {record.unit || t('perQuintal')}
                     </div>
                   </div>
                 </div>
@@ -945,7 +1167,7 @@ export const Home: React.FC = () => {
               >
                 <div>
                   <div className="font-semibold text-xs text-charcoal">
-                    {language === 'hi' ? mandi.nameHi : language === 'pa' ? mandi.namePa || mandi.nameEn : mandi.nameEn}
+                    {getMandiName(mandi.code, mandi.nameHi || mandi.nameEn)}
                   </div>
                   <div className="text-[11px] text-charcoal-muted">
                     {mandi.district}, {mandi.state}

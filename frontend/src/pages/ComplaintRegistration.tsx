@@ -65,7 +65,7 @@ export const ComplaintRegistration: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['registeredComplaints'] });
     },
     onError: (err: Error) => {
-      setValidationError(err.message || 'Failed to register grievance. Please retry.');
+      setValidationError(err.message || t('errFailedRegisterGrievance'));
     },
   });
 
@@ -82,11 +82,11 @@ export const ComplaintRegistration: React.FC = () => {
     setValidationError(null);
 
     if (!description.trim() || description.trim().length < 10) {
-      setValidationError('Please provide at least 10 characters describing the issue in detail.');
+      setValidationError(t('errMinComplaintDesc'));
       return;
     }
     if (!state.trim() || !district.trim()) {
-      setValidationError('State and District are required.');
+      setValidationError(t('errStateDistrictReq'));
       return;
     }
 
@@ -156,7 +156,7 @@ export const ComplaintRegistration: React.FC = () => {
       <div className="rounded-xl bg-surface border border-hairline p-4 flex items-start space-x-3 text-xs text-charcoal shadow-subtle">
         <Info className="w-4 h-4 text-harvest-dark shrink-0 mt-0.5" />
         <div className="space-y-1">
-          <span className="font-bold text-forest-dark uppercase tracking-wider text-[10px]">
+          <span className="font-bold text-forest-dark uppercase tracking-wider text-xs">
             Platform Governance Notice
           </span>
           <p className="text-charcoal-muted leading-relaxed">
@@ -175,12 +175,12 @@ export const ComplaintRegistration: React.FC = () => {
               <form onSubmit={handleReview} className="space-y-4 text-xs">
                 <div className="flex items-center justify-between border-b border-hairline pb-3">
                   <h2 className="text-sm font-bold text-charcoal flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-forest text-white text-[10px] flex items-center justify-center font-bold">
+                    <span className="w-5 h-5 rounded-full bg-forest text-white text-xs flex items-center justify-center font-bold">
                       1
                     </span>
                     <span>Fill Issue Details</span>
                   </h2>
-                  <span className="text-[11px] text-charcoal-muted font-mono">
+                  <span className="text-xs text-charcoal-muted font-mono">
                     Step 1 of 2: Details
                   </span>
                 </div>
@@ -194,7 +194,7 @@ export const ComplaintRegistration: React.FC = () => {
 
                 {/* Category Selection */}
                 <div>
-                  <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
                     {t('complaintCategory')} *
                   </label>
                   <select
@@ -213,7 +213,7 @@ export const ComplaintRegistration: React.FC = () => {
                 {/* State & District */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
+                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
                       {t('selectState')} *
                     </label>
                     <input
@@ -226,7 +226,7 @@ export const ComplaintRegistration: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
+                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
                       {t('selectDistrict')} *
                     </label>
                     <input
@@ -242,7 +242,7 @@ export const ComplaintRegistration: React.FC = () => {
 
                 {/* Mandi (Optional / Applicable) */}
                 <div>
-                  <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
                     APMC Mandi Yard (Where applicable)
                   </label>
                   <select
@@ -261,7 +261,7 @@ export const ComplaintRegistration: React.FC = () => {
 
                 {/* Detailed Description */}
                 <div>
-                  <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
                     {t('descriptionLabel')} *
                   </label>
                   <textarea
@@ -272,7 +272,7 @@ export const ComplaintRegistration: React.FC = () => {
                     required
                     className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest leading-relaxed"
                   />
-                  <div className="flex justify-between text-[11px] text-charcoal-muted mt-1 font-mono">
+                  <div className="flex justify-between text-xs text-charcoal-muted mt-1 font-mono">
                     <span>Minimum 10 characters. Include lot numbers if available.</span>
                     <span>{description.length} chars</span>
                   </div>
@@ -281,7 +281,7 @@ export const ComplaintRegistration: React.FC = () => {
                 {/* Farmer Contact Info (Optional) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-hairline">
                   <div>
-                    <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1 flex items-center space-x-1">
+                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1 flex items-center space-x-1">
                       <User className="w-3.5 h-3.5 text-charcoal-muted" />
                       <span>{t('farmerNameLabel')}</span>
                     </label>
@@ -294,7 +294,7 @@ export const ComplaintRegistration: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1 flex items-center space-x-1">
+                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1 flex items-center space-x-1">
                       <Phone className="w-3.5 h-3.5 text-charcoal-muted" />
                       <span>{t('farmerPhoneLabel')}</span>
                     </label>
@@ -326,12 +326,12 @@ export const ComplaintRegistration: React.FC = () => {
               <div className="space-y-4 text-xs">
                 <div className="flex items-center justify-between border-b border-hairline pb-3">
                   <h2 className="text-sm font-bold text-charcoal flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-harvest-dark text-white text-[10px] flex items-center justify-center font-bold">
+                    <span className="w-5 h-5 rounded-full bg-harvest-dark text-white text-xs flex items-center justify-center font-bold">
                       2
                     </span>
                     <span>Review Issue Report Before Saving</span>
                   </h2>
-                  <span className="text-[11px] text-charcoal-muted font-mono">
+                  <span className="text-xs text-charcoal-muted font-mono">
                     Step 2 of 2: Confirmation
                   </span>
                 </div>
@@ -343,13 +343,13 @@ export const ComplaintRegistration: React.FC = () => {
                 <div className="bg-surface border border-hairline rounded-xl p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-2 pb-2 border-b border-hairline">
                     <div>
-                      <div className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">Category</div>
+                      <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Category</div>
                       <div className="font-semibold text-charcoal mt-0.5">
                         {getCategoryLabel(category)}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">Location</div>
+                      <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Location</div>
                       <div className="font-semibold text-charcoal mt-0.5">
                         {district}, {state}
                       </div>
@@ -358,7 +358,7 @@ export const ComplaintRegistration: React.FC = () => {
 
                   {mandiCode && selectedMandiObj && (
                     <div className="pb-2 border-b border-hairline">
-                      <div className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">Mandi Yard</div>
+                      <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Mandi Yard</div>
                       <div className="font-semibold text-charcoal mt-0.5">
                         {selectedMandiObj.nameEn} ({selectedMandiObj.code})
                       </div>
@@ -366,7 +366,7 @@ export const ComplaintRegistration: React.FC = () => {
                   )}
 
                   <div className="pb-2 border-b border-hairline">
-                    <div className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">Grievance Description</div>
+                    <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Grievance Description</div>
                     <div className="text-charcoal mt-1 whitespace-pre-wrap leading-relaxed font-sans bg-surface-white p-3 rounded-lg border border-hairline">
                       {description}
                     </div>
@@ -375,13 +375,13 @@ export const ComplaintRegistration: React.FC = () => {
                   {(farmerName || farmerPhone) && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <div className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">Farmer Contact</div>
+                        <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Farmer Contact</div>
                         <div className="font-medium text-charcoal mt-0.5">
                           {farmerName || 'Anonymous'}
                         </div>
                       </div>
                       <div>
-                        <div className="text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">Phone</div>
+                        <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Phone</div>
                         <div className="font-medium text-charcoal mt-0.5">
                           {farmerPhone || 'Not provided'}
                         </div>

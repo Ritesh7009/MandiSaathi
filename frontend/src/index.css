@@ -5,7 +5,7 @@
 @layer base {
   :root {
     --app-bg: #F5F3EA;
-    --app-text: #25352C;
+    --app-text: #1F2421;
   }
 
   html {
@@ -24,6 +24,42 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* Indic Matra & Diacritic Clearance across all 10 Gnani-supported languages */
+  :lang(hi), :lang(pa), :lang(mr), :lang(gu), :lang(bn), :lang(te), :lang(ta), :lang(kn), :lang(ml) {
+    line-height: 1.68;
+  }
+
+  /* Prevent matra clipping on interactive inline badges, buttons and pills */
+  :lang(hi) .matra-safe,
+  :lang(pa) .matra-safe,
+  :lang(mr) .matra-safe,
+  :lang(gu) .matra-safe,
+  :lang(bn) .matra-safe,
+  :lang(te) .matra-safe,
+  :lang(ta) .matra-safe,
+  :lang(kn) .matra-safe,
+  :lang(ml) .matra-safe {
+    padding-top: 0.15em;
+    padding-bottom: 0.15em;
+  }
+
+  /* Organic Tactile Grain for Authentic Parchment Finish (Zero AI Slop) */
+  .bg-parchment-grain {
+    background-color: #FAF9F5;
+    background-image: radial-gradient(rgba(23, 75, 53, 0.035) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+
+  /* Tactile Physical Press Feel */
+  .tactile-press {
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .tactile-press:active {
+    transform: translateY(1px);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
   }
 
   /* Universal Tabular Figures for currency & statistics */

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage, ALL_RECOGNIZED_LANGUAGES } from '../context/LanguageContext';
 import {
   Sprout,
   TrendingUp,
@@ -43,18 +43,18 @@ export const Sidebar: React.FC = () => {
       {/* Brand Header */}
       <div className="px-5 py-5 border-b border-hairline flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-forest text-harvest flex items-center justify-center shadow-subtle shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-forest text-white flex items-center justify-center shadow-subtle shrink-0">
             <Sprout className="w-4 h-4 stroke-[2.4]" />
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-bold text-sm tracking-tight text-charcoal">{t('appTitle')}</span>
-              <span className="text-[9px] font-mono font-semibold uppercase px-1.5 py-0.2 rounded-full bg-forest-50 text-forest border border-forest/20">
+              <span className="text-[10px] font-mono font-bold uppercase px-1.5 py-0.5 rounded-full bg-forest-50 text-forest border border-forest/20">
                 APMC
               </span>
             </div>
-            <p className="text-[11px] text-charcoal-muted leading-tight">
-              {language === 'hi' ? 'कृषि बाज़ार आसूचना' : language === 'pa' ? 'ਖੇਤੀਬਾੜੀ ਮੰਡੀ ਮੰਚ' : 'Agri Intelligence'}
+            <p className="text-xs text-charcoal-muted leading-tight mt-0.5">
+              {t('mandiPriceService')}
             </p>
           </div>
         </div>
@@ -63,7 +63,7 @@ export const Sidebar: React.FC = () => {
       {/* Primary 4-Destination Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         <div className="px-2 mb-2 text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider">
-          Main Navigation
+          {t('mainNavigation')}
         </div>
         {primaryNavItems.map((item) => {
           const Icon = item.icon;
@@ -99,27 +99,48 @@ export const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      {/* Language Dialect Selector */}
-      <div className="p-3 border-t border-hairline bg-surface/40">
-        <div className="flex items-center space-x-1.5 mb-2 px-1 text-charcoal-subtle">
-          <Globe className="w-3.5 h-3.5 text-forest" />
-          <span className="text-[10px] font-semibold uppercase tracking-wider">Dialect / भाषा</span>
+      {/* Language Dialect Selector (All 23 Recognized Languages) */}
+      <div className="p-3 border-t border-hairline bg-surface-white space-y-2">
+        <div className="flex items-center justify-between px-1 text-charcoal-subtle">
+          <div className="flex items-center space-x-1.5">
+            <Globe className="w-3.5 h-3.5 text-forest" />
+            <span className="text-xs font-bold uppercase tracking-wider">Dialect / भाषा</span>
+          </div>
+          <span className="text-xs font-mono text-charcoal-muted">10 Gnani AI</span>
         </div>
-        <div className="grid grid-cols-3 gap-1 bg-ivory-dark/60 p-1 rounded-lg border border-hairline">
+
+        {/* Quick top 3 buttons */}
+        <div className="grid grid-cols-3 gap-1 bg-surface p-1 rounded-lg border border-hairline">
           {languages.map((l) => (
             <button
               key={l.code}
               type="button"
               onClick={() => setLanguage(l.code)}
-              className={`py-1 text-center text-[11px] font-medium rounded transition-all duration-150 cursor-pointer ${
+              className={`min-h-[30px] py-1 text-center text-xs font-semibold rounded transition-all duration-150 cursor-pointer ${
                 language === l.code
-                  ? 'bg-surface-white text-forest font-semibold shadow-subtle'
-                  : 'text-charcoal-muted hover:text-charcoal'
+                  ? 'bg-forest text-white shadow-subtle'
+                  : 'text-charcoal hover:text-forest'
               }`}
             >
               {l.label}
             </button>
           ))}
+        </div>
+
+        {/* Full selector for all 22 official languages + English */}
+        <div className="relative">
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+            className="w-full bg-surface border border-hairline rounded-lg px-2.5 py-1.5 text-xs font-semibold text-charcoal focus:outline-none focus:border-forest cursor-pointer"
+            aria-label="Select recognized language"
+          >
+            {ALL_RECOGNIZED_LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label} — {l.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     </aside>

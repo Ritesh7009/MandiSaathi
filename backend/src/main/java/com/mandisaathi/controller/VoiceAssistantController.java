@@ -3,6 +3,9 @@ package com.mandisaathi.controller;
 import com.mandisaathi.dto.VoiceQueryRequest;
 import com.mandisaathi.dto.VoiceQueryResponse;
 import com.mandisaathi.service.VoiceAssistantService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +18,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/voice")
 public class VoiceAssistantController {
+
+    private static final Logger log = LoggerFactory.getLogger(VoiceAssistantController.class);
 
     private final VoiceAssistantService voiceAssistantService;
 
@@ -32,14 +37,21 @@ public class VoiceAssistantController {
             @RequestParam("audio") MultipartFile audioFile,
             @RequestParam(value = "language", required = false) String language
     ) throws IOException {
+        long startTime = System.currentTimeMillis();
+        String contentType = audioFile != null ? audioFile.getContentType() : "unknown";
+        String filename = audioFile != null ? audioFile.getOriginalFilename() : "unknown";
+        long byteSize = audioFile != null ? audioFile.getSize() : 0;
+
         if (audioFile == null || audioFile.isEmpty()) {
+            log.warn("Voice request rejected: Empty audio payload. filename='{}', contentType='{}', byteSize={}",
+                    filename, contentType, byteSize);
             return ResponseEntity.badRequest().body(new VoiceQueryResponse(
                     "",
                     language != null ? language : "hi-IN",
                     "UNKNOWN",
                     Map.of(),
                     List.of(),
-                    "कोई ऑडियो प्राप्त नहीं हुआ। कृपया दोबारा बोलें।",
+                    "No audio received. Please try speaking again.",
                     "कोई ऑडियो प्राप्त नहीं हुआ। कृपया दोबारा बोलें।",
                     "ਕੋਈ ਆਡੀਓ ਨਹੀਂ ਮਿਲੀ।",
                     null,
@@ -48,11 +60,44 @@ public class VoiceAssistantController {
                     "FAILED",
                     false,
                     "Audio payload is empty.",
-                    List.of()
+                    List.of(),
+                    0L,
+                    0L,
+                    400,
+                    "EMPTY_AUDIO"
             ));
         }
 
         byte[] audioBytes = audioFile.getBytes();
-        return ResponseEntity.ok(voiceAssistantService.processAudioQuery(audioBytes, language));
+        Double durationSec = calculateWavDurationSeconds(audioBytes);
+        String durationStr = durationSec != null ? String.format("%.2fs", durationSec) : "unknown";
+
+        log.info("Voice audio upload received: filename='{}', contentType='{}', byteSize={} bytes, duration={}, lang='{}'",
+                filename, contentType, byteSize, durationStr, language);
+
+        VoiceQueryResponse response = voiceAssistantService.processAudioQuery(audioBytes, language, filename, contentType, durationSec);
+        long totalLatencyMs = System.currentTimeMillis() - startTime;
+
+        log.info("Voice audio request finished: filename='{}', totalLatency={}ms, sttLatency={}ms, status={}, transcript='{}', intent='{}'",
+                filename, totalLatencyMs, response.sttLatencyMs(), response.statusCode(), response.transcript(), response.intent());
+
+        if (response.statusCode() != null && response.statusCode() == 429) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    private Double calculateWavDurationSeconds(byte[] bytes) {
+        if (bytes == null || bytes.length < 44) return null;
+        if (bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F' &&
+            bytes[8] == 'W' && bytes[9] == 'A' && bytes[10] == 'V' && bytes[11] == 'E') {
+            int byteRate = (bytes[28] & 0xFF) | ((bytes[29] & 0xFF) << 8) | ((bytes[30] & 0xFF) << 16) | ((bytes[31] & 0xFF) << 24);
+            if (byteRate > 0) {
+                long dataSize = bytes.length - 44;
+                return (double) dataSize / byteRate;
+            }
+        }
+        return null;
     }
 }

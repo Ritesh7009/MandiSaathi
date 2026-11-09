@@ -18,9 +18,54 @@ public record VoiceQueryResponse(
         String aiServiceStatus,
         boolean isLiveGnaniConnected,
         String engineNotice,
-        List<String> relatedQueries
+        List<String> relatedQueries,
+        Long backendLatencyMs,
+        Long sttLatencyMs,
+        Integer statusCode,
+        String errorCode
 ) {
-    // Backward-compatible constructor for Phase 1 & 2 tests
+    // 15-parameter constructor for existing service callers
+    public VoiceQueryResponse(
+            String transcript,
+            String detectedLanguage,
+            String intent,
+            Map<String, String> extractedEntities,
+            List<PriceRecordDto> priceRecords,
+            String responseText,
+            String responseTextHi,
+            String responseTextPa,
+            String audioBase64,
+            String source,
+            String reportingDate,
+            String aiServiceStatus,
+            boolean isLiveGnaniConnected,
+            String engineNotice,
+            List<String> relatedQueries
+    ) {
+        this(
+                transcript,
+                detectedLanguage,
+                intent,
+                extractedEntities,
+                priceRecords,
+                responseText,
+                responseTextHi,
+                responseTextPa,
+                audioBase64,
+                source,
+                reportingDate,
+                aiServiceStatus,
+                isLiveGnaniConnected,
+                engineNotice,
+                relatedQueries,
+                0L,
+                0L,
+                200,
+                null
+        );
+    }
+
+    // 9-parameter constructor for legacy Phase 1 & 2 tests
     public VoiceQueryResponse(
             String transcript,
             String detectedLanguage,
@@ -47,7 +92,11 @@ public record VoiceQueryResponse(
                 isLiveGnaniConnected ? "CONNECTED" : "STUBBED",
                 isLiveGnaniConnected,
                 engineNotice,
-                relatedQueries
+                relatedQueries,
+                0L,
+                0L,
+                200,
+                null
         );
     }
 }

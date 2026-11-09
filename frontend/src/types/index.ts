@@ -1,4 +1,14 @@
-export type Language = 'en' | 'hi' | 'pa';
+export type Language =
+  | 'hi'   // हिन्दी (Hindi - hi-IN)
+  | 'pa'   // ਪੰਜਾਬੀ (Punjabi - pa-IN)
+  | 'en'   // English (Indian English - en-IN)
+  | 'mr'   // मराठी (Marathi - mr-IN)
+  | 'gu'   // ગુજરાતી (Gujarati - gu-IN)
+  | 'bn'   // বাংলা (Bengali - bn-IN)
+  | 'te'   // తెలుగు (Telugu - te-IN)
+  | 'ta'   // தமிழ் (Tamil - ta-IN)
+  | 'kn'   // ಕನ್ನಡ (Kannada - kn-IN)
+  | 'ml';  // മലയാളം (Malayalam - ml-IN)
 
 export interface HealthResponse {
   status: 'UP' | 'DOWN' | 'DEGRADED';
@@ -155,6 +165,10 @@ export interface VoiceQueryResponse {
   isLiveGnaniConnected: boolean;
   engineNotice: string;
   relatedQueries: string[];
+  backendLatencyMs?: number;
+  sttLatencyMs?: number;
+  statusCode?: number;
+  errorCode?: string;
 }
 
 export interface IngestionSummary {

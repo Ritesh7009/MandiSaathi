@@ -18,12 +18,14 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 class ApiClientError extends Error {
   status: number;
   errorData?: ApiError;
+  voiceResponse?: VoiceQueryResponse;
 
-  constructor(status: number, message: string, errorData?: ApiError) {
+  constructor(status: number, message: string, errorData?: ApiError, voiceResponse?: VoiceQueryResponse) {
     super(message);
     this.name = 'ApiClientError';
     this.status = status;
     this.errorData = errorData;
+    this.voiceResponse = voiceResponse;
   }
 }
 
@@ -141,40 +143,56 @@ export const api = {
   sendVoiceAudio: async (audioBlob: Blob, language?: string): Promise<VoiceQueryResponse> => {
     const url = `${API_BASE_URL}/api/v1/voice/audio`;
     const formData = new FormData();
-    const extension = audioBlob.type.includes('wav') ? 'wav' : 'webm';
-    formData.append('audio', audioBlob, `voice_query.${extension}`);
+    formData.append('audio', audioBlob, 'recording.wav');
     if (language) {
       formData.append('language', language);
     }
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          Accept: 'application/json',
-        },
-      });
+    const executeUpload = async (isRetry = false): Promise<VoiceQueryResponse> => {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            Accept: 'application/json',
+          },
+        });
 
-      if (!response.ok) {
-        let errorData: ApiError | undefined;
-        try {
-          errorData = await response.json();
-        } catch {
-          // Non-JSON
+        // Handle HTTP 429 rate limit with a short retry
+        if (response.status === 429 && !isRetry) {
+          console.warn('[Voice API] HTTP 429 rate limit encountered. Retrying in 1500ms...');
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          return await executeUpload(true);
         }
-        const message = errorData?.message || `HTTP ${response.status}: ${response.statusText}`;
-        throw new ApiClientError(response.status, message, errorData);
-      }
 
-      return (await response.json()) as VoiceQueryResponse;
-    } catch (err) {
-      if (err instanceof ApiClientError) {
-        throw err;
+        if (!response.ok) {
+          let errorData: ApiError | undefined;
+          let voiceData: VoiceQueryResponse | undefined;
+          try {
+            const json = await response.json();
+            if (json.transcript !== undefined || json.responseText !== undefined) {
+              voiceData = json as VoiceQueryResponse;
+            } else {
+              errorData = json as ApiError;
+            }
+          } catch {
+            // Non-JSON response
+          }
+          const message = voiceData?.engineNotice || errorData?.message || `HTTP ${response.status}: ${response.statusText}`;
+          throw new ApiClientError(response.status, message, errorData, voiceData);
+        }
+
+        return (await response.json()) as VoiceQueryResponse;
+      } catch (err) {
+        if (err instanceof ApiClientError) {
+          throw err;
+        }
+        const message = err instanceof Error ? err.message : 'Audio upload failed';
+        throw new ApiClientError(0, `Cannot process audio query: ${message}`);
       }
-      const message = err instanceof Error ? err.message : 'Audio upload failed';
-      throw new ApiClientError(0, `Cannot process audio query: ${message}`);
-    }
+    };
+
+    return executeUpload(false);
   },
 };
 

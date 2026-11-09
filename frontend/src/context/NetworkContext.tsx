@@ -28,7 +28,8 @@ export const NetworkProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     try {
       // Lightweight probe to actuator health or head
-      const res = await fetch('/actuator/health', {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+      const res = await fetch(`${apiBase}/actuator/health`, {
         method: 'GET',
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' },
