@@ -1,346 +1,426 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Card } from '@astryxdesign/core/Card';
+import { Badge } from '@astryxdesign/core/Badge';
+import { Button } from '@astryxdesign/core/Button';
+import { Divider } from '@astryxdesign/core/Divider';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
+import { useToast } from '@astryxdesign/core/Toast';
 import { useLanguage, ALL_RECOGNIZED_LANGUAGES } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { useNetwork } from '../context/NetworkContext';
 import { api } from '../services/apiClient';
-import { clearOfflineCache, getCachedPrices } from '../services/offlineStorage';
+import { getCachedPrices, clearOfflineCache } from '../services/offlineStorage';
 import {
-  Sliders,
+  GearSix,
   Globe,
-  Type,
-  Check,
-  Server,
+  MagnifyingGlass,
+  TextAa,
+  Sun,
+  Moon,
+  SpeakerHigh,
   Database,
-  Trash2,
-  Volume2,
-  Search,
-} from 'lucide-react';
+  Trash,
+  Check,
+  Cpu,
+  ShieldCheck,
+  WifiHigh,
+  WifiSlash,
+} from '@phosphor-icons/react';
 
 export const Settings: React.FC = () => {
   const { language, setLanguage, fontSize, setFontSize, t } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const { isOnline } = useNetwork();
+  const showToast = useToast();
 
-  const [cacheCount, setCacheCount] = useState<number>(0);
-  const [cacheCleared, setCacheCleared] = useState<boolean>(false);
   const [langSearch, setLangSearch] = useState<string>('');
+  const [cachedCount, setCachedCount] = useState<number>(0);
+
+  const { data: health } = useQuery({
+    queryKey: ['systemHealthSettings'],
+    queryFn: () => api.checkHealth(),
+    staleTime: 60000,
+    enabled: isOnline,
+  });
 
   useEffect(() => {
     getCachedPrices()
-      .then((res) => setCacheCount(res.totalCached))
-      .catch(() => setCacheCount(0));
-  }, [cacheCleared]);
-
-  const handleClearCache = async () => {
-    await clearOfflineCache();
-    setCacheCleared(true);
-    setCacheCount(0);
-    setTimeout(() => setCacheCleared(false), 2500);
-  };
-
-  const { data: health } = useQuery({
-    queryKey: ['systemHealthDetails'],
-    queryFn: () => api.checkHealth(),
-    refetchInterval: 30000,
-  });
+      .then((res) => setCachedCount(res.records.length))
+      .catch(() => setCachedCount(0));
+  }, []);
 
   const filteredLanguages = useMemo(() => {
-    if (!langSearch.trim()) return ALL_RECOGNIZED_LANGUAGES;
-    const term = langSearch.toLowerCase();
+    const q = langSearch.trim().toLowerCase();
+    if (!q) return ALL_RECOGNIZED_LANGUAGES;
     return ALL_RECOGNIZED_LANGUAGES.filter(
-      (l) =>
-        l.name.toLowerCase().includes(term) ||
-        l.label.toLowerCase().includes(term) ||
-        l.script.toLowerCase().includes(term) ||
-        l.region.toLowerCase().includes(term) ||
-        l.code.toLowerCase().includes(term)
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        item.label.toLowerCase().includes(q) ||
+        item.script.toLowerCase().includes(q) ||
+        item.region.toLowerCase().includes(q) ||
+        item.code.toLowerCase().includes(q)
     );
   }, [langSearch]);
 
+  const activeLangMeta =
+    ALL_RECOGNIZED_LANGUAGES.find((l) => l.code === language) || ALL_RECOGNIZED_LANGUAGES[0];
+
+  const handleClearCache = async () => {
+    try {
+      await clearOfflineCache();
+      setCachedCount(0);
+      showToast({ body: copy.cacheClearedMsg, type: 'info' });
+    } catch {
+      // Ignore storage errors gracefully
+    }
+  };
+
+  const copy = useMemo(() => {
+    if (language === 'hi') {
+      return {
+        eyebrow: '07 · पहुंच और क्षेत्रीय विन्यास',
+        searchLangPlaceholder: 'भाषा, लिपि या क्षेत्र खोजें (उदा. हिन्दी, ਪੰਜਾਬੀ, Tamil)...',
+        themeTitle: 'रंग और थीम (Color Mode)',
+        themeDesc: 'तेज़ धूप में स्पष्ट पढ़ने के लिए लाइट मोड या रात में आंखों की सुरक्षा के लिए डार्क मोड चुनें।',
+        themeLightTitle: 'मिनरल डेलाइट (Light)',
+        themeLightDesc: 'धूप में उच्च कंट्रास्ट और उजला कृषि इंटरफ़ेस',
+        themeDarkTitle: 'ऑब्सीडियन ऑब्ज़र्वेटरी (Dark)',
+        themeDarkDesc: 'कम रोशनी में आंखों के लिए आरामदायक गहरा मोड',
+        voiceEngineTitle: 'ज्ञानि एआई वाक् संश्लेषण (TTS)',
+        voiceEngineDesc: 'चयनित भाषा के अनुसार सर्वर से प्राकृतिक आवाज़ में भाव रिपोर्ट।',
+        offlineStorageTitle: 'ऑफ़लाइन डेटा और IndexedDB कैशे',
+        offlineRecordsSaved: 'स्थानीय रूप से सहेजे गए रिकॉर्ड',
+        clearCacheBtn: 'कैशे साफ़ करें',
+        cacheClearedMsg: 'स्थानीय मंडी कैशे साफ़ किया गया।',
+        archStackTitle: 'तकनीकी स्टैक एवं डेटा सुरक्षा मानक',
+      };
+    }
+    if (language === 'pa') {
+      return {
+        eyebrow: '07 · ਪਹੁੰਚ ਅਤੇ ਖੇਤਰੀ ਸੈਟਿੰਗਾਂ',
+        searchLangPlaceholder: 'ਭਾਸ਼ਾ, ਲਿਪੀ ਜਾਂ ਖੇਤਰ ਖੋਜੋ (ਜਿਵੇਂ ਪੰਜਾਬੀ, हिन्दी, Tamil)...',
+        themeTitle: 'ਰੰਗ ਅਤੇ ਥੀਮ (Color Mode)',
+        themeDesc: 'ਧੁੱਪ ਵਿੱਚ ਸਪਸ਼ਟ ਪੜ੍ਹਨ ਲਈ ਲਾਈਟ ਮੋਡ ਜਾਂ ਰਾਤ ਨੂੰ ਅੱਖਾਂ ਦੇ ਆਰਾਮ ਲਈ ਡਾਰਕ ਮੋਡ ਚੁਣੋ।',
+        themeLightTitle: 'ਮਿਨਰਲ ਡੇਲਾਈਟ (Light)',
+        themeLightDesc: 'ਧੁੱਪ ਵਿੱਚ ਉੱਚ ਕੰਟ੍ਰਾਸਟ ਅਤੇ ਸਾਫ਼ ਇੰਟਰਫੇਸ',
+        themeDarkTitle: 'ਓਬਸੀਡੀਅਨ ਡਾਰਕ (Dark)',
+        themeDarkDesc: 'ਘੱਟ ਰੋਸ਼ਨੀ ਵਿੱਚ ਅੱਖਾਂ ਲਈ ਆਰਾਮਦਾਇਕ ਮੋਡ',
+        voiceEngineTitle: 'ਗਿਆਨੀ ਏਆਈ ਵਾਇਸ ਆਉਟਪੁੱਟ (TTS)',
+        voiceEngineDesc: 'ਚੁਣੀ ਭਾਸ਼ਾ ਅਨੁਸਾਰ ਸਰਵਰ ਤੋਂ ਕੁਦਰਤੀ ਆਵਾਜ਼ ਵਿੱਚ ਭਾਅ ਰਿਪੋਰਟ।',
+        offlineStorageTitle: 'ਆਫ਼ਲਾਈਨ ਡੇਟਾ ਅਤੇ IndexedDB ਕੈਸ਼',
+        offlineRecordsSaved: 'ਲੋਕਲ ਸੰਭਾਲੇ ਰਿਕਾਰਡ',
+        clearCacheBtn: 'ਕੈਸ਼ ਸਾਫ਼ ਕਰੋ',
+        cacheClearedMsg: 'ਲੋਕਲ ਮੰਡੀ ਕੈਸ਼ ਸਾਫ਼ ਹੋ ਗਿਆ।',
+        archStackTitle: 'ਤਕਨੀਕੀ ਸਟੈਕ ਅਤੇ ਡੇਟਾ ਸੁਰੱਖਿਆ ਮਾਪਦੰਡ',
+      };
+    }
+    return {
+      eyebrow: '07 · ACCESSIBILITY & DIALECT CALIBRATION',
+      searchLangPlaceholder: 'Search language, script, or region (e.g. Hindi, ਪੰਜਾਬੀ, Tamil)...',
+      themeTitle: 'Appearance & Theme Mode',
+      themeDesc: 'Switch between high-contrast Mineral Daylight for sunny field viewing or Obsidian Dark for low-light environments.',
+      themeLightTitle: 'Mineral Daylight (Light)',
+      themeLightDesc: 'High outdoor contrast emerald palette',
+      themeDarkTitle: 'Obsidian Observatory (Dark)',
+      themeDarkDesc: 'Low-glare dark canopy palette',
+      voiceEngineTitle: 'Gnani Voice Profile (Prisma STT + Timbre TTS)',
+      voiceEngineDesc: 'Active server voice pipeline paired with your selected regional dialect.',
+      offlineStorageTitle: 'Offline IndexedDB Cache Storage',
+      offlineRecordsSaved: 'Locally cached market records',
+      clearCacheBtn: 'Clear Cache',
+      cacheClearedMsg: 'Local IndexedDB cache cleared.',
+      archStackTitle: 'Platform Stack & Governance',
+    };
+  }, [language]);
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-16 lg:pb-8">
-      {/* Screen Header */}
-      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
-            <Sliders className="w-3.5 h-3.5 text-harvest-dark" />
-            <span>{t('preferencesAndDisplay')}</span>
+    <div className="space-y-6 pb-8">
+      {/* Editorial Masthead */}
+      <Card padding={6} className="bg-surface">
+        <div className="space-y-2.5">
+          <div className="flex items-center flex-wrap gap-2">
+            <Badge
+              variant="success"
+              icon={<GearSix weight="duotone" className="w-3.5 h-3.5" />}
+              label={t('preferencesAndDisplay')}
+            />
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+              {copy.eyebrow}
+            </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
+          <h1 className="font-display font-semibold text-2xl sm:text-3xl text-ink tracking-tight">
             {t('settingsTitle')}
           </h1>
-          <p className="text-xs sm:text-sm text-charcoal-muted mt-0.5 max-w-2xl">
-            {t('settingsSubtitle')}
-          </p>
+          <p className="text-sm text-ink-muted max-w-2xl leading-relaxed">{t('settingsSubtitle')}</p>
         </div>
+      </Card>
 
-        <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
-          <Globe className="w-3.5 h-3.5 text-forest" />
-          <span>{t('regionalDialects')}</span>
-        </div>
-      </section>
+      {/* Theme Mode & Font Size Controls */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card padding={5} className="bg-surface">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-canopy-soft text-canopy dark:text-canopy-bright shrink-0">
+                {theme === 'dark' ? (
+                  <Moon weight="duotone" className="w-5 h-5" />
+                ) : (
+                  <Sun weight="duotone" className="w-5 h-5" />
+                )}
+              </div>
+              <div>
+                <h2 className="font-display font-semibold text-base text-ink">{copy.themeTitle}</h2>
+                <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">{copy.themeDesc}</p>
+              </div>
+            </div>
 
-      {/* Group 1: Language & Dialect Selection (10 Gnani-Supported Languages) */}
-      <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
-        <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <Globe className="w-4 h-4 text-forest" />
-            <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider">
-              {t('languageSectionTitle')}
-            </h2>
+            <SegmentedControl
+              value={theme}
+              onChange={(val) => setTheme(val === 'dark' ? 'dark' : 'light')}
+              label={copy.themeTitle}
+              size="lg"
+              layout="fill"
+            >
+              <SegmentedControlItem
+                value="light"
+                label={copy.themeLightTitle}
+                icon={<Sun weight={theme === 'light' ? 'fill' : 'regular'} className="w-4 h-4" />}
+              />
+              <SegmentedControlItem
+                value="dark"
+                label={copy.themeDarkTitle}
+                icon={<Moon weight={theme === 'dark' ? 'fill' : 'regular'} className="w-4 h-4" />}
+              />
+            </SegmentedControl>
+
+            <p className="text-[11px] font-mono text-ink-muted px-1">
+              {theme === 'light' ? copy.themeLightDesc : copy.themeDarkDesc}
+            </p>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-mono text-forest bg-forest-50 border border-forest/20 px-2 py-0.5 rounded-full">
-              {ALL_RECOGNIZED_LANGUAGES.find((l) => l.code === language)?.label} ({language.toUpperCase()}) Active
-            </span>
-            <span className="text-xs font-mono text-charcoal-muted hidden sm:inline">
-              {t('gnaniVoicePowered')}
-            </span>
-          </div>
-        </div>
+        </Card>
 
-        {/* Search bar for quick language finding */}
-        <div className="p-3 border-b border-hairline bg-surface/20">
-          <div className="relative">
-            <Search className="w-4 h-4 text-charcoal-muted absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={langSearch}
-              onChange={(e) => setLangSearch(e.target.value)}
-              placeholder="Search by language, script, or region (e.g., Marathi, বাংলা, Telugu, தமிழ், Urdu)..."
-              className="w-full pl-9 pr-8 py-2 bg-surface-white border border-hairline rounded-lg text-xs text-charcoal placeholder-charcoal-muted focus:outline-none focus:border-forest"
+        <Card padding={5} className="bg-surface">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-saffron-soft text-saffron-text shrink-0">
+                <TextAa weight="duotone" className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-display font-semibold text-base text-ink">{t('fontSizeTitle')}</h2>
+                <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">{t('fontSizeDesc')}</p>
+              </div>
+            </div>
+
+            <SegmentedControl
+              value={fontSize}
+              onChange={(val) => setFontSize(val === 'large' ? 'large' : 'normal')}
+              label={t('fontSizeTitle')}
+              size="lg"
+              layout="fill"
+            >
+              <SegmentedControlItem value="normal" label={t('fontNormal')} />
+              <SegmentedControlItem value="large" label={t('fontLarge')} />
+            </SegmentedControl>
+
+            <p className="text-[11px] font-mono text-ink-muted px-1">
+              {fontSize === 'large' ? 'High-visibility 18px+ Indic scale active' : '16px editorial balanced base scale'}
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Regional Dialect & Language Directory */}
+      <Card padding={6} className="bg-surface">
+        <div className="space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-canopy-soft text-canopy dark:text-canopy-bright shrink-0">
+                <Globe weight="duotone" className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-display font-semibold text-base text-ink">
+                  {t('languageSectionTitle')}
+                </h2>
+                <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">{t('languageDesc')}</p>
+              </div>
+            </div>
+
+            <Badge
+              variant="neutral"
+              label={`${activeLangMeta?.label ?? language} (${activeLangMeta?.bcp47 ?? 'hi-IN'})`}
             />
-            {langSearch && (
-              <button
-                type="button"
-                onClick={() => setLangSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-charcoal-muted hover:text-charcoal text-xs cursor-pointer font-semibold"
-              >
-                Clear
-              </button>
-            )}
           </div>
-        </div>
 
-        {/* Scrollable list of all 23 recognized languages */}
-        <div className="divide-y divide-hairline max-h-[460px] overflow-y-auto">
-          {filteredLanguages.map((l) => {
-            const isSelected = language === l.code;
-            return (
-              <button
-                key={l.code}
-                type="button"
-                onClick={() => setLanguage(l.code)}
-                className={`w-full p-4 text-left flex items-start justify-between transition-colors cursor-pointer ${
-                  isSelected ? 'bg-forest-50/50' : 'hover:bg-surface'
-                }`}
-              >
-                <div className="space-y-1 pr-3">
-                  <div className="flex items-center flex-wrap gap-2">
-                    <span className="font-bold text-sm text-charcoal">{l.label}</span>
-                    <span className="text-xs font-semibold text-charcoal-muted">({l.name})</span>
-                    <span className="text-xs font-mono px-2 py-0.5 rounded bg-surface border border-hairline text-charcoal-muted">
-                      {l.script}
-                    </span>
-                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-forest-50 text-forest text-[11px]">
-                      {l.bcp47}
-                    </span>
-                  </div>
-                  <div className="text-xs text-forest font-medium">"{l.greeting}"</div>
-                  <p className="text-xs text-charcoal-muted leading-relaxed">
-                    {l.description}
-                  </p>
-                </div>
+          <TextInput
+            label={t('languageSectionTitle')}
+            isLabelHidden
+            value={langSearch}
+            onChange={setLangSearch}
+            placeholder={copy.searchLangPlaceholder}
+            startIcon={<MagnifyingGlass weight="bold" className="w-4 h-4" />}
+            hasClear
+            size="lg"
+            width="100%"
+          />
 
-                <div
-                  className={`w-5 h-5 mt-1 rounded-full flex items-center justify-center shrink-0 border transition-all ${
-                    isSelected
-                      ? 'bg-forest text-white border-forest'
-                      : 'border-hairline-dark bg-surface-white'
+          <div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+            role="radiogroup"
+            aria-label={t('languageSectionTitle')}
+          >
+            {filteredLanguages.map((item) => {
+              const active = language === item.code;
+              return (
+                <button
+                  key={item.code}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setLanguage(item.code)}
+                  className={`p-4 rounded-xl border text-left transition-all cursor-pointer space-y-1.5 ${
+                    active
+                      ? 'bg-canopy-soft border-canopy shadow-subtle'
+                      : 'bg-surface-subtle/60 border-line hover:border-canopy/40'
                   }`}
                 >
-                  {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-display font-semibold text-sm text-ink truncate">
+                        {item.label}
+                      </span>
+                      {active && (
+                        <Check weight="bold" className="w-3.5 h-3.5 text-canopy dark:text-canopy-bright shrink-0" />
+                      )}
+                    </div>
+                    <Badge label={item.bcp47} variant={active ? 'success' : 'neutral'} />
+                  </div>
+                  <p className="text-xs font-medium text-canopy dark:text-canopy-bright">
+                    {item.greeting}
+                  </p>
+                  <p className="text-[11px] text-ink-muted truncate">
+                    {item.name} · {item.script} · {item.region}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      {/* Voice Profile & Offline Storage Diagnostics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card padding={5} className="bg-surface">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-canopy-soft text-canopy dark:text-canopy-bright shrink-0">
+                <SpeakerHigh weight="duotone" className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-display font-semibold text-base text-ink">
+                  {copy.voiceEngineTitle}
+                </h2>
+                <p className="text-xs text-ink-muted mt-0.5 leading-relaxed">
+                  {copy.voiceEngineDesc}
+                </p>
+              </div>
+            </div>
+
+            <Divider />
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-ink-muted">Selected Voice Dialect</span>
+                <span className="font-mono font-semibold text-ink">
+                  {activeLangMeta?.name ?? 'Hindi'} ({activeLangMeta?.bcp47 ?? 'hi-IN'})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-ink-muted">Gnani STT / TTS</span>
+                <Badge
+                  variant={isOnline ? 'success' : 'warning'}
+                  icon={
+                    isOnline ? (
+                      <WifiHigh weight="bold" className="w-3.5 h-3.5" />
+                    ) : (
+                      <WifiSlash weight="bold" className="w-3.5 h-3.5" />
+                    )
+                  }
+                  label={health?.services?.gnaniVoice?.status || (isOnline ? t('connected') : t('offline'))}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card padding={5} className="bg-surface">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-surface-subtle border border-line text-ink shrink-0">
+                  <Database weight="duotone" className="w-5 h-5" />
                 </div>
-              </button>
-            );
-          })}
-
-          {filteredLanguages.length === 0 && (
-            <div className="p-8 text-center text-xs text-charcoal-muted">
-              No recognized language matching &quot;{langSearch}&quot;.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Group 2: Display & Accessibility Font Sizing */}
-      <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
-        <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Type className="w-4 h-4 text-forest" />
-            <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider">
-              {t('fontSizeTitle')}
-            </h2>
-          </div>
-          <span className="text-xs text-charcoal-muted font-mono">
-            {fontSize === 'large' ? 'Large (+2px)' : 'Standard'}
-          </span>
-        </div>
-
-        <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setFontSize('normal')}
-            className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
-              fontSize === 'normal'
-                ? 'border-forest bg-forest-50/50 shadow-subtle'
-                : 'border-hairline bg-surface hover:bg-surface-white'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-bold text-sm text-charcoal">{t('fontNormal')}</span>
-              {fontSize === 'normal' && (
-                <div className="w-4 h-4 rounded-full bg-forest text-white flex items-center justify-center">
-                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                <div>
+                  <h2 className="font-display font-semibold text-base text-ink">
+                    {copy.offlineStorageTitle}
+                  </h2>
+                  <p className="text-xs text-ink-muted mt-0.5">
+                    {copy.offlineRecordsSaved}:{' '}
+                    <span className="font-mono tnum font-semibold text-ink">{cachedCount}</span>
+                  </p>
                 </div>
-              )}
+              </div>
+              <Badge label={`${cachedCount} rows`} variant={cachedCount > 0 ? 'info' : 'neutral'} />
             </div>
-            <p className="text-xs text-charcoal-muted leading-relaxed">
-              Standard body text size (14px/16px) optimized for high-density mobile and desktop screens.
-            </p>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setFontSize('large')}
-            className={`p-4 rounded-xl text-left border transition-all cursor-pointer ${
-              fontSize === 'large'
-                ? 'border-forest bg-forest-50/50 shadow-subtle'
-                : 'border-hairline bg-surface hover:bg-surface-white'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="font-bold text-base text-charcoal">{t('fontLarge')}</span>
-              {fontSize === 'large' && (
-                <div className="w-4 h-4 rounded-full bg-forest text-white flex items-center justify-center">
-                  <Check className="w-2.5 h-2.5 stroke-[3]" />
-                </div>
-              )}
-            </div>
-            <p className="text-sm text-charcoal-muted leading-relaxed">
-              High-visibility enlarged text (+2px) designed for outdoor use under bright sunlight in mandis.
-            </p>
-          </button>
-        </div>
-      </section>
-
-      {/* Group 3: Regional Voice Synthesis */}
-      <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
-        <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Volume2 className="w-4 h-4 text-forest" />
-            <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider">
-              Regional Voice Synthesis
-            </h2>
+            <Button
+              label={copy.clearCacheBtn}
+              variant="destructive"
+              size="lg"
+              width="100%"
+              icon={<Trash weight="duotone" className="w-4 h-4" />}
+              isDisabled={cachedCount === 0}
+              onClick={handleClearCache}
+            />
           </div>
-          <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-forest-50 text-forest border border-forest/20">
-            {health?.services.gnaniTimbreTts?.status === 'CONNECTED' ? 'LIVE AUDIO' : 'STANDARD'}
-          </span>
-        </div>
+        </Card>
+      </div>
 
-        <div className="p-4 sm:p-5 space-y-3 text-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-              <div className="text-xs uppercase font-semibold text-charcoal-subtle">Hindi Voice</div>
-              <div className="font-bold text-charcoal text-sm">Nalini (नलिनि)</div>
-              <div className="text-xs text-charcoal-muted font-mono">Model: timbre-v2.5</div>
+      {/* System Architecture Summary */}
+      <Card variant="muted" padding={5}>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-ink">
+            <Cpu weight="duotone" className="w-4 h-4 text-canopy dark:text-canopy-bright" />
+            <span>{copy.archStackTitle}</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs border-y border-line py-3">
+            <div className="space-y-0.5">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-ink-muted block">
+                Database &amp; Schema
+              </span>
+              <span className="font-mono font-semibold text-ink">PostgreSQL 16 (Flyway V1-V7)</span>
             </div>
-            <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-              <div className="text-xs uppercase font-semibold text-charcoal-subtle">Punjabi Voice</div>
-              <div className="font-bold text-charcoal text-sm">Nalini (ਨਲਿਨੀ)</div>
-              <div className="text-xs text-charcoal-muted font-mono">Model: timbre-v2.5</div>
+            <div className="space-y-0.5">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-ink-muted block">
+                Application Runtime
+              </span>
+              <span className="font-mono font-semibold text-ink">Java 21 + Spring Boot 3.3.5</span>
             </div>
-            <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-              <div className="text-xs uppercase font-semibold text-charcoal-subtle">Indian English</div>
-              <div className="font-bold text-charcoal text-sm">Kaveri</div>
-              <div className="text-xs text-charcoal-muted font-mono">Model: timbre-v2.5</div>
+            <div className="space-y-0.5">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-ink-muted block">
+                Design System
+              </span>
+              <span className="font-mono font-semibold text-ink">Meta Astryx + React 19 PWA</span>
             </div>
           </div>
-          <p className="text-xs text-charcoal-muted leading-relaxed">
-            All voice processing operates server-side via Spring Boot proxying to Gnani.ai Prisma STT and Timbre TTS. Audio is streamed as raw 16-bit PCM WAV binaries without exposing client credentials.
-          </p>
-        </div>
-      </section>
 
-      {/* Group 4: Network & Offline Cache Storage */}
-      <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
-        <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Database className="w-4 h-4 text-forest" />
-            <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider">
-              Network & Offline Storage
-            </h2>
-          </div>
-          <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded-full ${
-            isOnline ? 'bg-forest-50 text-forest border border-forest/20' : 'bg-amber-100 text-amber-900'
-          }`}>
-            {isOnline ? 'CONNECTED' : 'OFFLINE'}
-          </span>
-        </div>
-
-        <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
-          <div>
-            <div className="font-bold text-charcoal">IndexedDB Structured Price Cache</div>
-            <p className="text-charcoal-muted text-xs mt-0.5 leading-relaxed">
-              MandiSaathi caches retrieved APMC records in client IndexedDB (`mandisaathi_offline_db`) for zero-connectivity field use. Currently caching <strong>{cacheCount}</strong> price records.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleClearCache}
-            disabled={cacheCount === 0}
-            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-surface hover:bg-red-50 text-charcoal-muted hover:text-red-700 border border-hairline hover:border-red-200 transition-all text-xs font-semibold cursor-pointer disabled:opacity-40 self-start sm:self-auto shrink-0"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>{cacheCleared ? 'Cache Cleared!' : 'Clear Offline Cache'}</span>
-          </button>
-        </div>
-      </section>
-
-      {/* Group 5: System Architecture & Verification */}
-      <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
-        <div className="px-5 py-3.5 border-b border-hairline bg-surface/40 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Server className="w-4 h-4 text-forest" />
-            <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider">
-              {t('systemArchitecturePreview')}
-            </h2>
-          </div>
-          <span className="text-xs font-mono text-charcoal-muted">
-            v{health?.version || '1.0.0-RC1'}
-          </span>
-        </div>
-
-        <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-            <div className="font-bold text-forest">Backend Platform</div>
-            <div className="text-charcoal text-xs">Java 21 • Spring Boot 3.3.5</div>
-            <p className="text-xs text-charcoal-muted">Spring Data JPA, Hibernate, Actuator Health</p>
-          </div>
-
-          <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-            <div className="font-bold text-forest">Database Architecture</div>
-            <div className="text-charcoal text-xs">PostgreSQL 16 • Flyway V1–V4</div>
-            <p className="text-xs text-charcoal-muted">Strict composite unique constraints on auction dates</p>
-          </div>
-
-          <div className="p-3 rounded-lg bg-surface border border-hairline space-y-1">
-            <div className="font-bold text-forest">Data Source Grounding</div>
-            <div className="text-charcoal text-xs">Agmarknet / data.gov.in</div>
-            <p className="text-xs text-charcoal-muted">Nightly @Scheduled cron at 19:00 IST</p>
+          <div className="flex items-center gap-2 text-[11px] text-ink-muted">
+            <ShieldCheck weight="fill" className="w-4 h-4 text-canopy dark:text-canopy-bright shrink-0" />
+            <span>{t('systemArchitecturePreview')}</span>
           </div>
         </div>
-      </section>
+      </Card>
     </div>
   );
 };

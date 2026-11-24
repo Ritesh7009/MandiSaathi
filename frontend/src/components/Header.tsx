@@ -1,14 +1,37 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage, ALL_RECOGNIZED_LANGUAGES } from '../context/LanguageContext';
-import { Sprout, Mic, Globe, Type, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import {
+  Plant,
+  TrendUp,
+  Scales,
+  SquaresFour,
+  Globe,
+  TextAa,
+  Sun,
+  Moon,
+  Check,
+  CaretDown,
+  MagnifyingGlass,
+  BookOpenText,
+} from '@phosphor-icons/react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/apiClient';
-import { Language } from '../types';
+import { useNetwork } from '../context/NetworkContext';
 import { NetworkStatusBadge } from './NetworkStatusBadge';
+import { ScrollProgressRail } from './ui/MotionPrimitives';
+import { useCommandSpotlight } from './AstryxRootProvider';
 
 export const Header: React.FC = () => {
   const { language, setLanguage, fontSize, setFontSize, t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
+  const { isOnline } = useNetwork();
+  const { openSpotlight } = useCommandSpotlight();
+  const location = useLocation();
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
 
   const { data: health } = useQuery({
     queryKey: ['systemHealthHeader'],
@@ -16,116 +39,219 @@ export const Header: React.FC = () => {
     staleTime: 60000,
   });
 
-  const isUp = health?.status === 'UP';
+  const isUp = isOnline && health?.status !== 'DOWN';
+  const currentLang = ALL_RECOGNIZED_LANGUAGES.find((l) => l.code === language) || ALL_RECOGNIZED_LANGUAGES[0];
 
-  const languages: { code: Language; label: string }[] = [
-    { code: 'hi', label: 'हिन्दी' },
-    { code: 'pa', label: 'ਪੰਜਾਬੀ' },
-    { code: 'en', label: 'EN' },
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setLangMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  const isHomeActive =
+    location.pathname === '/' ||
+    location.pathname === '/assistant' ||
+    location.pathname === '/voice';
+
+  const isMoreActive =
+    location.pathname.startsWith('/more') ||
+    location.pathname.startsWith('/schemes') ||
+    location.pathname.startsWith('/complaints') ||
+    location.pathname.startsWith('/settings');
+
+  const navItems = [
+    { to: '/', label: t('navHome'), icon: Plant, customActive: isHomeActive },
+    { to: '/prices', label: t('navPrices'), icon: TrendUp },
+    { to: '/compare', label: t('navCompare'), icon: Scales },
+    {
+      to: '/crops',
+      label: language === 'hi' ? 'फसल ज्ञान' : language === 'pa' ? 'ਫ਼ਸਲ ਗਿਆਨ' : 'Crops',
+      icon: BookOpenText,
+    },
+    { to: '/more', label: t('navMore'), icon: SquaresFour, customActive: isMoreActive },
   ];
 
   return (
-    <header className="bg-surface-white border-b border-hairline sticky top-0 z-30 px-4 sm:px-6 py-2.5 shadow-subtle">
-      <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
-        {/* Mobile Brand */}
-        <div className="flex items-center space-x-2.5 lg:hidden">
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="bg-forest text-white p-1.5 rounded-lg shadow-subtle">
-              <Sprout className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            <span className="font-bold text-sm text-charcoal tracking-tight">{t('appTitle')}</span>
-          </Link>
-        </div>
-
-        {/* Desktop Breadcrumb/Subtitle */}
-        <div className="hidden lg:flex items-center space-x-3 text-xs text-charcoal-muted">
-          <span className="font-medium text-charcoal">{t('appSubtitle')}</span>
-          <span className="text-charcoal-subtle">•</span>
-          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-forest-50 border border-forest/20">
-            {isUp ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-forest" />
-            ) : health?.status === 'DEGRADED' ? (
-              <AlertTriangle className="w-3.5 h-3.5 text-harvest-dark" />
-            ) : (
-              <XCircle className="w-3.5 h-3.5 text-red-600" />
-            )}
-            <span className="text-xs font-mono font-semibold text-forest-dark">
-              {isUp ? t('marketDataVerified') : t('marketDataOffline')}
+    <header className="sticky top-0 z-40 ms-glass-dock border-x-0 border-t-0 border-b border-line">
+      <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+        {/* Brand Anchor */}
+        <Link to="/" className="flex items-center space-x-2.5 min-h-[44px] shrink-0 min-w-0 group">
+          <img
+            src="/icon.svg"
+            alt="MandiSaathi"
+            className="w-8 h-8 rounded-lg shadow-subtle transition-transform duration-200 group-hover:scale-105 shrink-0"
+          />
+          <div className="flex items-center space-x-2 min-w-0">
+            <span className="font-display font-bold text-base sm:text-lg tracking-tight text-ink whitespace-nowrap">
+              {t('appTitle')}
             </span>
-          </span>
-        </div>
+            <span
+              className="hidden xl:inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-canopy-soft text-canopy dark:text-canopy-bright border border-canopy/20 whitespace-nowrap"
+              title={isUp ? t('marketDataVerified') : t('marketDataOffline')}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isUp ? 'bg-canopy-bright' : 'bg-saffron'}`} />
+              <span>{isUp ? 'APMC' : t('offline')}</span>
+            </span>
+          </div>
+        </Link>
 
-        {/* Right Action Utilities */}
-        <div className="flex items-center space-x-2 sm:space-x-3 ml-auto">
-          {/* Network Connection Indicator */}
-          <NetworkStatusBadge />
+        {/* Center Desktop Navigation Tabs (Skiper UI Animated Pill Indicator) */}
+        <nav
+          aria-label={t('mainNavigation')}
+          className="hidden md:flex items-center bg-surface-subtle/90 border border-line p-1 rounded-full gap-0.5"
+        >
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) => {
+                  const active = item.customActive !== undefined ? item.customActive : isActive;
+                  return `relative inline-flex items-center gap-1.5 px-2.5 lg:px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
+                    active ? 'text-white' : 'text-ink-muted hover:text-ink'
+                  }`;
+                }}
+              >
+                {({ isActive }) => {
+                  const active = item.customActive !== undefined ? item.customActive : isActive;
+                  return (
+                    <>
+                      {active && (
+                        <motion.span
+                          layoutId="desktop-nav-pill"
+                          transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                          className="absolute inset-0 rounded-full bg-canopy shadow-subtle -z-0"
+                        />
+                      )}
+                      <Icon
+                        weight={active ? 'duotone' : 'regular'}
+                        className={`w-4 h-4 relative z-10 ${active ? 'text-white' : ''}`}
+                      />
+                      <span className="relative z-10">{item.label}</span>
+                    </>
+                  );
+                }}
+              </NavLink>
+            );
+          })}
+        </nav>
 
-          {/* Font Size Accessibility Toggle (Minimum 40px touch target) */}
+        {/* Compact Single Right Utility Strip (Fits cleanly at 390px and 768px without clipping) */}
+        <div className="flex items-center space-x-1.5 lg:space-x-2 shrink-0">
+          <button
+            type="button"
+            onClick={openSpotlight}
+            aria-label="Open quick command search"
+            title="Quick Command Search (Cmd+K / Ctrl+K)"
+            className="hidden md:inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] lg:px-3 rounded-full bg-surface border border-line hover:border-canopy/50 text-xs text-ink-muted hover:text-ink transition-all cursor-pointer active:scale-95"
+          >
+            <MagnifyingGlass weight="bold" className="w-4 h-4 text-canopy dark:text-canopy-bright shrink-0" />
+            <span className="hidden xl:inline font-medium">Search</span>
+            <kbd className="hidden xl:inline font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-subtle border border-line text-ink-subtle">
+              ⌘K
+            </kbd>
+          </button>
+
+          <div className="hidden xl:block">
+            <NetworkStatusBadge />
+          </div>
+
+          {/* Font Size Accessibility Toggle */}
           <button
             type="button"
             onClick={() => setFontSize(fontSize === 'normal' ? 'large' : 'normal')}
-            className={`min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-150 flex items-center space-x-1 cursor-pointer active:scale-[0.98] ${
+            aria-label="Toggle high-visibility text size"
+            title="Toggle text size"
+            className={`min-h-[44px] min-w-[44px] px-2 rounded-full border text-xs font-mono font-semibold flex items-center justify-center space-x-1 transition-all cursor-pointer active:scale-95 ${
               fontSize === 'large'
-                ? 'bg-harvest-100 text-harvest-dark border-harvest'
-                : 'bg-surface border-hairline text-charcoal hover:border-forest/40'
+                ? 'bg-saffron-soft text-saffron-ink dark:text-saffron border-saffron/40'
+                : 'bg-surface border-line text-ink hover:border-line-strong'
             }`}
-            title="Toggle high-visibility text size"
-            aria-label="Toggle text size"
           >
-            <Type className="w-4 h-4" />
-            <span className="text-xs font-mono font-bold hidden sm:inline">A+</span>
+            <TextAa weight="bold" className="w-4 h-4 shrink-0" />
+            <span className="hidden xl:inline">{fontSize === 'large' ? 'A+' : 'A'}</span>
           </button>
 
-          {/* Language Selector for All 23 Recognized Languages (Comfortable 38px touch height) */}
-          <div className="flex items-center bg-surface p-1 rounded-lg border border-hairline shadow-subtle">
-            <Globe className="w-3.5 h-3.5 text-forest ml-1 mr-1.5 shrink-0" />
-            
-            {/* Quick dialect buttons for fast 1-tap switching */}
-            <div className="hidden md:flex items-center space-x-1 mr-1 pr-1 border-r border-hairline">
-              {languages.map((l) => (
-                <button
-                  key={l.code}
-                  type="button"
-                  onClick={() => setLanguage(l.code)}
-                  className={`min-h-[30px] px-2 py-0.5 text-xs font-semibold rounded transition-all cursor-pointer ${
-                    language === l.code
-                      ? 'bg-forest text-white shadow-subtle'
-                      : 'text-charcoal-muted hover:text-charcoal'
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Native dropdown for all 23 officially recognized Indian languages */}
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              className="bg-transparent text-xs font-semibold text-charcoal focus:outline-none cursor-pointer pr-1 py-1 max-w-[140px] truncate"
-              aria-label="Select from all recognized Indian languages"
-              title="Select language"
-            >
-              <optgroup label={t('gnaniVoicePowered')}>
-                {ALL_RECOGNIZED_LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.label} ({l.name})
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-          </div>
-
-          {/* Quick Voice Access CTA Button */}
-          <Link
-            to="/assistant"
-            className="inline-flex items-center space-x-1.5 min-h-[38px] px-3.5 py-1.5 rounded-lg bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-subtle transition-all duration-150 active:scale-[0.98]"
+          {/* Daylight / Dark Observatory Mode Toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to daylight mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Daylight mode' : 'Dark observatory mode'}
+            className="min-h-[44px] min-w-[44px] rounded-full bg-surface border border-line hover:border-line-strong text-ink flex items-center justify-center transition-all cursor-pointer active:scale-95"
           >
-            <Mic className="w-4 h-4 text-white stroke-[2.2]" />
-            <span className="hidden sm:inline font-medium">{t('navVoice')}</span>
-          </Link>
+            {theme === 'dark' ? (
+              <Sun weight="duotone" className="w-4 h-4 text-saffron" />
+            ) : (
+              <Moon weight="duotone" className="w-4 h-4 text-canopy" />
+            )}
+          </button>
+
+          {/* Single Authoritative Language Popover */}
+          <div className="relative" ref={popoverRef}>
+            <button
+              type="button"
+              onClick={() => setLangMenuOpen((prev) => !prev)}
+              aria-expanded={langMenuOpen}
+              aria-label="Select interface and voice language"
+              className="min-h-[44px] px-3 rounded-full bg-surface border border-line hover:border-line-strong text-xs font-semibold text-ink flex items-center space-x-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+            >
+              <Globe weight="duotone" className="w-4 h-4 text-canopy dark:text-canopy-bright shrink-0" />
+              <span className="max-w-[72px] truncate">{currentLang?.label ?? 'English'}</span>
+              <CaretDown weight="bold" className={`w-3 h-3 text-ink-muted transition-transform ${langMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {langMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                  transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute right-0 mt-2 w-64 rounded-2xl bg-surface border border-line-strong shadow-dock p-2 z-50"
+                >
+                  <div className="px-2.5 py-1.5 text-[10px] font-mono font-semibold uppercase tracking-wider text-ink-muted border-b border-line mb-1">
+                    {t('gnaniVoicePowered')}
+                  </div>
+                  <div className="max-h-72 overflow-y-auto space-y-0.5">
+                    {ALL_RECOGNIZED_LANGUAGES.map((l) => {
+                      const active = language === l.code;
+                      return (
+                        <button
+                          key={l.code}
+                          type="button"
+                          onClick={() => {
+                            setLanguage(l.code);
+                            setLangMenuOpen(false);
+                          }}
+                          className={`w-full px-2.5 py-2 rounded-xl text-left text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                            active
+                              ? 'bg-canopy-soft text-canopy dark:text-canopy-bright font-semibold'
+                              : 'text-ink hover:bg-surface-subtle'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <span className="font-semibold">{l.label}</span>
+                            <span className="text-[11px] text-ink-muted truncate">{l.name}</span>
+                          </div>
+                          {active && <Check weight="bold" className="w-3.5 h-3.5 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
+      <ScrollProgressRail />
     </header>
   );
 };

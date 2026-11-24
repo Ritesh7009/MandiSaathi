@@ -57,12 +57,12 @@ class SameDateMandiComparisonTest {
     }
 
     @Test
-    @DisplayName("Comparison succeeds when all requested mandis have records for an identical reporting date")
-    void comparisonSucceedsOnSameDate() {
+    @DisplayName("Comparison succeeds when all requested mandis have records for an identical reporting date and variety")
+    void comparisonSucceedsOnSameDateAndVariety() {
         LocalDate commonDate = LocalDate.of(2026, 11, 8);
 
-        PriceRecord r1 = createRecord("WHEAT", "KHANNA_PB", commonDate, "2300.00", "2400.00", "2350.00");
-        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", commonDate, "2250.00", "2350.00", "2300.00");
+        PriceRecord r1 = createRecord("WHEAT", "KHANNA_PB", commonDate, "2300.00", "2400.00", "2350.00", "Standard / FAQ");
+        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", commonDate, "2250.00", "2350.00", "2300.00", "Standard / FAQ");
         priceRecordRepository.saveAll(List.of(r1, r2));
 
         PriceComparisonDto comparison = priceRecordService.comparePrices("WHEAT", List.of("KHANNA_PB", "SIRSA_HR"));
@@ -71,8 +71,53 @@ class SameDateMandiComparisonTest {
         assertEquals(2, comparison.records().size());
         assertEquals(commonDate, comparison.records().get(0).priceDate());
         assertEquals(commonDate, comparison.records().get(1).priceDate());
+        assertEquals("Standard / FAQ", comparison.records().get(0).variety());
+        assertEquals("Standard / FAQ", comparison.records().get(1).variety());
         assertTrue(comparison.summaryEn().contains("2026-11-08"));
         assertTrue(comparison.summaryEn().contains("Spread: ₹50.00"));
+    }
+
+    @Test
+    @DisplayName("Comparison returns insufficient data when mandis have the same date but completely different varieties")
+    void comparisonFailsWhenVarietiesDifferOnSameDate() {
+        LocalDate commonDate = LocalDate.of(2026, 11, 8);
+
+        // Khanna has Sharbati, Sirsa has Kalyan Sona on the exact same date
+        PriceRecord r1 = createRecord("WHEAT", "KHANNA_PB", commonDate, "2800.00", "3000.00", "2900.00", "Sharbati");
+        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", commonDate, "2200.00", "2300.00", "2250.00", "Kalyan Sona");
+        priceRecordRepository.saveAll(List.of(r1, r2));
+
+        PriceComparisonDto comparison = priceRecordService.comparePrices("WHEAT", List.of("KHANNA_PB", "SIRSA_HR"));
+
+        assertNotNull(comparison);
+        assertTrue(comparison.records().isEmpty(), "Must not compare disparate crop varieties across mandis");
+        assertTrue(comparison.summaryEn().contains("Insufficient comparative data"));
+        assertTrue(comparison.summaryEn().contains("same crop variety"));
+    }
+
+    @Test
+    @DisplayName("Comparison matches on the common variety when multiple varieties exist on the same date")
+    void comparisonMatchesOnCommonVariety() {
+        LocalDate commonDate = LocalDate.of(2026, 11, 8);
+
+        // Khanna has Desi (high modal 3200) and Sharbati (modal 2500)
+        PriceRecord khannaDesi = createRecord("WHEAT", "KHANNA_PB", commonDate, "3000.00", "3400.00", "3200.00", "Desi");
+        PriceRecord khannaSharbati = createRecord("WHEAT", "KHANNA_PB", commonDate, "2400.00", "2600.00", "2500.00", "Sharbati");
+
+        // Sirsa ONLY has Sharbati (modal 2450)
+        PriceRecord sirsaSharbati = createRecord("WHEAT", "SIRSA_HR", commonDate, "2400.00", "2500.00", "2450.00", "Sharbati");
+
+        priceRecordRepository.saveAll(List.of(khannaDesi, khannaSharbati, sirsaSharbati));
+
+        PriceComparisonDto comparison = priceRecordService.comparePrices("WHEAT", List.of("KHANNA_PB", "SIRSA_HR"));
+
+        assertEquals(2, comparison.records().size());
+        assertEquals("Sharbati", comparison.records().get(0).variety());
+        assertEquals("Sharbati", comparison.records().get(1).variety());
+        // Crucial verification: Khanna modal must be 2500 (Sharbati), NOT 3200 (Desi highest modal price!)
+        assertEquals(new BigDecimal("2500.00"), comparison.records().stream()
+                .filter(r -> "KHANNA_PB".equals(r.mandiCode()))
+                .findFirst().get().modalPrice());
     }
 
     @Test
@@ -81,9 +126,8 @@ class SameDateMandiComparisonTest {
         LocalDate date1 = LocalDate.of(2026, 11, 8);
         LocalDate date2 = LocalDate.of(2026, 11, 5); // 3 days earlier
 
-        // Khanna only on Nov 8, Sirsa only on Nov 5
-        PriceRecord r1 = createRecord("WHEAT", "KHANNA_PB", date1, "2300.00", "2400.00", "2350.00");
-        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", date2, "2250.00", "2350.00", "2300.00");
+        PriceRecord r1 = createRecord("WHEAT", "KHANNA_PB", date1, "2300.00", "2400.00", "2350.00", "Standard / FAQ");
+        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", date2, "2250.00", "2350.00", "2300.00", "Standard / FAQ");
         priceRecordRepository.saveAll(List.of(r1, r2));
 
         PriceComparisonDto comparison = priceRecordService.comparePrices("WHEAT", List.of("KHANNA_PB", "SIRSA_HR"));
@@ -91,33 +135,60 @@ class SameDateMandiComparisonTest {
         assertNotNull(comparison);
         assertTrue(comparison.records().isEmpty(), "Records must be empty when no common date exists");
         assertTrue(comparison.summaryEn().contains("Insufficient comparative data"));
-        assertTrue(comparison.summaryEn().contains("common reporting date"));
     }
 
     @Test
-    @DisplayName("Comparison picks the latest common date when multiple common dates exist")
-    void comparisonPicksLatestCommonDate() {
-        LocalDate olderCommonDate = LocalDate.of(2026, 11, 2);
-        LocalDate newerCommonDate = LocalDate.of(2026, 11, 7);
+    @DisplayName("Comparison handles duplicate records deterministically without throwing or blending")
+    void comparisonHandlesDuplicateRecordsDeterministically() {
+        LocalDate commonDate = LocalDate.of(2026, 11, 8);
 
-        // Older date records
-        PriceRecord old1 = createRecord("WHEAT", "KHANNA_PB", olderCommonDate, "2200.00", "2300.00", "2250.00");
-        PriceRecord old2 = createRecord("WHEAT", "SIRSA_HR", olderCommonDate, "2180.00", "2280.00", "2230.00");
+        // Khanna has two records for same variety and date
+        PriceRecord r1a = createRecord("WHEAT", "KHANNA_PB", commonDate, "2300.00", "2400.00", "2350.00", "Standard / FAQ");
+        PriceRecord r1b = createRecord("WHEAT", "KHANNA_PB", commonDate, "2310.00", "2410.00", "2360.00", "Standard / FAQ");
+        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", commonDate, "2250.00", "2350.00", "2300.00", "Standard / FAQ");
 
-        // Newer date records
-        PriceRecord new1 = createRecord("WHEAT", "KHANNA_PB", newerCommonDate, "2320.00", "2420.00", "2380.00");
-        PriceRecord new2 = createRecord("WHEAT", "SIRSA_HR", newerCommonDate, "2280.00", "2380.00", "2330.00");
-
-        priceRecordRepository.saveAll(List.of(old1, old2, new1, new2));
+        priceRecordRepository.saveAll(List.of(r1a, r1b, r2));
 
         PriceComparisonDto comparison = priceRecordService.comparePrices("WHEAT", List.of("KHANNA_PB", "SIRSA_HR"));
 
-        assertEquals(2, comparison.records().size());
-        assertEquals(newerCommonDate, comparison.records().get(0).priceDate());
-        assertEquals(newerCommonDate, comparison.records().get(1).priceDate());
+        assertEquals(2, comparison.records().size(), "Deduplication must yield exactly 2 records (1 per mandi)");
     }
 
-    private PriceRecord createRecord(String commodity, String mandi, LocalDate date, String min, String max, String modal) {
+    @Test
+    @DisplayName("Targeted variety comparison succeeds when requested variety is shared across mandis")
+    void targetedVarietyComparisonSucceeds() {
+        LocalDate commonDate = LocalDate.of(2026, 11, 8);
+
+        PriceRecord r1 = createRecord("WHEAT", "KHANNA_PB", commonDate, "2800.00", "3000.00", "2900.00", "Sharbati");
+        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", commonDate, "2750.00", "2950.00", "2850.00", "Sharbati");
+        priceRecordRepository.saveAll(List.of(r1, r2));
+
+        PriceComparisonDto comparison = priceRecordService.comparePrices("WHEAT", List.of("KHANNA_PB", "SIRSA_HR"), "Sharbati");
+
+        assertNotNull(comparison);
+        assertEquals(2, comparison.records().size());
+        assertEquals("Sharbati", comparison.commonVariety());
+        assertEquals(commonDate, comparison.commonDate());
+        assertEquals("Sharbati", comparison.records().get(0).variety());
+    }
+
+    @Test
+    @DisplayName("Targeted variety comparison returns insufficient data when requested variety is absent")
+    void targetedVarietyComparisonFailsWhenAbsent() {
+        LocalDate commonDate = LocalDate.of(2026, 11, 8);
+
+        PriceRecord r1 = createRecord("WHEAT", "KHANNA_PB", commonDate, "2800.00", "3000.00", "2900.00", "Sharbati");
+        PriceRecord r2 = createRecord("WHEAT", "SIRSA_HR", commonDate, "2750.00", "2950.00", "2850.00", "Sharbati");
+        priceRecordRepository.saveAll(List.of(r1, r2));
+
+        PriceComparisonDto comparison = priceRecordService.comparePrices("WHEAT", List.of("KHANNA_PB", "SIRSA_HR"), "Basmati");
+
+        assertNotNull(comparison);
+        assertTrue(comparison.records().isEmpty());
+        assertTrue(comparison.summaryEn().contains("Basmati"));
+    }
+
+    private PriceRecord createRecord(String commodity, String mandi, LocalDate date, String min, String max, String modal, String variety) {
         PriceRecord r = new PriceRecord();
         r.setCommodityCode(commodity);
         r.setMandiCode(mandi);
@@ -127,9 +198,8 @@ class SameDateMandiComparisonTest {
         r.setModalPrice(new BigDecimal(modal));
         r.setUnit("QUINTAL");
         r.setDataSource("Agmarknet");
-        r.setVariety("Standard / FAQ");
+        r.setVariety(variety != null ? variety : "Standard / FAQ");
         r.setProvenanceType("SEEDED_BASELINE");
         return r;
     }
 }
-

@@ -138,14 +138,9 @@ public class GnaniSttServiceImpl implements GnaniSttService {
                 int status = holder.statusCode;
                 String rawBody = holder.bodyString != null ? holder.bodyString : "";
 
-                // Handle HTTP 429 Rate Limit respecting Retry-After header
+                // Handle HTTP 429 Rate Limit respecting Retry-After header (seconds or HTTP-date)
                 if (status == 429 && currentAttempt < maxAttempts) {
-                    long backoffMs = 1500;
-                    if (holder.retryAfter != null) {
-                        try {
-                            backoffMs = Math.min(5000, Math.max(500, Long.parseLong(holder.retryAfter.trim()) * 1000));
-                        } catch (NumberFormatException ignored) {}
-                    }
+                    long backoffMs = parseRetryAfter(holder.retryAfter);
                     log.warn("Gnani STT returned HTTP 429 (rate limit). Backing off for {}ms before retry (attempt {}/{})...",
                             backoffMs, currentAttempt, maxAttempts);
                     try {
@@ -206,20 +201,39 @@ public class GnaniSttServiceImpl implements GnaniSttService {
                         status, errorType, errorMessage, latencyMs);
 
                 String farmerFriendlyMsg = mapErrorToFriendlyMessage(status, errorType, errorMessage);
-                return TranscriptionResult.failure(status, errorType, farmerFriendlyMsg, latencyMs, rawBody);
+                return TranscriptionResult.failure(status, errorType, farmerFriendlyMsg, latencyMs, null);
 
             } catch (ResourceAccessException ex) {
                 long latencyMs = System.currentTimeMillis() - startTime;
-                log.error("Gnani STT network connection timeout after {}ms: {}", latencyMs, ex.getMessage());
+                log.error("Gnani STT network connection timeout after {}ms", latencyMs);
                 return TranscriptionResult.failure(504, "TIMEOUT", "Voice request timed out (HTTP 504). Upstream speech server took too long to respond.", latencyMs, null);
             } catch (Exception ex) {
                 long latencyMs = System.currentTimeMillis() - startTime;
-                log.error("Gnani STT unexpected failure after {}ms: {}", latencyMs, ex.getMessage(), ex);
-                return TranscriptionResult.failure(500, "INTERNAL_ERROR", "Server error processing audio: " + ex.getMessage(), latencyMs, null);
+                log.error("Gnani STT unexpected failure after {}ms: {}", latencyMs, ex.getClass().getSimpleName());
+                return TranscriptionResult.failure(500, "INTERNAL_ERROR", "Server error processing audio. Please try again later.", latencyMs, null);
             }
         }
 
         return TranscriptionResult.failure(429, "RATE_LIMIT_EXCEEDED", "Gnani AI STT rate limit reached (HTTP 429). Please retry after a few seconds.", 0, null);
+    }
+
+    private long parseRetryAfter(String retryAfterHeader) {
+        if (retryAfterHeader == null || retryAfterHeader.isBlank()) {
+            return 1500L;
+        }
+        String trimmed = retryAfterHeader.trim();
+        try {
+            long seconds = Long.parseLong(trimmed);
+            return Math.min(5000L, Math.max(500L, seconds * 1000L));
+        } catch (NumberFormatException notSeconds) {
+            try {
+                java.time.ZonedDateTime date = java.time.ZonedDateTime.parse(trimmed, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME);
+                long diffMs = java.time.Duration.between(java.time.Instant.now(), date.toInstant()).toMillis();
+                return Math.min(5000L, Math.max(500L, diffMs));
+            } catch (Exception ignored) {
+                return 1500L;
+            }
+        }
     }
 
     private String resolveLanguageCode(String code) {

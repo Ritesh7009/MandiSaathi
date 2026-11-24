@@ -1,70 +1,154 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'motion/react';
+import { Badge } from '@astryxdesign/core/Badge';
+import { Banner } from '@astryxdesign/core/Banner';
+import { BottomSheet } from '@astryxdesign/core/BottomSheet';
+import { Button } from '@astryxdesign/core/Button';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import {
+  Table,
+  proportional,
+  useTableSortableState,
+  useTableSortable,
+  type TableColumn,
+} from '@astryxdesign/core/Table';
 import { useLanguage } from '../context/LanguageContext';
 import { useNetwork } from '../context/NetworkContext';
 import { api } from '../services/apiClient';
-import {
-  savePriceRecords,
-  getCachedPrices,
-  saveCommodities,
-  saveMandis,
-} from '../services/offlineStorage';
+import { savePriceRecords, getCachedPrices, saveCommodities, saveMandis } from '../services/offlineStorage';
 import { MetricTile } from '../components/ui/MetricTile';
 import { PriceSpreadBar } from '../components/ui/PriceSpreadBar';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { WatchlistBar } from '../components/ui/WatchlistBar';
+import { GsapStaggerGrid, MorphingActionButton } from '../components/ui/MotionPrimitives';
+import { LottieBadge } from '../components/ui/LottieBadge';
 import {
-  TrendingUp,
+  TrendUp,
   MapPin,
   Calendar,
   ShieldCheck,
-  RotateCcw,
-  Scale,
-  Wheat,
+  ArrowCounterClockwise,
+  Scales,
+  Grains,
   Clock,
-  Info,
-  RefreshCw,
-  CheckCircle,
-  WifiOff,
+  ArrowsClockwise,
   Database,
-  AlertCircle,
-  Filter,
-} from 'lucide-react';
+  CaretDown,
+  MagnifyingGlass,
+  X,
+} from '@phosphor-icons/react';
 import { IngestionSummary, PriceRecord } from '../types';
 
-export const PriceIntelligence: React.FC = () => {
-  const { language, t, getCommodityName: getLocalizedComm, getMandiName: getLocalizedM } = useLanguage();
-  const { isOnline } = useNetwork();
+type PriceTableRow = PriceRecord & Record<string, unknown>;
 
+const ALL_INDIAN_STATES = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Delhi',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jammu and Kashmir',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Chandigarh',
+  'Puducherry',
+] as const;
+
+export const PriceIntelligence: React.FC = () => {
+  const { language, t, getCommodityName, getMandiName } = useLanguage();
+  const { isOnline } = useNetwork();
+  const [searchParams] = useSearchParams();
+
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCommodity, setSelectedCommodity] = useState<string>('');
   const [selectedState, setSelectedState] = useState<string>('');
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
-  const [selectedMandi, setSelectedMandi] = useState<string>('');
+  const [pageSelection, setPageSelection] = useState({ filters: '', page: 0 });
+  const [selectedMandi, setSelectedMandi] = useState<string>(() => searchParams.get('mandi') || '');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncJustSucceeded, setSyncJustSucceeded] = useState<boolean>(false);
   const [syncSummary, setSyncSummary] = useState<IngestionSummary | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Offline caching states
   const [offlinePrices, setOfflinePrices] = useState<PriceRecord[]>([]);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [isCacheStale, setIsCacheStale] = useState<boolean>(false);
   const [isUsingCache, setIsUsingCache] = useState<boolean>(false);
 
-  // Fetch commodities list
   const { data: commodities = [] } = useQuery({
     queryKey: ['commoditiesList'],
     queryFn: () => api.getCommodities(),
     staleTime: 120000,
   });
 
-  // Fetch all mandis for filter cascading
+  useEffect(() => {
+    const requestedCommodity = searchParams.get('commodity');
+    if (requestedCommodity && commodities.length > 0) {
+      const normalized = requestedCommodity.trim().toLowerCase();
+      const matched = commodities.find((c) => {
+        const code = c.code.toLowerCase();
+        const en = c.nameEn.toLowerCase();
+        const hi = (c.nameHi || '').toLowerCase();
+        const pa = (c.namePa || '').toLowerCase();
+        return (
+          code === normalized ||
+          en === normalized ||
+          en.includes(normalized) ||
+          normalized.includes(code) ||
+          (normalized.includes('chilli') && (code === 'chilli' || en.includes('chilli'))) ||
+          (normalized.includes('mirch') && (code === 'chilli' || en.includes('chilli') || hi.includes('मिर्च'))) ||
+          (normalized.includes('cumin') && (code === 'cumin' || en.includes('cumin'))) ||
+          (normalized.includes('jeera') && (code === 'cumin' || en.includes('cumin') || hi.includes('जीरा'))) ||
+          (normalized.includes('haldi') && (code === 'turmeric' || en.includes('turmeric') || hi.includes('हल्दी'))) ||
+          (normalized.includes('turmeric') && (code === 'turmeric' || en.includes('turmeric'))) ||
+          (normalized.includes('groundnut') && (code === 'groundnut' || en.includes('groundnut'))) ||
+          (normalized.includes('mungfali') && (code === 'groundnut' || en.includes('groundnut') || hi.includes('मूंगफली'))) ||
+          hi.includes(normalized) ||
+          pa.includes(normalized)
+        );
+      });
+      if (matched) {
+        setSelectedCommodity(matched.code);
+      }
+    }
+  }, [searchParams, commodities]);
+
   const { data: mandis = [] } = useQuery({
-    queryKey: ['mandisList', selectedState],
-    queryFn: () => api.getMandis(selectedState || undefined),
+    queryKey: ['allMandisList'],
+    queryFn: () => api.getMandis(),
     staleTime: 120000,
   });
 
-  // Fetch prices based on selection
+  const pageSize = 50;
+  const filterKey = [selectedCommodity, selectedState, selectedDistrict, selectedMandi].join('|');
+  const page = pageSelection.filters === filterKey ? pageSelection.page : 0;
+
   const {
     data: priceRecords = [],
     isLoading: loadingPrices,
@@ -72,43 +156,39 @@ export const PriceIntelligence: React.FC = () => {
     error: priceError,
     refetch: refetchPrices,
   } = useQuery({
-    queryKey: ['priceRecords', selectedCommodity, selectedMandi],
-    queryFn: () => api.getPrices(selectedCommodity || undefined, selectedMandi || undefined),
+    queryKey: ['priceRecords', filterKey, page],
+    queryFn: () => api.getPrices(selectedCommodity || undefined, selectedMandi || undefined, {
+      state: selectedState || undefined,
+      district: selectedDistrict || undefined,
+      page,
+      size: pageSize,
+    }),
     staleTime: 60000,
     enabled: isOnline,
   });
 
-  // Fetch scheduled cron sync status telemetry
+  const adminKey = typeof window !== 'undefined' ? localStorage.getItem('mandisaathi_admin_key') : null;
   const { data: syncStatus } = useQuery({
-    queryKey: ['syncScheduleStatus'],
-    queryFn: () => api.getSyncStatus(),
+    queryKey: ['syncScheduleStatus', adminKey],
+    queryFn: () => api.getSyncStatus(adminKey || undefined),
     staleTime: 60000,
-    enabled: isOnline,
+    enabled: isOnline && !!adminKey,
   });
 
-  // Persist live commodities into IndexedDB
   useEffect(() => {
-    if (commodities.length > 0) {
-      saveCommodities(commodities).catch(console.warn);
-    }
+    if (commodities.length > 0) saveCommodities(commodities).catch(() => {});
   }, [commodities]);
 
-  // Persist live mandis into IndexedDB
   useEffect(() => {
-    if (mandis.length > 0) {
-      saveMandis(mandis).catch(console.warn);
-    }
+    if (mandis.length > 0) saveMandis(mandis).catch(() => {});
   }, [mandis]);
 
-  // Persist retrieved live prices into IndexedDB
   useEffect(() => {
-    if (priceRecords.length > 0 && isOnline) {
-      savePriceRecords(priceRecords).catch(console.warn);
-      setIsUsingCache(false);
+    if (isOnline && priceRecords.length > 0) {
+      savePriceRecords(priceRecords).catch(() => {});
     }
-  }, [priceRecords, isOnline]);
+  }, [isOnline, priceRecords]);
 
-  // If offline or fetch failed, retrieve records from IndexedDB
   useEffect(() => {
     if (!isOnline || errorPrices) {
       getCachedPrices(selectedCommodity || undefined, selectedMandi || undefined)
@@ -118,42 +198,39 @@ export const PriceIntelligence: React.FC = () => {
           setIsCacheStale(result.isStale);
           setIsUsingCache(true);
         })
-        .catch((err) => {
-          console.warn('[MandiSaathi Offline] Could not read IndexedDB:', err);
-        });
+        .catch(() => {});
     } else {
       setIsUsingCache(false);
     }
   }, [isOnline, errorPrices, selectedCommodity, selectedMandi]);
 
-  // Active records: Live API when online, IndexedDB cache when offline
   const activeRecords = isUsingCache || !isOnline ? offlinePrices : priceRecords;
+  const reportingDate = activeRecords.reduce(
+    (latest, row) => (row.priceDate > latest ? row.priceDate : latest), '',
+  );
 
-  // Unique states from mandis
   const states = useMemo(() => {
-    const s = new Set<string>();
+    const s = new Set<string>(ALL_INDIAN_STATES);
     mandis.forEach((m) => {
       if (m.state) s.add(m.state);
     });
-    return Array.from(s).sort();
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [mandis]);
 
-  // Unique districts for selected state
   const districts = useMemo(() => {
     const d = new Set<string>();
     mandis.forEach((m) => {
-      if (!selectedState || m.state === selectedState) {
+      if (!selectedState || m.state.toLowerCase() === selectedState.toLowerCase()) {
         if (m.district) d.add(m.district);
       }
     });
     return Array.from(d).sort();
   }, [mandis, selectedState]);
 
-  // Filtered mandis based on state & district
   const filteredMandis = useMemo(() => {
     return mandis.filter((m) => {
-      if (selectedState && m.state !== selectedState) return false;
-      if (selectedDistrict && m.district !== selectedDistrict) return false;
+      if (selectedState && m.state.toLowerCase() !== selectedState.toLowerCase()) return false;
+      if (selectedDistrict && m.district.toLowerCase() !== selectedDistrict.toLowerCase()) return false;
       return true;
     });
   }, [mandis, selectedState, selectedDistrict]);
@@ -163,339 +240,467 @@ export const PriceIntelligence: React.FC = () => {
     setSelectedState('');
     setSelectedDistrict('');
     setSelectedMandi('');
+    setSearchQuery('');
   };
 
-  const getCommodityName = (c: { code?: string; nameEn: string; nameHi: string; namePa: string | null }) => {
-    return getLocalizedComm(c.code || c.nameEn, c.nameHi || c.nameEn);
-  };
-
-  const getMandiName = (m: { code?: string; nameEn: string; nameHi: string; namePa: string | null }) => {
-    return getLocalizedM(m.code || m.nameEn, m.nameHi || m.nameEn);
-  };
-
-  // Filter records by district if selected
   const displayedRecords = useMemo(() => {
-    if (!selectedDistrict) return activeRecords;
-    return activeRecords.filter((r) => r.district.toLowerCase() === selectedDistrict.toLowerCase());
-  }, [activeRecords, selectedDistrict]);
+    const q = searchQuery.trim().toLowerCase();
+    return activeRecords.filter((r) => {
+      if (selectedState && r.state && r.state.toLowerCase() !== selectedState.toLowerCase()) return false;
+      if (selectedDistrict && r.district && r.district.toLowerCase() !== selectedDistrict.toLowerCase()) return false;
+      if (!q) return true;
+      const commName = (
+        getCommodityName(r.commodityCode, r.commodityNameEn) +
+        ' ' +
+        (r.commodityNameHi || '') +
+        ' ' +
+        (r.commodityNamePa || '')
+      ).toLowerCase();
+      const mandiName = (
+        (r.mandiNameEn || '') +
+        ' ' +
+        (r.mandiNameHi || '') +
+        ' ' +
+        (r.mandiNamePa || '')
+      ).toLowerCase();
+      const stateName = (r.state || '').toLowerCase();
+      const distName = (r.district || '').toLowerCase();
+      const variety = (r.variety || '').toLowerCase();
+      const code = (r.commodityCode || '').toLowerCase();
+      return (
+        commName.includes(q) ||
+        code.includes(q) ||
+        mandiName.includes(q) ||
+        stateName.includes(q) ||
+        distName.includes(q) ||
+        variety.includes(q) ||
+        (q.includes('chilli') && (code === 'chilli' || commName.includes('chilli') || commName.includes('mirch') || commName.includes('मिर्च'))) ||
+        (q.includes('mirch') && (code === 'chilli' || commName.includes('chilli') || commName.includes('mirch') || commName.includes('मिर्च'))) ||
+        (q.includes('jeera') && (code === 'cumin' || commName.includes('cumin') || commName.includes('jeera') || commName.includes('जीरा'))) ||
+        (q.includes('cumin') && (code === 'cumin' || commName.includes('cumin') || commName.includes('jeera') || commName.includes('जीरा'))) ||
+        (q.includes('haldi') && (code === 'turmeric' || commName.includes('turmeric') || commName.includes('haldi') || commName.includes('हल्दी')))
+      );
+    });
+  }, [activeRecords, selectedState, selectedDistrict, searchQuery, getCommodityName]);
 
-  // Summary figures across displayed records
   const summary = useMemo(() => {
     if (displayedRecords.length === 0) return null;
     const modalPrices = displayedRecords.map((r) => r.modalPrice);
     const avgModal = Math.round(modalPrices.reduce((a, b) => a + b, 0) / modalPrices.length);
     const minOverall = Math.min(...displayedRecords.map((r) => r.minPrice));
     const maxOverall = Math.max(...displayedRecords.map((r) => r.maxPrice));
-    const totalArrivals = displayedRecords.reduce((acc, r) => acc + (r.arrivalQuantity || 0), 0);
+    const arrivalRows = displayedRecords.filter((record) => record.arrivalQuantity != null);
+    const totalArrivals = arrivalRows.length
+      ? arrivalRows.reduce((sum, record) => sum + (record.arrivalQuantity ?? 0), 0)
+      : undefined;
     return { avgModal, minOverall, maxOverall, totalArrivals };
   }, [displayedRecords]);
 
-  // Handle manual Agmarknet data synchronization
-  const handleSyncAgmarknet = async () => {
+  const handleRefreshPrices = async () => {
     if (!isOnline) return;
     setIsSyncing(true);
     setSyncError(null);
     setSyncSummary(null);
-
     try {
-      const summary = await api.syncMandiPrices();
-      setSyncSummary(summary);
-      await refetchPrices();
-    } catch (err: any) {
-      await refetchPrices();
-      if (err?.status === 403) {
-        setSyncError('Live Agmarknet synchronization requires administrative authorization.');
-      } else {
-        setSyncError(err instanceof Error ? err.message : 'Agmarknet synchronization failed');
+      if (adminKey) {
+        const res = await api.syncMandiPrices(adminKey);
+        setSyncSummary(res);
+        if (res.status !== 'CONNECTED') {
+          await refetchPrices();
+          return;
+        }
       }
+      const refreshed = await refetchPrices();
+      if (refreshed.isError) throw refreshed.error;
+      setSyncJustSucceeded(true);
+      setTimeout(() => setSyncJustSucceeded(false), 1800);
+    } catch (err: unknown) {
+      await refetchPrices();
+      setSyncError(err instanceof Error ? err.message : 'Refresh failed');
     } finally {
       setIsSyncing(false);
     }
   };
 
+  const labels = useMemo(() => {
+    if (language === 'hi') {
+      return {
+        refreshBtn: adminKey ? t('dataSyncButton') : 'भाव रीफ्रेश करें',
+        refreshing: adminKey ? t('dataSyncInProgress') : 'लोड हो रहा है...',
+        avgBadge: 'औसत',
+        floorBadge: 'न्यूनतम',
+        peakBadge: 'अधिकतम',
+        verifiedBadge: isUsingCache ? 'संग्रहीत' : 'सत्यापित',
+        syncedLabel: 'अपडेट हुआ',
+        applyFilters: 'फ़िल्टर लागू करें',
+        tableTitle: isUsingCache ? 'ऑफ़लाइन सहेजे गए भाव' : 'सत्यापित एपीएमसी बाज़ार रिकॉर्ड',
+        colCommodity: 'फ़सल एवं किस्म',
+        colMandi: 'एपीएमसी मंडी',
+        colLocation: 'जिला व राज्य',
+        filtersToggle: 'राज्य, जिला व मंडी चुनें',
+        recordsUnit: 'रिकॉर्ड',
+      };
+    }
+    if (language === 'pa') {
+      return {
+        refreshBtn: adminKey ? t('dataSyncButton') : 'ਭਾਅ ਰੀਫ੍ਰੈਸ਼ ਕਰੋ',
+        refreshing: adminKey ? t('dataSyncInProgress') : 'ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...',
+        avgBadge: 'ਔਸਤ',
+        floorBadge: 'ਘੱਟੋ-ਘੱਟ',
+        peakBadge: 'ਵੱਧ ਤੋਂ ਵੱਧ',
+        verifiedBadge: isUsingCache ? 'ਸੁਰੱਖਿਅਤ' : 'ਪ੍ਰਮਾਣਿਤ',
+        syncedLabel: 'ਅੱਪਡੇਟ ਹੋਇਆ',
+        applyFilters: 'ਫ਼ਿਲਟਰ ਲਾਗੂ ਕਰੋ',
+        tableTitle: isUsingCache ? 'ਆਫਲਾਈਨ ਸੁਰੱਖਿਅਤ ਭਾਅ' : 'ਪ੍ਰਮਾਣਿਤ ਏ.ਪੀ.ਐਮ.ਸੀ. ਮੰਡੀ ਰਿਕਾਰਡ',
+        colCommodity: 'ਫ਼ਸਲ ਅਤੇ ਕਿਸਮ',
+        colMandi: 'ਮੰਡੀ',
+        colLocation: 'ਜ਼ਿਲ੍ਹਾ ਅਤੇ ਰਾਜ',
+        filtersToggle: 'ਰਾਜ, ਜ਼ਿਲ੍ਹਾ ਤੇ ਮੰਡੀ ਚੁਣੋ',
+        recordsUnit: 'ਰਿਕਾਰਡ',
+      };
+    }
+    return {
+      refreshBtn: adminKey ? t('dataSyncButton') : 'Refresh Rates',
+      refreshing: adminKey ? t('dataSyncInProgress') : 'Refreshing...',
+      avgBadge: 'Avg Rate',
+      floorBadge: 'Floor',
+      peakBadge: 'Peak',
+      verifiedBadge: isUsingCache ? 'Cached' : 'Reported',
+      syncedLabel: 'Updated',
+      applyFilters: 'Apply Filters',
+      tableTitle: isUsingCache ? 'Cached market filings' : 'Market filings',
+      colCommodity: 'Commodity & Variety',
+      colMandi: 'APMC Mandi',
+      colLocation: 'District & State',
+      filtersToggle: 'Filter by State, District & Mandi',
+      recordsUnit: 'records',
+    };
+  }, [language, adminKey, isUsingCache, t]);
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8">
-      {/* Offline Status Alert Banner */}
+    <div className="space-y-6">
       {!isOnline && (
-        <div
-          data-testid="offline-alert-banner"
-          className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 shadow-subtle flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in"
-        >
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-amber-200/80 flex items-center justify-center shrink-0">
-              <WifiOff className="w-4 h-4 text-amber-800" />
-            </div>
-            <div>
-              <p className="font-bold text-xs sm:text-sm text-amber-950">
-                {t('offlineBannerText')}
-              </p>
-              <p className="text-[11px] sm:text-xs text-amber-800 mt-0.5">
-                {t('offlineVoiceNotice')}
-              </p>
-            </div>
-          </div>
-          {lastSyncedAt && (
-            <div className="text-[11px] text-amber-800 font-mono self-start sm:self-auto bg-amber-100/70 px-2.5 py-1 rounded-md border border-amber-200">
-              {t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleString()}
-            </div>
-          )}
-        </div>
+        <Banner
+          status="warning"
+          collapsible={false}
+          title={t('offlineBannerTitle')}
+          description={
+            <>
+              {t('offlineBannerText')}{' '}
+              {lastSyncedAt && (
+                <span className="font-mono font-semibold text-ink">
+                  ({t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleString()})
+                </span>
+              )}
+            </>
+          }
+          endContent={isCacheStale ? <Badge variant="warning" label={t('staleWarning')} /> : undefined}
+        />
       )}
 
-      {/* Screen Header & Action Toolbar */}
-      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Clean Screen Header */}
+      <section className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
-            <TrendingUp className="w-3.5 h-3.5 text-harvest-dark" />
-            <span>{t('verifiedMarketRecords')}</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink tracking-tight">
             {t('priceTitle')}
           </h1>
-          <p className="text-xs sm:text-sm text-charcoal-muted mt-0.5 max-w-2xl">
+          <p className="text-xs sm:text-sm text-ink-muted mt-1 max-w-2xl leading-relaxed">
             {t('priceSubtitle')}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-          {/* Live vs Offline Cache Telemetry Badges */}
-          {isUsingCache || !isOnline ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <div
-                data-testid="offline-cached-badge"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 text-xs font-semibold shadow-subtle"
-              >
-                <Database className="w-3.5 h-3.5 text-amber-800" />
-                <span>{t('offlineCachedBadge')}</span>
-                {lastSyncedAt && (
-                  <span className="text-[11px] font-normal text-amber-800 hidden md:inline font-mono">
-                    • {t('lastSyncedLabel')}: {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                )}
-              </div>
-
-              {isCacheStale && (
-                <div
-                  data-testid="stale-data-badge"
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-900 border border-red-300 text-xs font-bold"
-                >
-                  <AlertCircle className="w-3.5 h-3.5 text-red-700" />
-                  <span>{t('staleDataWarning')}</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div
-              data-testid="live-feed-badge"
-              className="flex items-center space-x-1.5 text-xs font-semibold bg-forest-50 border border-forest/20 px-3 py-1.5 rounded-lg text-forest shadow-subtle"
-            >
-              <ShieldCheck className="w-4 h-4 text-forest" />
-              <span>{t('liveFeedBadge')}</span>
-            </div>
-          )}
-
-          {/* Sync Trigger Button */}
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
           {isOnline && (
-            <button
-              type="button"
-              onClick={handleSyncAgmarknet}
-              disabled={isSyncing}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-forest hover:bg-forest-light text-white text-xs font-semibold shadow-subtle transition-all disabled:opacity-50 cursor-pointer active:scale-[0.98]"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? t('dataSyncInProgress') : t('dataSyncButton')}</span>
-            </button>
+            <MorphingActionButton
+              state={isSyncing ? 'loading' : syncJustSucceeded ? 'success' : 'idle'}
+              idleLabel={labels.refreshBtn}
+              loadingLabel={labels.refreshing}
+              successLabel={labels.syncedLabel}
+              icon={<ArrowsClockwise weight="bold" className="w-4 h-4 shrink-0" />}
+              onClick={handleRefreshPrices}
+              className="whitespace-nowrap shrink-0"
+            />
           )}
 
-          {/* Daily Scheduled Ingestion Status */}
-          {syncStatus && (
-            <div
-              title="Official Agmarknet Rates • Daily Sync at 05:00 PM IST"
-              className="hidden lg:flex items-center space-x-1.5 text-xs font-medium bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted"
-            >
-              <Clock className="w-3.5 h-3.5 text-forest" />
-              <span>{t('dailySyncNotice')}</span>
-            </div>
-          )}
+          <div
+            title={
+              syncStatus?.latestRun
+                ? `Agmarknet Sync: ${syncStatus.latestRun.status}`
+                : t('marketDataDate')
+            }
+            className="min-h-[44px] inline-flex items-center space-x-1.5 text-xs font-medium bg-surface border border-line px-3.5 py-2 rounded-full text-ink-muted"
+          >
+            {isUsingCache ? (
+              <Database weight="duotone" className="w-4 h-4 text-saffron" />
+            ) : (
+              <Clock weight="duotone" className="w-4 h-4 text-canopy dark:text-canopy-bright" />
+            )}
+            <span>{isUsingCache ? labels.verifiedBadge : t('marketDataDate')}{reportingDate ? ` · ${reportingDate}` : ''}</span>
+          </div>
         </div>
       </section>
 
-      {/* Sync Result Feedback */}
+      {activeRecords.some((row) => row.provenanceType === 'SEEDED_BASELINE') && (
+        <p className="text-sm text-ink-muted border-l-2 border-saffron pl-3">{t('baselinePriceNotice')}</p>
+      )}
+
       {syncSummary && (
-        <div className="p-3 bg-forest-50 border border-forest/25 rounded-xl text-xs text-forest-dark flex items-center justify-between shadow-subtle">
-          <div className="flex items-center space-x-2">
-            <CheckCircle className="w-4 h-4 text-forest shrink-0" />
-            <span>
-              <strong>{t('dataSyncSuccess')}:</strong> {syncSummary.message} (Fetched: {syncSummary.totalFetched}, Inserted: {syncSummary.insertedCount}, Updated: {syncSummary.updatedCount})
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSyncSummary(null)}
-            className="text-forest hover:text-forest-dark text-xs underline ml-2 cursor-pointer"
-          >
-            {t('dismiss')}
-          </button>
-        </div>
+        <Banner
+          status={syncSummary.status === 'CONNECTED' ? 'success' : 'warning'}
+          collapsible={false}
+          title={t('dataSyncSuccess')}
+          description={syncSummary.message}
+          isDismissable
+          dismissLabel={t('dismiss')}
+          onDismiss={() => setSyncSummary(null)}
+        />
       )}
 
       {syncError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-center justify-between shadow-subtle">
-          <span>{syncError}</span>
-          <button
-            type="button"
-            onClick={() => setSyncError(null)}
-            className="text-red-700 hover:text-red-900 text-xs underline ml-2 cursor-pointer"
-          >
-            {t('dismiss')}
-          </button>
-        </div>
+        <Banner
+          status="error"
+          role="alert"
+          collapsible={false}
+          title={syncError}
+          isDismissable
+          dismissLabel={t('dismiss')}
+          onDismiss={() => setSyncError(null)}
+        />
       )}
 
-      {/* High-Density Filter Toolbar */}
-      <section className="rounded-xl border border-hairline bg-surface-white p-4 shadow-subtle space-y-3">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center space-x-1.5 font-semibold text-charcoal">
-            <Filter className="w-3.5 h-3.5 text-forest" />
-            <span className="uppercase tracking-wider text-xs text-charcoal-muted">{t('activeFilters')}</span>
+      {/* Adaptive Filter Bar (Compact on Mobile so rates show immediately!) */}
+      <section className="rounded-2xl border border-line bg-surface p-4 shadow-subtle space-y-3">
+        {/* Search input + Reset / Drawer actions */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative flex-1">
+            <MagnifyingGlass weight="bold" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                language === 'hi'
+                  ? 'फसल, मंडी, किस्म या राज्य खोजें (जैसे मिर्च, जीरा, गुंटूर, हल्दी, गेहूं...)'
+                  : language === 'pa'
+                  ? 'ਫ਼ਸਲ, ਮੰਡੀ, ਕਿਸਮ ਜਾਂ ਰਾਜ ਖੋਜੋ (ਜਿਵੇਂ ਮਿਰਚ, ਜ਼ੀਰਾ, ਗੁੰਟੂਰ...)'
+                  : 'Search crop, mandi, variety or state (e.g. Chilli, Cumin, Guntur, Kolar...)'
+              }
+              className="w-full min-h-[44px] pl-10 pr-9 py-2 rounded-xl bg-surface-subtle border border-line text-xs sm:text-sm text-ink placeholder:text-ink-muted/70 focus:outline-none focus:border-canopy-bright transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink p-1 rounded-full cursor-pointer"
+                aria-label="Clear search"
+              >
+                <X weight="bold" className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-          {(selectedCommodity || selectedState || selectedDistrict || selectedMandi) && (
+
+          <div className="flex items-center justify-between sm:justify-end space-x-3 shrink-0">
+            {(selectedCommodity || selectedState || selectedDistrict || selectedMandi || searchQuery) && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="text-canopy dark:text-canopy-bright hover:underline flex items-center space-x-1 font-semibold text-xs cursor-pointer"
+              >
+                <ArrowCounterClockwise weight="bold" className="w-3.5 h-3.5" />
+                <span>{t('filterReset')}</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={handleResetFilters}
-              className="text-forest hover:text-forest-dark flex items-center space-x-1 font-semibold text-xs cursor-pointer"
+              onClick={() => setMobileFiltersOpen(true)}
+              className="md:hidden min-h-[44px] inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-full bg-surface-subtle border border-line text-xs font-semibold text-ink cursor-pointer"
             >
-              <RotateCcw className="w-3 h-3" />
-              <span>{t('filterReset')}</span>
+              <span>{labels.filtersToggle}</span>
+              <CaretDown weight="bold" className="w-3.5 h-3.5" />
             </button>
-          )}
+          </div>
         </div>
 
-        {/* 1-Tap Quick Commodity Pills for Mobile / Fast Navigation */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 -mx-1 px-1 select-none">
+        {/* Farmer Watchlist & Opt-In Price Alerts */}
+        <WatchlistBar
+          priceRecords={priceRecords}
+          onSelectCommodity={(c) => setSelectedCommodity(c)}
+          onSelectMandi={(m) => setSelectedMandi(m)}
+        />
+
+        {/* 1-Tap Commodity Horizontal Pills (All available crops with smooth scroll) */}
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1 select-none scrollbar-thin">
           <button
             type="button"
-            onClick={() => setSelectedCommodity('')}
-            className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer tactile-press ${
+            onClick={() => {
+              setSelectedCommodity('');
+              setSearchQuery('');
+            }}
+            className={`min-h-[44px] px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               !selectedCommodity
-                ? 'bg-forest text-white shadow-subtle'
-                : 'bg-surface text-charcoal-muted hover:text-charcoal border border-hairline'
+                ? 'bg-canopy text-white shadow-subtle'
+                : 'bg-surface-subtle text-ink-muted hover:text-ink border border-line'
             }`}
           >
             {t('allCommodities')}
           </button>
-          {commodities.slice(0, 8).map((c) => {
+          {commodities.map((c) => {
             const isSelected = selectedCommodity === c.code;
+            const localizedName = getCommodityName(
+              c.code,
+              (language === 'hi' ? c.nameHi : language === 'pa' ? c.namePa : c.nameEn) || c.nameEn
+            );
             return (
               <button
                 key={c.code}
                 type="button"
-                onClick={() => setSelectedCommodity(isSelected ? '' : c.code)}
-                className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer tactile-press ${
+                onClick={() => {
+                  setSelectedCommodity(isSelected ? '' : c.code);
+                  setSearchQuery('');
+                }}
+                className={`min-h-[44px] px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-forest text-white shadow-subtle'
-                    : 'bg-surface text-charcoal border border-hairline hover:bg-surface-white'
+                    ? 'bg-canopy text-white shadow-subtle'
+                    : 'bg-surface-subtle text-ink hover:bg-canopy-soft border border-line'
                 }`}
               >
-                {getCommodityName(c)}
+                {localizedName}
               </button>
             );
           })}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {/* Commodity Selector */}
-          <div>
-            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-              {t('selectCommodity')}
-            </label>
-            <select
-              value={selectedCommodity}
-              onChange={(e) => setSelectedCommodity(e.target.value)}
-              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-            >
-              <option value="">{t('allCommodities')}</option>
-              {commodities.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {getCommodityName(c)} ({c.category})
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Desktop Inline Selectors & Mobile Cult UI FamilyDrawer sharing one helper */}
+        {(() => {
+          const selectClass =
+            'w-full min-h-[44px] bg-surface-subtle border border-line rounded-xl px-3.5 py-2 text-xs sm:text-sm text-ink focus:outline-none focus:border-canopy-bright disabled:opacity-50';
 
-          {/* State Selector */}
-          <div>
-            <label className="block text-[10px] font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-              {t('selectState')}
-            </label>
-            <select
-              value={selectedState}
-              onChange={(e) => {
-                setSelectedState(e.target.value);
-                setSelectedDistrict('');
-                setSelectedMandi('');
-              }}
-              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-            >
-              <option value="">{t('allStates')}</option>
-              {states.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
+          const locationControls = (prefix: string) => (
+            <>
+              <div>
+                <label htmlFor={`${prefix}-commodity`} className="block text-[11px] font-semibold text-ink-muted mb-1">
+                  {t('selectCommodity')}
+                </label>
+                <select
+                  id={`${prefix}-commodity`}
+                  value={selectedCommodity}
+                  onChange={(e) => setSelectedCommodity(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">{t('allCommodities')}</option>
+                  {commodities.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {getCommodityName(c.code, (language === "hi" ? c.nameHi : language === "pa" ? c.namePa : c.nameEn) || c.nameEn)} ({c.category})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          {/* District Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-              {t('selectDistrict')}
-            </label>
-            <select
-              value={selectedDistrict}
-              onChange={(e) => {
-                setSelectedDistrict(e.target.value);
-                setSelectedMandi('');
-              }}
-              disabled={districts.length === 0}
-              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest disabled:opacity-50"
-            >
-              <option value="">{t('allDistricts')}</option>
-              {districts.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
+              <div>
+                <label htmlFor={`${prefix}-state`} className="block text-[11px] font-semibold text-ink-muted mb-1">
+                  {t('selectState')}
+                </label>
+                <select
+                  id={`${prefix}-state`}
+                  value={selectedState}
+                  onChange={(e) => {
+                    setSelectedState(e.target.value);
+                    setSelectedDistrict('');
+                    setSelectedMandi('');
+                  }}
+                  className={selectClass}
+                >
+                  <option value="">{t('allStates')}</option>
+                  {states.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          {/* Mandi Selector */}
-          <div>
-            <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-              {t('selectMandi')}
-            </label>
-            <select
-              value={selectedMandi}
-              onChange={(e) => setSelectedMandi(e.target.value)}
-              className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-            >
-              <option value="">{t('allMandis')}</option>
-              {filteredMandis.map((m) => (
-                <option key={m.code} value={m.code}>
-                  {getMandiName(m)} ({m.district}, {m.state})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+              <div>
+                <label htmlFor={`${prefix}-district`} className="block text-[11px] font-semibold text-ink-muted mb-1">
+                  {t('selectDistrict')}
+                </label>
+                <select
+                  id={`${prefix}-district`}
+                  value={selectedDistrict}
+                  onChange={(e) => {
+                    setSelectedDistrict(e.target.value);
+                    setSelectedMandi('');
+                  }}
+                  disabled={districts.length === 0}
+                  className={selectClass}
+                >
+                  <option value="">{t('allDistricts')}</option>
+                  {districts.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor={`${prefix}-mandi`} className="block text-[11px] font-semibold text-ink-muted mb-1">
+                  {t('selectMandi')}
+                </label>
+                <select
+                  id={`${prefix}-mandi`}
+                  value={selectedMandi}
+                  onChange={(e) => setSelectedMandi(e.target.value)}
+                  className={selectClass}
+                >
+                  <option value="">{t('allMandis')}</option>
+                  {filteredMandis.map((m) => (
+                    <option key={m.code} value={m.code}>
+                      {getMandiName(m.code, m.nameHi || m.nameEn)} ({m.district})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          );
+
+          return (
+            <>
+              <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                {locationControls('price-filter')}
+              </div>
+              <BottomSheet
+                isOpen={mobileFiltersOpen}
+                onOpenChange={setMobileFiltersOpen}
+                label={labels.filtersToggle}
+                height="capped"
+                purpose="info"
+              >
+                <div className="space-y-4 pb-2">
+                  <div className="flex items-center justify-between border-b border-line pb-3">
+                    <h3 className="font-display font-bold text-base text-ink">{labels.filtersToggle}</h3>
+                    <Button
+                      label={t('filterReset')}
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetFilters}
+                    />
+                  </div>
+                  <div className="space-y-3">{locationControls('mobile-price-filter')}</div>
+                  <Button
+                    label={labels.applyFilters}
+                    variant="primary"
+                    size="lg"
+                    width="100%"
+                    onClick={() => setMobileFiltersOpen(false)}
+                  />
+                </div>
+              </BottomSheet>
+            </>
+          );
+        })()}
       </section>
 
-      {/* Loading & Error States */}
-      {loadingPrices && isOnline && !isUsingCache && (
-        <div className="rounded-xl border border-hairline bg-surface-white p-12 flex justify-center shadow-subtle">
-          <LoadingSpinner />
-        </div>
-      )}
+      {loadingPrices && isOnline && !isUsingCache && <LoadingSpinner message={t('loading')} />}
 
       {errorPrices && !isUsingCache && (
         <ErrorMessage
@@ -504,261 +709,337 @@ export const PriceIntelligence: React.FC = () => {
         />
       )}
 
-      {/* Aggregate Metric Tiles & Mobile Compact Ledger */}
+      {/* Animated Summary KPI Bento Grid */}
       {summary && displayedRecords.length > 0 && (
-        <>
-          {/* Mobile Single-Row Compact Ticker (< 640px) ensuring rates stay above the fold */}
-          <div className="sm:hidden bg-surface-white border border-hairline rounded-xl p-3 shadow-subtle flex items-center justify-between text-xs">
-            <div className="flex flex-col">
-              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('modalPrice')}</span>
-              <span className="text-base font-bold text-forest font-mono tnum">₹{summary.avgModal.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="h-8 w-px bg-hairline" />
-            <div className="flex flex-col">
-              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('minPrice')}</span>
-              <span className="text-xs font-semibold text-charcoal font-mono tnum">₹{summary.minOverall.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="h-8 w-px bg-hairline" />
-            <div className="flex flex-col">
-              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('maxPrice')}</span>
-              <span className="text-xs font-semibold text-charcoal font-mono tnum">₹{summary.maxOverall.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="h-8 w-px bg-hairline" />
-            <div className="flex flex-col text-right">
-              <span className="text-xs text-charcoal-muted uppercase font-semibold">{t('arrivals')}</span>
-              <span className="text-xs font-semibold text-charcoal font-mono tnum">{summary.totalArrivals.toLocaleString('en-IN')} Qtl</span>
-            </div>
-          </div>
-
-          {/* Desktop & Tablet Aggregate Metric Tiles (>= 640px) */}
-          <div className="hidden sm:grid sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            <MetricTile
-              label={t('modalPrice')}
-              value={`₹${summary.avgModal.toLocaleString('en-IN')}`}
-              unit={t('perQuintal')}
-              variant="forest"
-              badge="Avg Rate"
-              icon={<Scale className="w-4 h-4 text-forest" />}
-            />
-            <MetricTile
-              label={t('minPrice')}
-              value={`₹${summary.minOverall.toLocaleString('en-IN')}`}
-              unit={t('perQuintal')}
-              badge="Floor"
-              icon={<TrendingUp className="w-4 h-4 text-charcoal-muted" />}
-            />
-            <MetricTile
-              label={t('maxPrice')}
-              value={`₹${summary.maxOverall.toLocaleString('en-IN')}`}
-              unit={t('perQuintal')}
-              variant="harvest"
-              badge="Peak"
-              icon={<Wheat className="w-4 h-4 text-harvest-dark" />}
-            />
-            <MetricTile
-              label={t('arrivals')}
-              value={summary.totalArrivals.toLocaleString('en-IN')}
-              unit="Quintals"
-              badge={isUsingCache ? 'Cached' : 'Verified'}
-              icon={<Clock className="w-4 h-4 text-mutedGreen-dark" />}
-            />
-          </div>
-        </>
+        <GsapStaggerGrid
+          depKey={`${displayedRecords.length}-${selectedCommodity}-${selectedMandi}`}
+          className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"
+        >
+          <MetricTile
+            className="gs-stagger-item"
+            label={t('modalPrice')}
+            value={summary.avgModal}
+            numericValue={summary.avgModal}
+            prefix="₹"
+            unit={t('perQuintal')}
+            variant="emerald"
+            badge={labels.avgBadge}
+            icon={<Scales weight="duotone" className="w-4 h-4" />}
+          />
+          <MetricTile
+            className="gs-stagger-item"
+            label={t('minPrice')}
+            value={summary.minOverall}
+            numericValue={summary.minOverall}
+            prefix="₹"
+            unit={t('perQuintal')}
+            badge={labels.floorBadge}
+            icon={<TrendUp weight="duotone" className="w-4 h-4" />}
+          />
+          <MetricTile
+            className="gs-stagger-item"
+            label={t('maxPrice')}
+            value={summary.maxOverall}
+            numericValue={summary.maxOverall}
+            prefix="₹"
+            unit={t('perQuintal')}
+            variant="saffron"
+            badge={labels.peakBadge}
+            icon={<Grains weight="duotone" className="w-4 h-4" />}
+          />
+          <MetricTile
+            className="gs-stagger-item"
+            label={t('reportedArrivals')}
+            value={summary.totalArrivals ?? '—'}
+            numericValue={summary.totalArrivals}
+            unit={summary.totalArrivals === undefined ? undefined : 'Qtl'}
+            subtext={summary.totalArrivals === undefined ? t('arrivalsUnavailable') : undefined}
+            icon={<ShieldCheck weight="duotone" className="w-4 h-4" />}
+          />
+        </GsapStaggerGrid>
       )}
 
-      {/* Price Records Table / List */}
+      {/* Market Filings Table & Mobile Card Stream */}
       {displayedRecords.length > 0 && (
-        <section className="rounded-xl border border-hairline bg-surface-white overflow-hidden shadow-subtle">
-          <div className="px-5 py-4 border-b border-hairline flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-charcoal flex items-center space-x-2">
-              <span>{isUsingCache ? 'Cached Local Market Filings' : 'Verified APMC Market Filings'}</span>
-              <span className="text-xs font-normal text-charcoal-muted font-mono">
-                ({displayedRecords.length} records)
+        <section className="rounded-2xl border border-line bg-surface overflow-hidden shadow-card">
+          <div className="px-5 py-4 border-b border-line flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h2 className="font-display text-sm sm:text-base font-bold text-ink flex items-center space-x-2">
+              <span>{labels.tableTitle}</span>
+              <span className="text-xs font-mono font-normal text-ink-muted">
+                ({displayedRecords.length} {labels.recordsUnit})
               </span>
             </h2>
-            <div className="text-xs text-charcoal-muted flex items-center space-x-2 font-mono">
-              <Calendar className="w-3.5 h-3.5 text-forest" />
+            <div className="text-xs text-ink-muted flex items-center space-x-2 font-mono">
+              <Calendar weight="duotone" className="w-4 h-4 text-canopy dark:text-canopy-bright" />
               <span>
                 {isUsingCache
-                  ? `Offline Structured Cache • ${lastSyncedAt ? new Date(lastSyncedAt).toLocaleDateString() : 'Local'}`
-                  : 'Agmarknet Verified Records'}
+                  ? `IndexedDB · ${lastSyncedAt ? new Date(lastSyncedAt).toLocaleDateString() : 'Local'}`
+                  : 'Agmarknet / State APMC'}
               </span>
             </div>
           </div>
 
-          {/* Desktop Table View (>= 768px) */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-surface border-b border-hairline text-charcoal-subtle uppercase text-xs font-semibold tracking-wider">
-                  <th className="py-3 px-4">Commodity / फसल</th>
-                  <th className="py-3 px-4">APMC Mandi / मंडी</th>
-                  <th className="py-3 px-4">Location</th>
-                  <th className="py-3 px-4 text-right">{t('minPrice')}</th>
-                  <th className="py-3 px-4 text-right font-bold text-forest">{t('modalPrice')}</th>
-                  <th className="py-3 px-4 text-right">{t('maxPrice')}</th>
-                  <th className="py-3 px-4 text-right">{t('arrivals')}</th>
-                  <th className="py-3 px-4 text-center">{t('reportingDateLabel')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline text-charcoal">
-                {displayedRecords.map((r) => {
-                  const commName =
-                    language === 'hi'
-                      ? r.commodityNameHi
-                      : language === 'pa' && r.commodityNamePa
-                      ? r.commodityNamePa
-                      : r.commodityNameEn;
-                  const mandiName =
-                    language === 'hi'
-                      ? r.mandiNameHi
-                      : language === 'pa' && r.mandiNamePa
-                      ? r.mandiNamePa
-                      : r.mandiNameEn;
-
-                  return (
-                    <tr key={r.id} className="hover:bg-forest-50/20 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-charcoal">
-                        <div className="flex items-center space-x-2">
-                          <Wheat className="w-3.5 h-3.5 text-forest shrink-0" />
-                          <span>{commName}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-medium text-charcoal">
-                        <div className="flex items-center space-x-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-harvest-dark shrink-0" />
-                          <span>{mandiName}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-charcoal-muted">
-                        {r.district}, {r.state}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-charcoal-muted tnum">
-                        ₹{r.minPrice.toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-forest text-sm bg-forest-50/40 tnum">
-                        ₹{r.modalPrice.toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-charcoal-muted tnum">
-                        ₹{r.maxPrice.toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono tnum">
-                        {r.arrivalQuantity ? `${r.arrivalQuantity} qtl` : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono">
-                        <span className="text-charcoal font-medium">{r.priceDate}</span>
-                        {isUsingCache && (
-                          <div className="text-xs text-amber-700 font-sans">Cached</div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {/* Desktop Sortable Astryx Ledger Table */}
+          <div className="hidden xl:block">
+            <SortablePriceTable
+              rows={displayedRecords as PriceTableRow[]}
+              labels={labels}
+              t={t}
+              getCommodityName={getCommodityName}
+              getMandiName={getMandiName}
+            />
           </div>
 
-          {/* Mobile Responsive Compact Rows (< 768px) - Eliminates horizontal table scrolling */}
-          <div className="md:hidden divide-y divide-hairline">
-            {displayedRecords.map((r) => {
-              const commName =
-                language === 'hi'
-                  ? r.commodityNameHi
-                  : language === 'pa' && r.commodityNamePa
-                  ? r.commodityNamePa
-                  : r.commodityNameEn;
-              const mandiName =
-                language === 'hi'
-                  ? r.mandiNameHi
-                  : language === 'pa' && r.mandiNamePa
-                  ? r.mandiNamePa
-                  : r.mandiNameEn;
+          {/* Mobile Responsive Stacked Cards */}
+          <div className="xl:hidden divide-y divide-line">
+            <AnimatePresence initial={false}>
+              {displayedRecords.map((r) => {
+                const commName = getCommodityName(r.commodityCode, r.commodityNameEn);
+                const mandiName = getMandiName(r.mandiCode, r.mandiNameEn);
 
-              return (
-                <div key={r.id} className="p-4 space-y-2 hover:bg-forest-50/20 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="font-bold text-sm text-charcoal flex items-center space-x-1.5">
-                        <Wheat className="w-3.5 h-3.5 text-forest shrink-0" />
-                        <span>{commName}</span>
+                return (
+                  <motion.div
+                    key={r.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="p-4 space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-display font-bold text-sm text-ink flex items-center flex-wrap gap-1.5">
+                          <Grains weight="duotone" className="w-4 h-4 text-canopy dark:text-canopy-bright shrink-0" />
+                          <span>{commName}</span>
+                          {r.variety && (
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-surface-subtle border border-line text-ink-muted">
+                              {r.variety}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-ink-muted flex items-center space-x-1 mt-0.5 truncate">
+                          <MapPin weight="duotone" className="w-3.5 h-3.5 text-saffron shrink-0" />
+                          <span className="truncate">
+                            {mandiName} ({r.district})
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-xs text-charcoal-muted flex items-center space-x-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-harvest-dark shrink-0" />
-                        <span>{mandiName} ({r.district})</span>
+                      <div className="text-right shrink-0">
+                        <div className="text-base font-bold text-canopy dark:text-canopy-bright tnum font-mono">
+                          ₹{r.modalPrice.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-[10px] text-ink-muted font-mono">{r.priceDate}</div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-base font-bold text-forest tnum font-mono">
-                        ₹{r.modalPrice.toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-xs text-charcoal-muted">Modal / Quintal</div>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between text-xs font-mono text-charcoal-muted pt-1 border-t border-hairline/60">
-                    <span>Range: ₹{r.minPrice} – ₹{r.maxPrice}</span>
-                    <span>Date: {r.priceDate}</span>
-                  </div>
-
-                  <PriceSpreadBar
-                    minPrice={r.minPrice}
-                    modalPrice={r.modalPrice}
-                    maxPrice={r.maxPrice}
-                    unit="₹/Qtl"
-                    className="pt-1"
-                  />
-                </div>
-              );
-            })}
+                    <PriceSpreadBar
+                      minPrice={r.minPrice}
+                      modalPrice={r.modalPrice}
+                      maxPrice={r.maxPrice}
+                      unit={r.unit || '₹/Qtl'}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         </section>
       )}
 
-      {/* Empty State */}
-      {displayedRecords.length === 0 && (
-        <div className="rounded-xl border border-hairline bg-surface-white p-8 text-center max-w-xl mx-auto shadow-subtle">
-          <div className="w-12 h-12 bg-surface rounded-full flex items-center justify-center mx-auto mb-3 text-charcoal-muted border border-hairline">
-            <Clock className="w-5 h-5 text-forest" />
-          </div>
-          <h3 className="font-bold text-charcoal text-base mb-1">
-            {!isOnline ? t('offlineNoDataMsg') : t('noPriceData')}
-          </h3>
-          <p className="text-xs text-charcoal-muted leading-relaxed mb-4">
-            {!isOnline
-              ? t('offlineBannerText')
-              : t('noPriceNotice')}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="px-4 py-2 bg-forest hover:bg-forest-light text-white text-xs font-semibold rounded-lg transition-all shadow-subtle cursor-pointer"
-            >
-              {t('filterReset')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedCommodity('WHEAT')}
-              className="px-4 py-2 bg-surface hover:bg-forest-50 border border-hairline text-charcoal text-xs font-semibold rounded-lg transition-all cursor-pointer"
-            >
-              View Wheat (गेहूं) Rates
-            </button>
-          </div>
-        </div>
+      {isOnline && !isUsingCache && (page > 0 || priceRecords.length === pageSize) && (
+        <nav aria-label={t('pricePagination')} className="flex flex-wrap items-center justify-between gap-3">
+          <Button
+            label={t('previousPricePage')}
+            variant="secondary"
+            isDisabled={page === 0 || loadingPrices}
+            onClick={() => setPageSelection({ filters: filterKey, page: Math.max(0, page - 1) })}
+          />
+          <p className="text-sm text-ink-muted">{t('pricePage')} {page + 1}</p>
+          <Button
+            label={t('nextPricePage')}
+            variant="secondary"
+            isDisabled={priceRecords.length < pageSize || loadingPrices}
+            onClick={() => setPageSelection({ filters: filterKey, page: page + 1 })}
+          />
+        </nav>
       )}
 
-      {/* CACP & MSP Reference Notice */}
-      <footer className="rounded-xl border border-hairline bg-surface p-4 flex items-start space-x-3 text-xs text-charcoal">
-        <Info className="w-4 h-4 text-harvest-dark shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <div className="font-semibold text-charcoal">
-            Commission for Agricultural Costs and Prices (CACP) Reference
-          </div>
-          <p className="text-charcoal-muted leading-relaxed">
-            {t('mspReferenceNotice')} The Minimum Support Price (MSP) acts as a price floor for agricultural commodities. Market modal prices fluctuate based on daily quality, moisture percentage, and arrival volume in each APMC yard.
-          </p>
-        </div>
-      </footer>
+      {/* Astryx Empty State */}
+      {displayedRecords.length === 0 && !loadingPrices && (
+        <section className="rounded-2xl border border-line bg-surface p-6 shadow-subtle">
+          <EmptyState
+            icon={<LottieBadge variant="empty" className="w-16 h-16" />}
+            title={!isOnline ? t('offlineNoDataMsg') : t('noPriceData')}
+            description={!isOnline ? t('offlineBannerText') : t('noPriceNotice')}
+            actions={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button label={t('filterReset')} variant="primary" onClick={handleResetFilters} />
+                <Button
+                  label={getCommodityName('WHEAT', 'Wheat')}
+                  variant="secondary"
+                  onClick={() => setSelectedCommodity('WHEAT')}
+                />
+              </div>
+            }
+          />
+        </section>
+      )}
+
+      {/* CACP MSP Notice */}
+      <Banner status="info" collapsible={false} title={t('mspReferenceNotice')} />
     </div>
+  );
+};
+
+interface SortablePriceTableProps {
+  rows: PriceTableRow[];
+  labels: {
+    colCommodity: string;
+    colMandi: string;
+    colLocation: string;
+  };
+  t: (key: string) => string;
+  getCommodityName: (code: string, fallback: string) => string;
+  getMandiName: (code: string, fallback: string) => string;
+}
+
+const SortablePriceTable: React.FC<SortablePriceTableProps> = ({
+  rows,
+  labels,
+  t,
+  getCommodityName,
+  getMandiName,
+}) => {
+  const { sortedData, sortConfig } = useTableSortableState<PriceTableRow>({
+    data: rows,
+    comparators: {
+      minPrice: (a, b) => a.minPrice - b.minPrice,
+      modalPrice: (a, b) => a.modalPrice - b.modalPrice,
+      maxPrice: (a, b) => a.maxPrice - b.maxPrice,
+      arrivalQuantity: (a, b) => (a.arrivalQuantity || 0) - (b.arrivalQuantity || 0),
+      commodity: (a, b) =>
+        getCommodityName(a.commodityCode, a.commodityNameEn).localeCompare(
+          getCommodityName(b.commodityCode, b.commodityNameEn)
+        ),
+      mandi: (a, b) =>
+        getMandiName(a.mandiCode, a.mandiNameEn).localeCompare(
+          getMandiName(b.mandiCode, b.mandiNameEn)
+        ),
+    },
+  });
+
+  const sortPlugin = useTableSortable<PriceTableRow>(sortConfig);
+
+  const columns: TableColumn<PriceTableRow>[] = useMemo(
+    () => [
+      {
+        key: 'commodity',
+        header: labels.colCommodity,
+        width: proportional(1.6, { minWidth: 160 }),
+        sortable: true,
+        renderCell: (r) => (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Grains weight="duotone" className="w-4 h-4 text-canopy dark:text-canopy-bright shrink-0" />
+            <span className="font-semibold text-ink">
+              {getCommodityName(r.commodityCode, r.commodityNameEn)}
+            </span>
+            {r.variety && <Badge label={r.variety} variant="neutral" />}
+          </div>
+        ),
+      },
+      {
+        key: 'mandi',
+        header: labels.colMandi,
+        width: proportional(1.3, { minWidth: 140 }),
+        sortable: true,
+        renderCell: (r) => (
+          <div className="flex items-center gap-1.5">
+            <MapPin weight="duotone" className="w-3.5 h-3.5 text-saffron-text shrink-0" />
+            <span className="font-medium text-ink">
+              {getMandiName(r.mandiCode, r.mandiNameEn)}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: 'location',
+        header: labels.colLocation,
+        width: proportional(1.1, { minWidth: 120 }),
+        renderCell: (r) => (
+          <span className="text-ink-muted">
+            {r.district}, {r.state}
+          </span>
+        ),
+      },
+      {
+        key: 'minPrice',
+        header: t('minPrice'),
+        align: 'end',
+        width: proportional(0.8, { minWidth: 90 }),
+        sortable: true,
+        renderCell: (r) => (
+          <span className="font-mono tnum text-ink-muted">
+            ₹{r.minPrice.toLocaleString('en-IN')}
+          </span>
+        ),
+      },
+      {
+        key: 'modalPrice',
+        header: t('modalPrice'),
+        align: 'end',
+        width: proportional(0.9, { minWidth: 100 }),
+        sortable: true,
+        renderCell: (r) => (
+          <span className="font-mono tnum font-bold text-canopy dark:text-canopy-bright text-sm">
+            ₹{r.modalPrice.toLocaleString('en-IN')}
+          </span>
+        ),
+      },
+      {
+        key: 'maxPrice',
+        header: t('maxPrice'),
+        align: 'end',
+        width: proportional(0.8, { minWidth: 90 }),
+        sortable: true,
+        renderCell: (r) => (
+          <span className="font-mono tnum text-ink-muted">
+            ₹{r.maxPrice.toLocaleString('en-IN')}
+          </span>
+        ),
+      },
+      {
+        key: 'arrivalQuantity',
+        header: t('arrivalsShort'),
+        align: 'end',
+        width: proportional(0.85, { minWidth: 90 }),
+        sortable: true,
+        renderCell: (r) => (
+          <span className="font-mono tnum text-ink">
+            {r.arrivalQuantity ? `${r.arrivalQuantity} Qtl` : '-'}
+          </span>
+        ),
+      },
+      {
+        key: 'priceDate',
+        header: t('reportingDateLabel'),
+        align: 'center',
+        width: proportional(0.9, { minWidth: 100 }),
+        sortable: true,
+        renderCell: (r) => (
+          <span className="font-mono tnum text-xs text-ink-muted">{r.priceDate}</span>
+        ),
+      },
+    ],
+    [labels, t, getCommodityName, getMandiName]
+  );
+
+  return (
+    <Table<PriceTableRow>
+      data={sortedData}
+      columns={columns}
+      idKey="id"
+      density="balanced"
+      dividers="rows"
+      hasHover
+      plugins={{ sort: sortPlugin }}
+    />
   );
 };

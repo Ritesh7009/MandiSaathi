@@ -5,17 +5,22 @@ import com.mandisaathi.dto.ComplaintRequest;
 import com.mandisaathi.entity.Complaint;
 import com.mandisaathi.entity.Mandi;
 import com.mandisaathi.exception.ResourceNotFoundException;
+import com.mandisaathi.exception.RateLimitExceededException;
 import com.mandisaathi.repository.ComplaintRepository;
 import com.mandisaathi.repository.MandiRepository;
 import com.mandisaathi.util.ClientIpResolver;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
+import java.security.NoSuchAlgorithmException;
+import java.time.Year;
+import java.time.ZoneId;
+import java.util.Locale;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,14 +32,11 @@ public class ComplaintService {
 
     private final ComplaintRepository complaintRepository;
     private final MandiRepository mandiRepository;
-    private final SecureRandom random = new SecureRandom();
-
-    @Value("${app.security.admin-api-key:mandisaathi_admin_secret_2026}")
-    private String adminApiKey;
 
     // In-memory sliding window rate-limiter for complaint submission abuse protection per IP
-    private static final int MAX_SUBMISSIONS_PER_MINUTE = 20;
-    private final ConcurrentHashMap<String, AtomicInteger> submissionRateMap = new ConcurrentHashMap<>();
+    private static final int MAX_SUBMISSIONS_PER_MINUTE = 10;
+    private record SubmissionWindow(String ip, long minute) {}
+    private final ConcurrentHashMap<SubmissionWindow, AtomicInteger> submissionRateMap = new ConcurrentHashMap<>();
 
     public ComplaintService(ComplaintRepository complaintRepository, MandiRepository mandiRepository) {
         this.complaintRepository = complaintRepository;
@@ -51,21 +53,14 @@ public class ComplaintService {
         String safeIp = (clientIp != null && ClientIpResolver.isValidIp(clientIp.trim()))
                 ? clientIp.trim()
                 : "127.0.0.1";
-        String rateKey = safeIp + ":" + currentMinute;
+        SubmissionWindow rateKey = new SubmissionWindow(safeIp, currentMinute);
+        submissionRateMap.keySet().removeIf(window -> window.minute() < currentMinute - 2);
 
-        submissionRateMap.entrySet().removeIf(e -> {
-            String[] parts = e.getKey().split(":");
-            if (parts.length < 2) return true;
-            try {
-                return Long.parseLong(parts[1]) < currentMinute - 2;
-            } catch (NumberFormatException ignored) {
-                return true;
-            }
-        });
-
-        AtomicInteger counter = submissionRateMap.computeIfAbsent(rateKey, k -> new AtomicInteger(0));
+        AtomicInteger counter = submissionRateMap.computeIfAbsent(rateKey, key -> new AtomicInteger());
         if (counter.incrementAndGet() > MAX_SUBMISSIONS_PER_MINUTE) {
-            throw new IllegalArgumentException("Submission rate limit exceeded. Please wait a minute before filing another grievance.");
+            throw new RateLimitExceededException(
+                    "Submission rate limit exceeded. Please wait a minute before filing another grievance.",
+                    60 - System.currentTimeMillis() / 1000 % 60);
         }
 
         if (request.description() == null || request.description().trim().length() < 10) {
@@ -75,8 +70,10 @@ public class ComplaintService {
             throw new IllegalArgumentException("Description must not exceed 2000 characters.");
         }
 
-        String ref = "MS-2026-" + (10000 + random.nextInt(90000));
-        String trackingToken = UUID.randomUUID().toString().replace("-", "");
+        String ref = "MS-" + Year.now(ZoneId.of("Asia/Kolkata")) + "-"
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
+        String rawTrackingToken = UUID.randomUUID().toString().replace("-", "");
+        String tokenHash = hashToken(rawTrackingToken);
 
         Complaint complaint = new Complaint(
                 ref,
@@ -87,55 +84,69 @@ public class ComplaintService {
                 request.mandiCode() != null ? request.mandiCode().trim() : null,
                 request.farmerName() != null ? request.farmerName().trim() : null,
                 request.farmerPhone() != null ? request.farmerPhone().trim() : null,
-                trackingToken
+                tokenHash
         );
 
         Complaint saved = complaintRepository.save(complaint);
-        // Include tracking token in creation response so the submitting farmer can retain it, but mask phone
-        return toDto(saved, true, false);
+        // Include raw tracking token ONLY once in the initial creation response for the submitter
+        return toDto(saved, rawTrackingToken, false);
     }
 
     @Transactional(readOnly = true)
-    public List<ComplaintDto> getAllComplaints(String adminKey) {
-        validateAdminKey(adminKey);
+    public List<ComplaintDto> getAllComplaints() {
+        if (!isCallerAdmin()) {
+            throw new AccessDeniedException("Administrative authorization required to access complaint registry.");
+        }
         return complaintRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(c -> toDto(c, true, true))
+                .map(c -> toDto(c, null, true))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public ComplaintDto getByReferenceNumber(String referenceNumber, String trackingToken, String adminKey) {
-        if (isAdmin(adminKey)) {
+    public ComplaintDto getByReferenceNumber(String referenceNumber, String rawTrackingToken) {
+        if (isCallerAdmin()) {
             return complaintRepository.findByReferenceNumber(referenceNumber)
-                    .map(c -> toDto(c, true, true))
+                    .map(c -> toDto(c, null, true))
                     .orElseThrow(() -> new ResourceNotFoundException("Complaint not found with reference: " + referenceNumber));
         }
 
-        if (trackingToken == null || trackingToken.isBlank()) {
-            throw new AccessDeniedException("Tracking token or administrative credentials required to track grievance.");
+        if (rawTrackingToken == null || rawTrackingToken.isBlank()) {
+            throw new AccessDeniedException("Tracking token required to track grievance.");
         }
 
-        return complaintRepository.findByReferenceNumberAndTrackingToken(referenceNumber, trackingToken.trim())
-                .map(c -> toDto(c, false, false)) // masked personal details for public tracking
+        String hash = hashToken(rawTrackingToken);
+        return complaintRepository.findByReferenceNumberAndTrackingTokenHash(referenceNumber, hash)
+                .map(c -> toDto(c, null, false)) // raw token is NEVER returned in tracking responses
                 .orElseThrow(() -> new ResourceNotFoundException("Complaint not found with the provided reference and tracking token."));
     }
 
-    private void validateAdminKey(String providedKey) {
-        if (!isAdmin(providedKey)) {
-            throw new AccessDeniedException("Administrative authorization required to access complaint registry.");
+    private boolean isCallerAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return false;
+        return auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+    }
+
+    public static String hashToken(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawToken.trim().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm unavailable", e);
         }
     }
 
-    private boolean isAdmin(String providedKey) {
-        if (providedKey == null || providedKey.isBlank() || adminApiKey == null || adminApiKey.isBlank()) {
-            return false;
-        }
-        byte[] providedBytes = providedKey.trim().getBytes(StandardCharsets.UTF_8);
-        byte[] actualBytes = adminApiKey.getBytes(StandardCharsets.UTF_8);
-        return MessageDigest.isEqual(providedBytes, actualBytes);
-    }
-
-    private ComplaintDto toDto(Complaint c, boolean includeTrackingToken, boolean isPrivileged) {
+    private ComplaintDto toDto(Complaint c, String rawTrackingTokenForSubmitter, boolean isPrivileged) {
         String mandiName = null;
         if (c.getMandiCode() != null) {
             mandiName = mandiRepository.findByCode(c.getMandiCode())
@@ -151,7 +162,7 @@ public class ComplaintService {
         return new ComplaintDto(
                 c.getId(),
                 c.getReferenceNumber(),
-                includeTrackingToken ? c.getTrackingToken() : null,
+                rawTrackingTokenForSubmitter, // only non-null at registration time
                 c.getCategory(),
                 c.getDescription(),
                 c.getState(),

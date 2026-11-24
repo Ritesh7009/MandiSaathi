@@ -285,6 +285,8 @@ ADMIN_API_KEY=your_secure_admin_key_here
 docker compose up -d postgres
 ```
 
+For live Agmarknet prices, set `MANDI_DATA_ENABLED=true` and your `DATA_GOV_IN_API_KEY` in the local environment. Set `MANDI_DATA_SCHEDULE_ENABLED=true` to run the daily import. The importer queries the priority district (Jodhpur, Rajasthan by default) before the general feed. `MANDI_DATA_PRIORITY_STATE` and `MANDI_DATA_PRIORITY_DISTRICT` override that district. A market appears in search before it has a filing, so a new market can display an empty result until the upstream source reports a price.
+
 ### 2. Launch Backend
 ```bash
 cd backend

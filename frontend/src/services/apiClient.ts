@@ -87,18 +87,26 @@ export const api = {
     fetchJson<Mandi>(`/api/v1/mandis/${encodeURIComponent(code)}`),
 
   // Mandi Price Intelligence
-  getPrices: (commodityCode?: string, mandiCode?: string): Promise<PriceRecord[]> => {
+  getPrices: (
+    commodityCode?: string,
+    mandiCode?: string,
+    filters?: { state?: string; district?: string; page?: number; size?: number },
+  ): Promise<PriceRecord[]> => {
     const params = new URLSearchParams();
     if (commodityCode) params.append('commodityCode', commodityCode);
     if (mandiCode) params.append('mandiCode', mandiCode);
+    if (filters?.state) params.set('state', filters.state);
+    if (filters?.district) params.set('district', filters.district);
+    if (filters?.page !== undefined) params.set('page', String(filters.page));
+    if (filters?.size !== undefined) params.set('size', String(filters.size));
     const qs = params.toString() ? `?${params.toString()}` : '';
     return fetchJson<PriceRecord[]>(`/api/v1/prices${qs}`);
   },
 
-  comparePrices: (commodityCode: string, mandiCodes?: string[]): Promise<PriceComparison> =>
+  comparePrices: (commodityCode: string, mandiCodes?: string[], variety?: string): Promise<PriceComparison> =>
     fetchJson<PriceComparison>('/api/v1/prices/compare', {
       method: 'POST',
-      body: JSON.stringify({ commodityCode, mandiCodes: mandiCodes || [] }),
+      body: JSON.stringify({ commodityCode, mandiCodes: mandiCodes || [], variety }),
     }),
 
   syncMandiPrices: (adminKey?: string): Promise<IngestionSummary> =>
@@ -140,8 +148,7 @@ export const api = {
     const headers: Record<string, string> = {};
     if (trackingToken) headers['X-Tracking-Token'] = trackingToken;
     if (adminKey) headers['X-Admin-Key'] = adminKey;
-    const qs = trackingToken ? `?trackingToken=${encodeURIComponent(trackingToken)}` : '';
-    return fetchJson<Complaint>(`/api/v1/complaints/${encodeURIComponent(referenceNumber)}${qs}`, { headers });
+    return fetchJson<Complaint>(`/api/v1/complaints/${encodeURIComponent(referenceNumber)}`, { headers });
   },
 
   // Voice Assistant
@@ -169,10 +176,13 @@ export const api = {
           },
         });
 
-        // Handle HTTP 429 rate limit with a short retry
+        // Handle HTTP 429 rate limit respecting Retry-After header
         if (response.status === 429 && !isRetry) {
-          console.warn('[Voice API] HTTP 429 rate limit encountered. Retrying in 1500ms...');
-          await new Promise((resolve) => setTimeout(resolve, 1500));
+          const retryHeader = response.headers.get('Retry-After');
+          const retrySec = retryHeader ? parseInt(retryHeader, 10) : 2;
+          const delayMs = Math.min(10000, Math.max(1000, (isNaN(retrySec) ? 2 : retrySec) * 1000));
+          console.warn(`[Voice API] HTTP 429 rate limit encountered. Retrying in ${delayMs}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
           return await executeUpload(true);
         }
 

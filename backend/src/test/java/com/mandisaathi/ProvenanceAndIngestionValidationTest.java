@@ -29,6 +29,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -88,6 +89,35 @@ class ProvenanceAndIngestionValidationTest {
                 ingestionRunRepository,
                 objectMapper
         );
+    }
+
+    @Test
+    void savesPriorityDistrictCuminWhenTheGeneralFeedFails() {
+        org.springframework.test.util.ReflectionTestUtils.setField(testIngestionService, "priorityState", "Rajasthan");
+        org.springframework.test.util.ReflectionTestUtils.setField(testIngestionService, "priorityDistrict", "Jodhpur");
+        if (commodityRepository.findByCode("CUMIN").isEmpty()) {
+            commodityRepository.save(new Commodity("CUMIN", "Cumin (Jeera)", "जीरा", "ਜ਼ੀਰਾ", "SPICES", "QUINTAL"));
+        }
+        mockServer.expect(request -> {
+            String query = request.getURI().getQuery();
+            assertTrue(query.contains("filters[state]=Rajasthan"));
+            assertTrue(query.contains("filters[district]=Jodhpur"));
+        }).andRespond(withSuccess("""
+                {"records":[{"commodity":"Cummin Seed(Jeera)","state":"Rajasthan","district":"Jodhpur",
+                "market":"Jodhpur (Grain)","arrival_date":"24/11/2026","variety":"Cumin","min_price":"24000",
+                "modal_price":"25000","max_price":"26000"}]}
+                """, MediaType.APPLICATION_JSON));
+        mockServer.expect(method(HttpMethod.GET)).andRespond(withServerError());
+
+        IngestionSummaryDto summary = testIngestionService.ingestLatestMandiPrices("TEST_JODHPUR");
+        assertEquals("PARTIAL", summary.status());
+        assertEquals(1, summary.insertedCount());
+        PriceRecord record = priceRecordRepository.findByCommodityCodeOrderByPriceDateDesc("CUMIN").getFirst();
+        assertEquals("LIVE_INGESTED", record.getProvenanceType());
+        Mandi market = mandiRepository.findByCode(record.getMandiCode()).orElseThrow();
+        assertEquals("Jodhpur", market.getDistrict());
+        assertEquals("Rajasthan", market.getState());
+        mockServer.verify();
     }
 
     @Test

@@ -37,14 +37,27 @@ public class PriceRecordController {
     @GetMapping
     public ResponseEntity<List<PriceRecordDto>> getPrices(
             @RequestParam(required = false) String commodityCode,
-            @RequestParam(required = false) String mandiCode
+            @RequestParam(required = false) String mandiCode,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
-        return ResponseEntity.ok(priceRecordService.getPrices(commodityCode, mandiCode));
+        if (state == null && district == null && page == null && size == null) {
+            return ResponseEntity.ok(priceRecordService.getPrices(commodityCode, mandiCode));
+        }
+        int pageNumber = page == null ? 0 : page;
+        int pageSize = size == null ? 100 : size;
+        if (pageNumber < 0 || pageNumber > 10000 || pageSize < 1 || pageSize > 200) {
+            throw new IllegalArgumentException("Page must be between 0 and 10000 and size between 1 and 200.");
+        }
+        return ResponseEntity.ok(priceRecordService.getPricePage(
+                commodityCode, mandiCode, state, district, pageNumber, pageSize));
     }
 
     @PostMapping("/compare")
     public ResponseEntity<PriceComparisonDto> comparePrices(@RequestBody PriceComparisonRequest request) {
-        return ResponseEntity.ok(priceRecordService.comparePrices(request.commodityCode(), request.mandiCodes()));
+        return ResponseEntity.ok(priceRecordService.comparePrices(request.commodityCode(), request.mandiCodes(), request.variety()));
     }
 }
 

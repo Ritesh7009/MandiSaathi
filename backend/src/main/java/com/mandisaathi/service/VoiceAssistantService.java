@@ -20,11 +20,17 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.regex.Pattern;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class VoiceAssistantService {
+
+    private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Kolkata");
+    private static final Pattern RICE_WORD = Pattern.compile("(?U)\\brice\\b");
+    private static final Pattern TODAY_WORD = Pattern.compile("(?U)\\btoday\\b");
 
     private static final Logger log = LoggerFactory.getLogger(VoiceAssistantService.class);
 
@@ -35,7 +41,9 @@ public class VoiceAssistantService {
     private final MandiRepository mandiRepository;
     private final PriceRecordRepository priceRecordRepository;
     private final PriceRecordService priceRecordService;
+    private final FarmingAdvisoryService farmingAdvisoryService;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public VoiceAssistantService(
             GnaniProperties gnaniProperties,
             GnaniSttService gnaniSttService,
@@ -43,7 +51,8 @@ public class VoiceAssistantService {
             CommodityRepository commodityRepository,
             MandiRepository mandiRepository,
             PriceRecordRepository priceRecordRepository,
-            PriceRecordService priceRecordService
+            PriceRecordService priceRecordService,
+            FarmingAdvisoryService farmingAdvisoryService
     ) {
         this.gnaniProperties = gnaniProperties;
         this.gnaniSttService = gnaniSttService;
@@ -52,6 +61,7 @@ public class VoiceAssistantService {
         this.mandiRepository = mandiRepository;
         this.priceRecordRepository = priceRecordRepository;
         this.priceRecordService = priceRecordService;
+        this.farmingAdvisoryService = farmingAdvisoryService != null ? farmingAdvisoryService : new FarmingAdvisoryService();
     }
 
     public VoiceQueryResponse processAudioQuery(byte[] audioData, String clientLanguageHint) {
@@ -144,7 +154,7 @@ public class VoiceAssistantService {
         String activeResponse;
         String responseHi;
         String responsePa;
-        String sourceProvenance = "Agmarknet (DAC&FW)";
+        String sourceProvenance = "";
         String reportingDate = "";
 
         switch (intent) {
@@ -169,7 +179,9 @@ public class VoiceAssistantService {
                             responsePa = buildNotFoundResponse("pa", getLocalizedCommodityName(commodityCode, "pa"), "ਏਪੀਐਮਸੀ ਮੰਡੀਆਂ");
                         }
                     } else if (district != null && mandiCode == null) {
-                        List<Mandi> districtMandis = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district);
+                        List<Mandi> districtMandis = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district).stream()
+                                .filter(m -> state == null || state.equalsIgnoreCase(m.getState()))
+                                .toList();
                         if (districtMandis.isEmpty()) {
                             activeResponse = buildNoMandisFoundResponse(langPrefix, district);
                             responseHi = buildNoMandisFoundResponse("hi", district);
@@ -181,11 +193,12 @@ public class VoiceAssistantService {
                                 matchedPriceRecords = priceRecordService.getPrices(commodityCode, singleMandi.getCode());
                                 PriceRecord latest = records.get(0);
                                 reportingDate = latest.getPriceDate().toString();
-                                sourceProvenance = latest.getDataSource();
+                                sourceProvenance = "SEEDED_BASELINE".equals(latest.getProvenanceType())
+                                        ? "Historical baseline" : latest.getDataSource();
 
-                                activeResponse = buildPriceResponse(langPrefix, commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate);
-                                responseHi = buildPriceResponse("hi", commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate);
-                                responsePa = buildPriceResponse("pa", commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate);
+                                activeResponse = buildPriceResponse(langPrefix, commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
+                                responseHi = buildPriceResponse("hi", commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
+                                responsePa = buildPriceResponse("pa", commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
                             } else {
                                 activeResponse = buildNotFoundResponse(langPrefix, getLocalizedCommodityName(commodityCode, langPrefix), singleMandi.getNameEn());
                                 responseHi = buildNotFoundResponse("hi", getLocalizedCommodityName(commodityCode, "hi"), singleMandi.getNameHi() != null ? singleMandi.getNameHi() : singleMandi.getNameEn());
@@ -194,6 +207,7 @@ public class VoiceAssistantService {
                         } else {
                             matchedPriceRecords = priceRecordService.getPrices(commodityCode, null).stream()
                                     .filter(p -> district.equalsIgnoreCase(p.district()))
+                                    .filter(p -> state == null || state.equalsIgnoreCase(p.state()))
                                     .toList();
                             List<String> codes = districtMandis.stream().map(Mandi::getCode).toList();
                             activeResponse = buildClarificationResponse(langPrefix, commodityCode, codes);
@@ -203,14 +217,18 @@ public class VoiceAssistantService {
                     } else {
                         List<PriceRecord> records = fetchPriceRecords(commodityCode, state, district, mandiCode);
                         if (!records.isEmpty()) {
-                            matchedPriceRecords = priceRecordService.getPrices(commodityCode, mandiCode);
+                            Set<String> matchingMarkets = records.stream().map(PriceRecord::getMandiCode).collect(Collectors.toSet());
+                            matchedPriceRecords = priceRecordService.getPrices(commodityCode, mandiCode).stream()
+                                    .filter(record -> matchingMarkets.contains(record.mandiCode()))
+                                    .toList();
                             PriceRecord latest = records.get(0);
                             reportingDate = latest.getPriceDate().toString();
-                            sourceProvenance = latest.getDataSource();
+                            sourceProvenance = "SEEDED_BASELINE".equals(latest.getProvenanceType())
+                                        ? "Historical baseline" : latest.getDataSource();
 
-                            activeResponse = buildPriceResponse(langPrefix, commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate);
-                            responseHi = buildPriceResponse("hi", commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate);
-                            responsePa = buildPriceResponse("pa", commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate);
+                            activeResponse = buildPriceResponse(langPrefix, commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
+                            responseHi = buildPriceResponse("hi", commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
+                            responsePa = buildPriceResponse("pa", commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
                         } else {
                             String locDesc = mandiCode != null ? getLocalizedMandiName(mandiCode, langPrefix) : getLocalizedRegionName(district != null ? district : state, langPrefix);
                             activeResponse = buildNotFoundResponse(langPrefix, getLocalizedCommodityName(commodityCode, langPrefix), locDesc);
@@ -226,19 +244,50 @@ public class VoiceAssistantService {
             }
 
             case "MANDI_COMPARISON" -> {
-                String targetComm = commodityCode != null ? commodityCode : "WHEAT";
+                if (commodityCode == null) {
+                    activeResponse = buildCommodityPrompt(langPrefix);
+                    responseHi = buildCommodityPrompt("hi");
+                    responsePa = buildCommodityPrompt("pa");
+                    break;
+                }
+                String targetComm = commodityCode;
+                String normalizedQuery = query.toLowerCase(Locale.ROOT);
+                Set<String> specifiedMarkets = mandiRepository.findByActiveTrue().stream()
+                        .filter(m -> matchesName(normalizedQuery, m.getNameEn())
+                                || matchesName(normalizedQuery, m.getNameHi())
+                                || matchesName(normalizedQuery, m.getNamePa())
+                                || matchesName(normalizedQuery, m.getNameEn().replaceFirst("(?i)\\s+mandi$", "")))
+                        .map(Mandi::getCode)
+                        .collect(Collectors.toSet());
                 List<PriceRecordDto> allPrices = priceRecordService.getPrices(targetComm, null);
 
-                if (district != null && !district.isBlank()) {
+                if (specifiedMarkets.size() > 1) {
+                    allPrices = allPrices.stream().filter(p -> specifiedMarkets.contains(p.mandiCode())).toList();
+                } else if (district != null && !district.isBlank()) {
                     allPrices = allPrices.stream().filter(p -> p.district() != null && p.district().equalsIgnoreCase(district)).toList();
                 } else if (state != null && !state.isBlank()) {
                     allPrices = allPrices.stream().filter(p -> p.state() != null && p.state().equalsIgnoreCase(state)).toList();
                 }
 
-                LocalDate latestDate = allPrices.stream().map(PriceRecordDto::priceDate).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
-                List<PriceRecordDto> consistentDateRecords = (latestDate != null)
-                        ? allPrices.stream().filter(p -> latestDate.equals(p.priceDate())).collect(Collectors.toMap(PriceRecordDto::mandiCode, p -> p, (p1, p2) -> p1)).values().stream().toList()
-                        : List.of();
+                List<PriceRecordDto> scopedPrices = allPrices;
+                Map<LocalDate, List<PriceRecordDto>> pricesByDate = scopedPrices.stream()
+                        .filter(p -> p.priceDate() != null)
+                        .collect(Collectors.groupingBy(PriceRecordDto::priceDate));
+                List<PriceRecordDto> consistentDateRecords = pricesByDate.keySet().stream()
+                        .sorted(Comparator.reverseOrder())
+                        .flatMap(date -> pricesByDate.get(date).stream()
+                                .collect(Collectors.groupingBy(
+                                        p -> p.variety() == null ? "" : p.variety().trim().toLowerCase(Locale.ROOT),
+                                        TreeMap::new, Collectors.toList()))
+                                .values().stream())
+                        .map(group -> group.stream().collect(Collectors.toMap(
+                                PriceRecordDto::mandiCode, p -> p, (first, second) -> first,
+                                LinkedHashMap::new)).values().stream().toList())
+                        .filter(group -> group.size() >= 2)
+                        .filter(group -> specifiedMarkets.size() < 2 || group.size() == specifiedMarkets.size())
+                        .findFirst()
+                        .orElseGet(() -> scopedPrices.isEmpty() ? List.of() : List.of(scopedPrices.getFirst()));
+                LocalDate latestDate = consistentDateRecords.isEmpty() ? null : consistentDateRecords.getFirst().priceDate();
 
                 matchedPriceRecords = consistentDateRecords;
 
@@ -275,11 +324,36 @@ public class VoiceAssistantService {
                 responsePa = buildGeneralHelpResponse("pa", isPmKisan);
             }
 
+            case "FARMING_ADVISORY" -> {
+                FarmingAdvisoryService.AdvisoryResult adv = farmingAdvisoryService.resolveAdvisory(query, commodityCode, district, state);
+                sourceProvenance = adv.sourceAuthority();
+                reportingDate = LocalDate.now(MARKET_ZONE).toString();
+                activeResponse = switch (langPrefix) {
+                    case "hi" -> adv.responseHi();
+                    case "pa" -> adv.responsePa();
+                    default -> adv.responseEn();
+                };
+                responseHi = adv.responseHi();
+                responsePa = adv.responsePa();
+            }
+
             default -> {
                 activeResponse = buildDefaultResponse(langPrefix);
                 responseHi = buildDefaultResponse("hi");
                 responsePa = buildDefaultResponse("pa");
             }
+        }
+
+        if ("MANDI_PRICE_LOOKUP".equals(intent) && !reportingDate.isBlank()) {
+            boolean isBaseline = "Historical baseline".equals(sourceProvenance);
+            String lowerQuery = query.toLowerCase(Locale.ROOT);
+            boolean askedForToday = TODAY_WORD.matcher(lowerQuery).find()
+                    || lowerQuery.contains("आज") || lowerQuery.contains("ਅੱਜ");
+            boolean noFilingToday = askedForToday && !LocalDate.now(MARKET_ZONE).toString().equals(reportingDate);
+
+            activeResponse = describePriceFreshness(langPrefix, activeResponse, isBaseline, noFilingToday);
+            responseHi = describePriceFreshness("hi", responseHi, isBaseline, noFilingToday);
+            responsePa = describePriceFreshness("pa", responsePa, isBaseline, noFilingToday);
         }
 
         // 2. Gnani Timbre TTS Audio Synthesis
@@ -320,12 +394,30 @@ public class VoiceAssistantService {
         );
     }
 
+    private String describePriceFreshness(String language, String response, boolean baseline, boolean noFilingToday) {
+        if (baseline) {
+            return switch (language) {
+                case "hi" -> "ऐप का पुराना संदर्भ भाव। " + response;
+                case "pa" -> "ਐਪ ਦਾ ਪੁਰਾਣਾ ਹਵਾਲਾ ਭਾਅ। " + response;
+                default -> (noFilingToday ? "No filing for today. " : "") + "Historical baseline. " + response;
+            };
+        }
+        if (!noFilingToday) return response;
+        return switch (language) {
+            case "hi" -> "आज की रिपोर्ट उपलब्ध नहीं है। " + response;
+            case "pa" -> "ਅੱਜ ਦੀ ਰਿਪੋਰਟ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। " + response;
+            default -> "No filing for today. " + response;
+        };
+    }
+
     private List<PriceRecord> fetchPriceRecords(String commCode, String state, String district, String mandiCode) {
         if (mandiCode != null && !mandiCode.isBlank()) {
             return priceRecordRepository.findByCommodityCodeAndMandiCodeOrderByPriceDateDesc(commCode, mandiCode);
         }
         if (district != null && !district.isBlank()) {
-            List<Mandi> districtMandis = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district);
+            List<Mandi> districtMandis = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district).stream()
+                    .filter(m -> state == null || state.equalsIgnoreCase(m.getState()))
+                    .toList();
             if (!districtMandis.isEmpty()) {
                 List<String> codes = districtMandis.stream().map(Mandi::getCode).toList();
                 return priceRecordRepository.findByCommodityCodeAndMandiCodeInOrderByPriceDateDesc(commCode, codes);
@@ -346,14 +438,16 @@ public class VoiceAssistantService {
     private Map<String, String> extractEntities(String text) {
         Map<String, String> entities = new HashMap<>();
         if (text == null || text.isBlank()) return entities;
-        String lower = text.toLowerCase();
+        String lower = text.toLowerCase(Locale.ROOT);
 
         // 1. Commodity Extraction (All 10 Gnani Languages)
-        if (lower.contains("wheat") || lower.contains("gehun") || lower.contains("gehu") || lower.contains("गेहूं") || lower.contains("गेहूँ") || lower.contains("कनक") || lower.contains("ਕਣਕ") || lower.contains("गहू") || lower.contains("गव्हा") || lower.contains("ઘઉં") || lower.contains("গম") || lower.contains("ಗೋಧಿ") || lower.contains("ഗോതമ്പ്") || lower.contains("గోధుమ") || lower.contains("கோதுமை")) {
+        if (CommodityAliases.isCumin(lower)) {
+            entities.put("commodity", "CUMIN");
+        } else if (lower.contains("wheat") || lower.contains("gehun") || lower.contains("gehu") || lower.contains("गेहूं") || lower.contains("गेहूँ") || lower.contains("कनक") || lower.contains("ਕਣਕ") || lower.contains("गहू") || lower.contains("गव्हा") || lower.contains("ઘઉં") || lower.contains("গম") || lower.contains("ಗೋಧಿ") || lower.contains("ഗോതമ്പ്") || lower.contains("గోధుమ") || lower.contains("கோதுமை")) {
             entities.put("commodity", "WHEAT");
         } else if (lower.contains("mustard") || lower.contains("sarson") || lower.contains("सरसों") || lower.contains("सरसो") || lower.contains("ਸਰ੍ਹੋਂ") || lower.contains("ਸਰੋਂ") || lower.contains("मोहरी") || lower.contains("રાયડો") || lower.contains("સરીষা") || lower.contains("সরিষা") || lower.contains("সর্ষে") || lower.contains("ఆవాలు") || lower.contains("கடுகு") || lower.contains("ಸಾಸಿವೆ") || lower.contains("കടുക്") || lower.contains("राई")) {
             entities.put("commodity", "MUSTARD");
-        } else if (lower.contains("paddy") || lower.contains("rice") || lower.contains("dhan") || lower.contains("धान") || lower.contains("चावल") || lower.contains("ਝੋਨਾ") || lower.contains("ਚੌਲ") || lower.contains("भात") || lower.contains("ડાંગર") || lower.contains("ধান") || lower.contains("వరి") || lower.contains("நெல்") || lower.contains("ಭತ್ತ") || lower.contains("നെല്ല്")) {
+        } else if (lower.contains("paddy") || RICE_WORD.matcher(lower).find() || lower.contains("dhan") || lower.contains("धान") || lower.contains("चावल") || lower.contains("ਝੋਨਾ") || lower.contains("ਚੌਲ") || lower.contains("भात") || lower.contains("ડાંગર") || lower.contains("ধান") || lower.contains("వరి") || lower.contains("நெல்") || lower.contains("ಭತ್ತ") || lower.contains("നെല്ല്")) {
             entities.put("commodity", "PADDY");
         } else if (lower.contains("onion") || lower.contains("pyaz") || lower.contains("प्याज") || lower.contains("प्यास") || lower.contains("ਪਿਆਜ਼") || lower.contains("ਗੰਢਾ") || lower.contains("कांदा") || lower.contains("कांद्या") || lower.contains("कांदे") || lower.contains("કાંદા") || lower.contains("કાંદો") || lower.contains("ડુંગળી") || lower.contains("পেঁয়াজ") || lower.contains("ఉల్లిపాయ") || lower.contains("ఉల్లి") || lower.contains("வெங்காயம்") || lower.contains("ಈರುಳ್ಳಿ") || lower.contains("ഉള്ളി") || lower.contains("സവാള")) {
             entities.put("commodity", "ONION");
@@ -366,9 +460,21 @@ public class VoiceAssistantService {
         } else if (lower.contains("maize") || lower.contains("corn") || lower.contains("makka") || lower.contains("मक्का") || lower.contains("मक्के") || lower.contains("मक्की") || lower.contains("ਮੱਕੀ") || lower.contains("मका") || lower.contains("મકાઈ") || lower.contains("ভুট্টা") || lower.contains("మొక్కజొన్న") || lower.contains("மக்காச்சோளம்") || lower.contains("ಮೆಕ್ಕೆಜೋಳ") || lower.contains("ചോളം")) {
             entities.put("commodity", "MAIZE");
         } else if (lower.contains("soyabean") || lower.contains("soybean") || lower.contains("सोयाबीन") || lower.contains("ਸੋਇਆਬੀਨ") || lower.contains("સયાવિન") || lower.contains("সয়াবিন") || lower.contains("సోయాబీన్") || lower.contains("சோயாபீன்") || lower.contains("ಸೋಯಾಬೀನ್") || lower.contains("സോയാബീൻ")) {
-            entities.put("commodity", "SOYABEAN");
-        } else if (lower.contains("chana") || lower.contains("gram") || lower.contains("चना") || lower.contains("ਛੋਲੇ") || lower.contains("हरभरा") || lower.contains("हरभऱ्या") || lower.contains("ચણા") || lower.contains("ছোলা") || lower.contains("శనగలు") || lower.contains("கொண்டைக்கடலை") || lower.contains("ಕಡಲೆ") || lower.contains("കടല")) {
-            entities.put("commodity", "GRAM");
+            entities.put("commodity", "SOYBEAN");
+        } else if (lower.contains("chana") || lower.contains("bengal gram") || lower.contains("चना") || lower.contains("ਛੋਲੇ") || lower.contains("हरभरा") || lower.contains("हरभऱ्या") || lower.contains("ચણા") || lower.contains("ছোলা") || lower.contains("శనగలు") || lower.contains("கொண்டைக்கடலை") || lower.contains("ಕಡಲೆ") || lower.contains("കടല")) {
+            entities.put("commodity", "CHANA");
+        } else if (CommodityAliases.isChilli(lower)) {
+            entities.put("commodity", "CHILLI");
+        } else if (CommodityAliases.isTurmeric(lower)) {
+            entities.put("commodity", "TURMERIC");
+        } else if (CommodityAliases.isGroundnut(lower)) {
+            entities.put("commodity", "GROUNDNUT");
+        } else if (CommodityAliases.isBajra(lower)) {
+            entities.put("commodity", "BAJRA");
+        } else if (CommodityAliases.isRagi(lower)) {
+            entities.put("commodity", "RAGI");
+        } else if (CommodityAliases.isApple(lower)) {
+            entities.put("commodity", "APPLE");
         }
 
         // 2. State Extraction (All Indian States & UTs across 10 Languages)
@@ -419,7 +525,10 @@ public class VoiceAssistantService {
         }
 
         // 3. District Extraction (Prominent APMC Agricultural Districts)
-        if (lower.contains("ludhiana") || lower.contains("लुधियाना") || lower.contains("ਲੁਧਿਆਣਾ")) {
+        if (lower.contains("jodhpur") || lower.contains("जोधपुर") || lower.contains("ਜੋਧਪੁਰ")) {
+            entities.put("district", "Jodhpur");
+            entities.putIfAbsent("state", "Rajasthan");
+        } else if (lower.contains("ludhiana") || lower.contains("लुधियाना") || lower.contains("ਲੁਧਿਆਣਾ")) {
             entities.put("district", "Ludhiana");
         } else if (lower.contains("nashik") || lower.contains("नासिक") || lower.contains("नाशिक")) {
             entities.put("district", "Nashik");
@@ -466,14 +575,59 @@ public class VoiceAssistantService {
             entities.put("mandi", "AZADPUR_DL");
         } else if (lower.contains("hapur") || lower.contains("हापुड़") || lower.contains("हापूड") || lower.contains("ਹਾਪੁੜ") || lower.contains("હાપુડ") || lower.contains("হাপুড়") || lower.contains("హాపూర్") || lower.contains("ஹாபூர்") || lower.contains("ಹಾಪುರ್") || lower.contains("ഹാപൂർ")) {
             entities.put("mandi", "HAPUR_UP");
+        } else if (lower.contains("guntur") || lower.contains("गुंटूर") || lower.contains("ਗੁੰਟੂਰ")) {
+            entities.put("mandi", "GUNTUR_AP");
+        } else if (lower.contains("byadgi") || lower.contains("ब्याडगी") || lower.contains("ਬਿਆਦਗੀ")) {
+            entities.put("mandi", "BYADGI_KA");
+        } else if (lower.contains("warangal") || lower.contains("वारंगल") || lower.contains("ਵਾਰੰਗਲ")) {
+            entities.put("mandi", "WARANGAL_TS");
+        } else if (lower.contains("erode") || lower.contains("इरोड") || lower.contains("ਇਰੋਡ")) {
+            entities.put("mandi", "ERODE_TN");
+        } else if (lower.contains("unjha") || lower.contains("ऊंझा") || lower.contains("ਊਂਝਾ")) {
+            entities.put("mandi", "UNJHA_GJ");
+        } else if (lower.contains("shimla") || lower.contains("शिमला") || lower.contains("ਸ਼ਿਮਲਾ")) {
+            entities.put("mandi", "SHIMLA_HP");
+        } else if (lower.contains("sopore") || lower.contains("सोपोर") || lower.contains("ਸੋਪੋਰ")) {
+            entities.put("mandi", "SOPORE_JK");
+        } else if (lower.contains("agra") || lower.contains("आगरा") || lower.contains("ਆਗਰਾ")) {
+            entities.put("mandi", "AGRA_UP");
+        } else if (lower.contains("kolar") || lower.contains("कोलार") || lower.contains("ਕੋਲਾਰ")) {
+            entities.put("mandi", "KOLAR_KA");
+        } else if (lower.contains("gulabbagh") || lower.contains("गुलाबबाग") || lower.contains("ਗੁਲਾਬਬਾਗ਼") || lower.contains("purnia") || lower.contains("पूर्णिया")) {
+            entities.put("mandi", "GULABBAGH_BR");
+        }
+
+        if (!entities.containsKey("mandi") && (lower.contains("mandi") || lower.contains("मंडी")
+                || lower.contains("ਮੰਡੀ") || entities.containsKey("district"))) {
+            String district = entities.get("district");
+            String state = entities.get("state");
+            List<Mandi> matchingMarkets = mandiRepository.findByActiveTrue().stream()
+                    .filter(m -> district == null || district.equalsIgnoreCase(m.getDistrict()))
+                    .filter(m -> state == null || state.equalsIgnoreCase(m.getState()))
+                    .filter(m -> matchesName(lower, m.getNameEn()) || matchesName(lower, m.getNameHi())
+                            || matchesName(lower, m.getNamePa())
+                            || ("JODHPUR_GRAIN_RJ".equals(m.getCode()) && (
+                                    lower.contains("jeera mandi") || lower.contains("जीरा मंडी")
+                                            || lower.contains("ਜ਼ੀਰਾ ਮੰਡੀ"))))
+                    .toList();
+            if (matchingMarkets.size() == 1) {
+                entities.put("mandi", matchingMarkets.getFirst().getCode());
+            }
         }
 
         return entities;
     }
 
+    private static boolean matchesName(String query, String name) {
+        return name != null && !name.isBlank()
+                && Pattern.compile("(?<![\\p{L}\\p{M}\\p{N}])"
+                        + Pattern.quote(name.toLowerCase(Locale.ROOT)) + "(?![\\p{L}\\p{M}\\p{N}])")
+                        .matcher(query).find();
+    }
+
     private String determineIntent(String text, Map<String, String> entities) {
         if (text == null || text.isBlank()) return "UNKNOWN";
-        String lower = text.toLowerCase();
+        String lower = text.toLowerCase(Locale.ROOT);
 
         if (lower.contains("compare") || lower.contains("तुलना") || lower.contains("अंतर") || lower.contains("ਮਿਲਾਓ") || lower.contains("ਫ਼ਰਕ")
                 || lower.contains("સરખામણી") || lower.contains("তফাত") || lower.contains("పోలిక") || lower.contains("ஒப்பீடு") || lower.contains("ಹೋಲಿಕೆ") || lower.contains("താരതമ്യം")
@@ -500,6 +654,13 @@ public class VoiceAssistantService {
         }
         if (lower.contains("योजना") || lower.contains("पीएम-किसान") || lower.contains("ਸਕੀਮ") || lower.contains("scheme") || lower.contains("pm-kisan") || lower.contains("kcc") || lower.contains("help") || lower.contains("मदद") || lower.contains("పథకం") || lower.contains("திட்டம்") || lower.contains("ಯೋಜನೆ") || lower.contains("പദ്ധതി") || lower.contains("প্রকল্প") || lower.contains("યોજના")) {
             return "GENERAL_HELP";
+        }
+        if (farmingAdvisoryService != null && farmingAdvisoryService.canHandle(text)) {
+            boolean asksForPrice = lower.contains("भाव") || lower.contains("रेट") || lower.contains("मूल्य")
+                    || lower.contains("दर") || lower.contains("कीमत") || lower.contains("price") || lower.contains("rate");
+            if (!asksForPrice) {
+                return "FARMING_ADVISORY";
+            }
         }
         if (entities.containsKey("commodity")) {
             return "MANDI_PRICE_LOOKUP";
@@ -645,7 +806,7 @@ public class VoiceAssistantService {
                 case "ml" -> "ചോളം";
                 default -> "Maize";
             };
-            case "SOYABEAN" -> switch (langPrefix) {
+            case "SOYBEAN", "SOYABEAN" -> switch (langPrefix) {
                 case "hi", "mr" -> "सोयाबीन";
                 case "pa" -> "ਸੋਇਆਬੀਨ";
                 case "gu" -> "સોયાબીન";
@@ -656,7 +817,7 @@ public class VoiceAssistantService {
                 case "ml" -> "സോയാബീൻ";
                 default -> "Soyabean";
             };
-            case "GRAM" -> switch (langPrefix) {
+            case "CHANA", "GRAM" -> switch (langPrefix) {
                 case "hi" -> "चना";
                 case "pa" -> "ਛੋਲੇ";
                 case "mr" -> "हरभरा";
@@ -667,6 +828,12 @@ public class VoiceAssistantService {
                 case "kn" -> "ಕಡಲೆ";
                 case "ml" -> "കടല";
                 default -> "Bengal Gram";
+            };
+            case "CUMIN" -> switch (langPrefix) {
+                case "hi", "mr" -> "जीरा";
+                case "pa" -> "ਜ਼ੀਰਾ";
+                case "gu" -> "જીરું";
+                default -> "Cumin (Jeera)";
             };
             default -> code;
         };
@@ -777,29 +944,44 @@ public class VoiceAssistantService {
     }
 
     private String buildPriceResponse(String langPrefix, String commCode, String mandiCode, BigDecimal modalPrice, BigDecimal minPrice, BigDecimal maxPrice, String date) {
+        return buildPriceResponse(langPrefix, commCode, mandiCode, modalPrice, minPrice, maxPrice, date, null, null);
+    }
+
+    private String buildPriceResponse(String langPrefix, String commCode, String mandiCode, BigDecimal modalPrice, BigDecimal minPrice, BigDecimal maxPrice, String date, String variety, String source) {
         String commName = getLocalizedCommodityName(commCode, langPrefix);
         String mandiName = getLocalizedMandiName(mandiCode, langPrefix);
+        boolean hasVariety = variety != null && !variety.isBlank() && !"Other".equalsIgnoreCase(variety);
+        boolean hasSource = source != null && !source.isBlank();
+
+        String varEn = hasVariety ? String.format(" (Variety: %s)", variety) : "";
+        String varHi = hasVariety ? String.format(" (किस्म: %s)", variety) : "";
+        String varPa = hasVariety ? String.format(" (ਕਿਸਮ: %s)", variety) : "";
+
+        String srcEn = hasSource ? String.format(" from %s", source) : "";
+        String srcHi = hasSource ? String.format(", स्रोत: %s", source) : "";
+        String srcPa = hasSource ? String.format(", ਸਰੋਤ: %s", source) : "";
+
         return switch (langPrefix) {
-            case "hi" -> String.format("%s में %s का प्रमाणित मॉडल भाव ₹%s प्रति क्विंटल है (न्यूनतम: ₹%s, अधिकतम: ₹%s, दिनांक: %s)।",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "pa" -> String.format("%s ਵਿੱਚ %s ਦਾ ਪ੍ਰਮਾਣਿਤ ਮਾਡਲ ਭਾਅ ₹%s ਪ੍ਰਤੀ ਕੁਇੰਟਲ ਹੈ (ਘੱਟੋ-ਘੱਟ: ₹%s, ਵੱਧ ਤੋਂ ਵੱਧ: ₹%s, ਮਿਤੀ: %s)।",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "mr" -> String.format("%s मध्ये %s चा प्रमाणित मॉडेल भाव ₹%s प्रति क्विंटल आहे (किमान: ₹%s, कमाल: ₹%s, दिनांक: %s).",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "gu" -> String.format("%sમાં %sનો પ્રમાણિત મોડલ ભાવ ₹%s પ્રતિ ક્વિન્ટલ છે (ન્યૂનતમ: ₹%s, મહત્તમ: ₹%s, તારીખ: %s).",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "bn" -> String.format("%s মান্ডিতে %s-এর সরকারি নিলাম দর ₹%s প্রতি কুইন্টাল (সর্বনিম্ন: ₹%s, সর্বোচ্চ: ₹%s, তারিখ: %s)।",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "te" -> String.format("%s మార్కెట్‌లో %s మోడల్ ధర క్వింటాలుకు ₹%s (కనిష్ట ధర: ₹%s, గరిష్ట ధర: ₹%s, తేదీ: %s).",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "ta" -> String.format("%s சந்தையில் %s-ன் மாதிரி விலை குவிண்டாலுக்கு ₹%s (குறைந்தபட்சம்: ₹%s, அதிகபட்சம்: ₹%s, தேதி: %s).",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "kn" -> String.format("%s ಮಾರುಕಟ್ಟೆಯಲ್ಲಿ %s ಮಾದರಿ ದರ ಪ್ರತಿ ಕ್ವಿಂಟಾಲ್‌ಗೆ ₹%s (ಕನಿಷ್ಠ: ₹%s, ಗರಿಷ್ಠ: ₹%s, ದಿನಾಂಕ: %s).",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            case "ml" -> String.format("%s മാർക്കറ്റിൽ %s-ന്റെ മോഡൽ നിരക്ക് ക്വിന്റലിന് ₹%s ആണ് (കുറഞ്ഞത്: ₹%s, കൂടിയത്: ₹%s, തീയതി: %s).",
-                    mandiName, commName, modalPrice, minPrice, maxPrice, date);
-            default -> String.format("Verified Agmarknet modal rate for %s in %s mandi is ₹%s per quintal (Min: ₹%s, Max: ₹%s, Reported %s).",
-                    commName, mandiName, modalPrice, minPrice, maxPrice, date);
+            case "hi" -> String.format("%s में %s%s का मॉडल भाव ₹%s प्रति क्विंटल है (न्यूनतम: ₹%s, अधिकतम: ₹%s, दिनांक: %s%s)।",
+                    mandiName, commName, varHi, modalPrice, minPrice, maxPrice, date, srcHi);
+            case "pa" -> String.format("%s ਵਿੱਚ %s%s ਦਾ ਮਾਡਲ ਭਾਅ ₹%s ਪ੍ਰਤੀ ਕੁਇੰਟਲ ਹੈ (ਘੱਟੋ-ਘੱਟ: ₹%s, ਵੱਧ ਤੋਂ ਵੱਧ: ₹%s, ਮਿਤੀ: %s%s)।",
+                    mandiName, commName, varPa, modalPrice, minPrice, maxPrice, date, srcPa);
+            case "mr" -> String.format("%s मध्ये %s%s चा मॉडेल भाव ₹%s प्रति क्विंटल आहे (किमान: ₹%s, कमाल: ₹%s, दिनांक: %s%s).",
+                    mandiName, commName, varEn, modalPrice, minPrice, maxPrice, date, srcEn);
+            case "gu" -> String.format("%sમાં %s%sનો મોડલ ભાવ ₹%s પ્રતિ ક્વિન્ટલ છે (ન્યૂનતમ: ₹%s, મહત્તમ: ₹%s, તારીખ: %s%s).",
+                    mandiName, commName, varEn, modalPrice, minPrice, maxPrice, date, srcEn);
+            case "bn" -> String.format("%s মান্ডিতে %s%s-এর নিলাম দর ₹%s প্রতি কুইন্টাল (সর্বনিম্ন: ₹%s, সর্বোচ্চ: ₹%s, তারিখ: %s%s)।",
+                    mandiName, commName, varEn, modalPrice, minPrice, maxPrice, date, srcEn);
+            case "te" -> String.format("%s మార్కెట్‌లో %s%s మోడల్ ధర క్వింటాలుకు ₹%s (కనిష్ట ధర: ₹%s, గরিష్ట ధర: ₹%s, తేదీ: %s%s).",
+                    mandiName, commName, varEn, modalPrice, minPrice, maxPrice, date, srcEn);
+            case "ta" -> String.format("%s சந்தையில் %s%s-ன் மாதிரி விலை குவிண்டாலுக்கு ₹%s (குறைந்தபட்சம்: ₹%s, அதிகபட்சம்: ₹%s, தேதி: %s%s).",
+                    mandiName, commName, varEn, modalPrice, minPrice, maxPrice, date, srcEn);
+            case "kn" -> String.format("%s ಮಾರುಕಟ್ಟೆಯಲ್ಲಿ %s%s ಮಾದರಿ ದರ ಪ್ರತಿ ಕ್ವಿಂಟಾಲ್‌ಗೆ ₹%s (ಕನಿಷ್ಠ: ₹%s, ಗರಿಷ್ಠ: ₹%s, ದಿನಾಂಕ: %s%s).",
+                    mandiName, commName, varEn, modalPrice, minPrice, maxPrice, date, srcEn);
+            case "ml" -> String.format("%s മാർക്കറ്റിൽ %s%s-ന്റെ മോഡൽ നിരക്ക് ക്വിന്റലിന് ₹%s ആണ് (കുറഞ്ഞത്: ₹%s, കൂടിയത്: ₹%s, തീയതി: %s%s).",
+                    mandiName, commName, varEn, modalPrice, minPrice, maxPrice, date, srcEn);
+            default -> String.format("The reported modal price for %s%s at %s is ₹%s per quintal (Min: ₹%s, Max: ₹%s, Reported %s%s).",
+                    commName, varEn, mandiName, modalPrice, minPrice, maxPrice, date, srcEn);
         };
     }
 
@@ -859,7 +1041,7 @@ public class VoiceAssistantService {
             case "ta" -> String.format("%s சந்தையில் %s-க்கு இன்று அதிகாரப்பூர்வ விலை எதுவும் பதிவாகவில்லை.", locDesc, commName);
             case "kn" -> String.format("%s ಮಾರುಕಟ್ಟೆಯಲ್ಲಿ %s ಬೆಳೆಗೆ ಇಂದು ಯಾವುದೇ ಅಧಿಕೃತ ದರ ದಾಖಲಾಗಿಲ್ಲ.", locDesc, commName);
             case "ml" -> String.format("%s മാർക്കറ്റിൽ %s-ന് ഇന്ന് ഔദ്യോഗിക നിരക്കുകൾ ലഭ്യമല്ല.", locDesc, commName);
-            default -> String.format("No current verified price record found for %s in %s. Check back after daily APMC auction closure.", commName, locDesc);
+            default -> String.format("No current verified price record found for %s in %s. This market may not have a filing in the available feed.", commName, locDesc);
         };
     }
 

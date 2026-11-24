@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mandisaathi.dto.ComplaintRequest;
 import com.mandisaathi.entity.Complaint;
 import com.mandisaathi.repository.ComplaintRepository;
+import com.mandisaathi.service.ComplaintService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,54 +60,74 @@ class ComplaintSecurityTest {
     @Test
     @DisplayName("Administrator with valid key can list all complaints")
     void adminCanListAllComplaints() throws Exception {
-        Complaint c1 = new Complaint("MS-2026-11111", "DELAYED_PAYMENT", "Payment delayed 15 days", "Punjab", "Ludhiana", "KHANNA_PB", "Farmer A", "9876543210", "token12345");
+        String tokenHash = ComplaintService.hashToken("token12345");
+        Complaint c1 = new Complaint("MS-2026-11111", "DELAYED_PAYMENT", "Payment delayed 15 days", "Punjab", "Ludhiana", "KHANNA_PB", "Farmer A", "9876543210", tokenHash);
         complaintRepository.save(c1);
 
         mockMvc.perform(get("/api/v1/complaints")
-                        .header("X-Admin-Key", "mandisaathi_admin_secret_2026"))
+                        .header("X-Admin-Key", "test_admin_key_32_characters_strictly_for_unit_tests"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].referenceNumber", is("MS-2026-11111")));
+                .andExpect(jsonPath("$[0].referenceNumber", is("MS-2026-11111")))
+                .andExpect(jsonPath("$[0].trackingToken").doesNotExist());
     }
 
     @Test
-    @DisplayName("Anonymous user cannot track complaint without tracking token")
+    @DisplayName("Anonymous user cannot track complaint without tracking token header")
     void cannotTrackComplaintWithoutToken() throws Exception {
-        Complaint c = new Complaint("MS-2026-22222", "WEIGHMENT_DISPARITY", "Scale disparity 2%", "Punjab", "Ludhiana", "KHANNA_PB", "Farmer B", "9876543210", "secret_token_abc");
+        String tokenHash = ComplaintService.hashToken("secret_token_abc");
+        Complaint c = new Complaint("MS-2026-22222", "WEIGHMENT_DISPARITY", "Scale disparity 2%", "Punjab", "Ludhiana", "KHANNA_PB", "Farmer B", "9876543210", tokenHash);
         complaintRepository.save(c);
 
         mockMvc.perform(get("/api/v1/complaints/MS-2026-22222"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message", containsString("Tracking token or administrative credentials required")));
+                .andExpect(jsonPath("$.message", containsString("Tracking token required to track grievance")));
+    }
+
+    @Test
+    @DisplayName("Query parameter trackingToken is rejected; header X-Tracking-Token is required")
+    void queryParamTrackingTokenIsIgnored() throws Exception {
+        String tokenHash = ComplaintService.hashToken("secret_token_query");
+        Complaint c = new Complaint("MS-2026-55555", "WEIGHMENT_DISPARITY", "Scale disparity 2%", "Punjab", "Ludhiana", "KHANNA_PB", "Farmer B", "9876543210", tokenHash);
+        complaintRepository.save(c);
+
+        // Sending in query param must be rejected because query param tracking is eliminated
+        mockMvc.perform(get("/api/v1/complaints/MS-2026-55555")
+                        .param("trackingToken", "secret_token_query"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
     @DisplayName("Tracking complaint with wrong token returns 404 Not Found")
     void trackingWithWrongTokenReturnsNotFound() throws Exception {
-        Complaint c = new Complaint("MS-2026-33333", "WEIGHMENT_DISPARITY", "Scale disparity 2%", "Punjab", "Ludhiana", "KHANNA_PB", "Farmer C", "9876543210", "secret_token_valid");
+        String tokenHash = ComplaintService.hashToken("secret_token_valid");
+        Complaint c = new Complaint("MS-2026-33333", "WEIGHMENT_DISPARITY", "Scale disparity 2%", "Punjab", "Ludhiana", "KHANNA_PB", "Farmer C", "9876543210", tokenHash);
         complaintRepository.save(c);
 
         mockMvc.perform(get("/api/v1/complaints/MS-2026-33333")
-                        .param("trackingToken", "wrong_token_xyz"))
+                        .header("X-Tracking-Token", "wrong_token_xyz"))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    @DisplayName("Tracking complaint with valid token succeeds and masks phone number")
+    @DisplayName("Tracking complaint with valid token succeeds, masks phone number, and never returns token")
     void trackingWithValidTokenSucceedsAndMasksPhone() throws Exception {
-        Complaint c = new Complaint("MS-2026-44444", "QUALITY_DISPUTE", "Fair average quality rejected unjustly", "Haryana", "Sirsa", "SIRSA_HR", "Kavita Devi", "9876543210", "valid_secret_token_123");
+        String rawToken = "valid_secret_token_123";
+        String tokenHash = ComplaintService.hashToken(rawToken);
+        Complaint c = new Complaint("MS-2026-44444", "QUALITY_DISPUTE", "Fair average quality rejected unjustly", "Haryana", "Sirsa", "SIRSA_HR", "Kavita Devi", "9876543210", tokenHash);
         complaintRepository.save(c);
 
         mockMvc.perform(get("/api/v1/complaints/MS-2026-44444")
-                        .param("trackingToken", "valid_secret_token_123"))
+                        .header("X-Tracking-Token", rawToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber", is("MS-2026-44444")))
                 .andExpect(jsonPath("$.farmerPhone", is("******3210")))
-                .andExpect(jsonPath("$.status", is("RECORDED")));
+                .andExpect(jsonPath("$.status", is("RECORDED")))
+                .andExpect(jsonPath("$.trackingToken").doesNotExist());
     }
 
     @Test
-    @DisplayName("Registration returns unguessable tracking token to the submitter")
+    @DisplayName("Registration returns unguessable tracking token to the submitter once")
     void registrationReturnsUnguessableTrackingToken() throws Exception {
         ComplaintRequest req = new ComplaintRequest(
                 "UNAUTHORIZED_DEDUCTIONS",
@@ -131,4 +152,3 @@ class ComplaintSecurityTest {
         assertFalse(token.isBlank(), "Tracking token must not be blank");
     }
 }
-

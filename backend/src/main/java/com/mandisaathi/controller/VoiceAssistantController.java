@@ -2,6 +2,8 @@ package com.mandisaathi.controller;
 
 import com.mandisaathi.dto.VoiceQueryRequest;
 import com.mandisaathi.dto.VoiceQueryResponse;
+import com.mandisaathi.ratelimit.RateLimitResult;
+import com.mandisaathi.ratelimit.RateLimiter;
 import com.mandisaathi.service.VoiceAssistantService;
 import com.mandisaathi.util.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,8 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @RestController
 @RequestMapping("/api/v1/voice")
@@ -29,10 +29,11 @@ public class VoiceAssistantController {
     private static final long MAX_AUDIO_BYTES = 15L * 1024L * 1024L;
 
     private final VoiceAssistantService voiceAssistantService;
-    private final ConcurrentHashMap<String, AtomicInteger> voiceRateMap = new ConcurrentHashMap<>();
+    private final RateLimiter rateLimiter;
 
-    public VoiceAssistantController(VoiceAssistantService voiceAssistantService) {
+    public VoiceAssistantController(VoiceAssistantService voiceAssistantService, RateLimiter rateLimiter) {
         this.voiceAssistantService = voiceAssistantService;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping("/query")
@@ -40,9 +41,10 @@ public class VoiceAssistantController {
             @RequestBody VoiceQueryRequest request,
             HttpServletRequest httpRequest
     ) {
-        if (!checkRateLimit(httpRequest)) {
+        RateLimitResult rateResult = checkRateLimit(httpRequest);
+        if (!rateResult.allowed()) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .header(HttpHeaders.RETRY_AFTER, "60")
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(rateResult.retryAfterSeconds()))
                     .body(buildRateLimitResponse(request.language()));
         }
         return ResponseEntity.ok(voiceAssistantService.processTextQuery(request));
@@ -56,9 +58,10 @@ public class VoiceAssistantController {
     ) throws IOException {
         String defaultLang = language != null ? language : "hi-IN";
 
-        if (!checkRateLimit(httpRequest)) {
+        RateLimitResult rateResult = checkRateLimit(httpRequest);
+        if (!rateResult.allowed()) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .header(HttpHeaders.RETRY_AFTER, "60")
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(rateResult.retryAfterSeconds()))
                     .body(buildRateLimitResponse(defaultLang));
         }
 
@@ -170,23 +173,9 @@ public class VoiceAssistantController {
         return ResponseEntity.ok(response);
     }
 
-    private boolean checkRateLimit(HttpServletRequest request) {
+    private RateLimitResult checkRateLimit(HttpServletRequest request) {
         String clientIp = ClientIpResolver.resolve(request);
-        long currentMinute = System.currentTimeMillis() / 60000;
-        String rateKey = clientIp + ":" + currentMinute;
-
-        voiceRateMap.entrySet().removeIf(e -> {
-            String[] parts = e.getKey().split(":");
-            if (parts.length < 2) return true;
-            try {
-                return Long.parseLong(parts[1]) < currentMinute - 2;
-            } catch (NumberFormatException ignored) {
-                return true;
-            }
-        });
-
-        AtomicInteger counter = voiceRateMap.computeIfAbsent(rateKey, k -> new AtomicInteger(0));
-        return counter.incrementAndGet() <= MAX_VOICE_REQUESTS_PER_MINUTE;
+        return rateLimiter.tryAcquire("voice_query", clientIp, MAX_VOICE_REQUESTS_PER_MINUTE);
     }
 
     private VoiceQueryResponse buildRateLimitResponse(String language) {
@@ -215,16 +204,10 @@ public class VoiceAssistantController {
     }
 
     private boolean isValidAudio(byte[] bytes, String contentType, String filename) {
-        if (bytes == null || bytes.length == 0) return false;
-        if (bytes.length < 12) {
-            return (contentType != null && contentType.startsWith("audio/")) ||
-                   (filename != null && (filename.endsWith(".wav") || filename.endsWith(".mp3") || filename.endsWith(".webm") || filename.endsWith(".ogg")));
-        }
-        if (isValidAudioHeader(bytes)) {
-            return true;
-        }
-        return (contentType != null && contentType.startsWith("audio/")) &&
-               (filename != null && (filename.endsWith(".wav") || filename.endsWith(".mp3") || filename.endsWith(".webm") || filename.endsWith(".ogg") || filename.endsWith(".m4a") || filename.endsWith(".flac")));
+        if (bytes == null || bytes.length < 4) return false;
+        // Declared MIME types and filenames must NEVER override container signature inspection.
+        // Valid magic bytes are strictly required to reject arbitrary binary uploads (CWE-434).
+        return isValidAudioHeader(bytes);
     }
 
     private boolean isValidAudioHeader(byte[] bytes) {

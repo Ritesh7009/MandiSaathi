@@ -1,11 +1,88 @@
+@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
+
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "./themes/mandisaathi/mandisaathi.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  /* Layer 1 + 2 Semantic Color Tokens: Daylight Mineral Canopy (with RGB triplets for Tailwind alpha modifiers) */
   :root {
-    --app-bg: #F5F3EA;
-    --app-text: #1F2421;
+    --ms-canvas: #f4f7f5;
+    --ms-canvas-rgb: 244 247 245;
+    --ms-surface: #ffffff;
+    --ms-surface-rgb: 255 255 255;
+    --ms-surface-subtle: #ebf1ed;
+    --ms-surface-subtle-rgb: 235 241 237;
+    --ms-surface-elevated: #ffffff;
+    --ms-surface-elevated-rgb: 255 255 255;
+    --ms-border: rgba(11, 79, 55, 0.11);
+    --ms-border-strong: rgba(11, 79, 55, 0.22);
+    --ms-text: #0d1f17;
+    --ms-text-rgb: 13 31 23;
+    --ms-text-muted: #445a4f;
+    --ms-text-muted-rgb: 68 90 79;
+    --ms-text-subtle: #50665b;
+    --ms-text-subtle-rgb: 80 102 91;
+    --ms-emerald: #0b4f37;
+    --ms-emerald-rgb: 11 79 55;
+    --ms-emerald-bright: #10b981;
+    --ms-emerald-bright-rgb: 16 185 129;
+    --ms-emerald-soft: #ecf4ef;
+    --ms-emerald-soft-rgb: 236 244 239;
+    --ms-saffron: #d97706;
+    --ms-saffron-rgb: 217 119 6;
+    --ms-saffron-soft: #fdf3e7;
+    --ms-saffron-soft-rgb: 253 243 231;
+    --ms-saffron-ink: #92400e;
+    --ms-saffron-ink-rgb: 146 64 14;
+    --ms-saffron-text: #92400e;
+    --ms-saffron-text-rgb: 146 64 14;
+    --ms-danger: #b91c1c;
+    --ms-danger-rgb: 185 28 28;
+    --ms-danger-soft: #fdecec;
+    --ms-danger-soft-rgb: 253 236 236;
+  }
+
+  /* Obsidian Studio Dark Mode */
+  html.dark {
+    --ms-canvas: #06100b;
+    --ms-canvas-rgb: 6 16 11;
+    --ms-surface: #0c1a13;
+    --ms-surface-rgb: 12 26 19;
+    --ms-surface-subtle: #12261c;
+    --ms-surface-subtle-rgb: 18 38 28;
+    --ms-surface-elevated: #142b20;
+    --ms-surface-elevated-rgb: 20 43 32;
+    --ms-border: rgba(52, 211, 153, 0.14);
+    --ms-border-strong: rgba(52, 211, 153, 0.28);
+    --ms-text: #f0f5f2;
+    --ms-text-rgb: 240 245 242;
+    --ms-text-muted: #9eb5a8;
+    --ms-text-muted-rgb: 158 181 168;
+    --ms-text-subtle: #839c8f;
+    --ms-text-subtle-rgb: 131 156 143;
+    --ms-emerald: #057a55;
+    --ms-emerald-rgb: 5 122 85;
+    --ms-emerald-bright: #34d399;
+    --ms-emerald-bright-rgb: 52 211 153;
+    --ms-emerald-soft: #0f2d21;
+    --ms-emerald-soft-rgb: 15 45 33;
+    --ms-saffron: #f59e0b;
+    --ms-saffron-rgb: 245 158 11;
+    --ms-saffron-soft: #2b2110;
+    --ms-saffron-soft-rgb: 43 33 16;
+    --ms-saffron-ink: #fbbf24;
+    --ms-saffron-ink-rgb: 251 191 36;
+    --ms-saffron-text: #fbbf24;
+    --ms-saffron-text-rgb: 251 191 36;
+    --ms-danger: #f87171;
+    --ms-danger-rgb: 248 113 113;
+    --ms-danger-soft: #33171a;
+    --ms-danger-soft-rgb: 51 23 26;
   }
 
   html {
@@ -18,21 +95,21 @@
   }
 
   body {
-    background-color: var(--app-bg);
-    color: var(--app-text);
+    background-color: var(--ms-canvas);
+    color: var(--ms-text);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    min-height: 100vh;
+    min-height: 100dvh;
     line-height: 1.5;
+    overflow-x: hidden;
   }
 
-  /* Indic Matra & Diacritic Clearance across all 10 Gnani-supported languages */
+  /* Indic Matra & Diacritic Clearance across all 10 Gnani-supported scripts */
   :lang(hi), :lang(pa), :lang(mr), :lang(gu), :lang(bn), :lang(te), :lang(ta), :lang(kn), :lang(ml) {
     line-height: 1.68;
   }
 
-  /* Prevent matra clipping on interactive inline badges, buttons and pills */
   :lang(hi) .matra-safe,
   :lang(pa) .matra-safe,
   :lang(mr) .matra-safe,
@@ -46,23 +123,7 @@
     padding-bottom: 0.15em;
   }
 
-  /* Organic Tactile Grain for Authentic Parchment Finish (Zero AI Slop) */
-  .bg-parchment-grain {
-    background-color: #FAF9F5;
-    background-image: radial-gradient(rgba(23, 75, 53, 0.035) 1px, transparent 0);
-    background-size: 24px 24px;
-  }
-
-  /* Tactile Physical Press Feel */
-  .tactile-press {
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
-  }
-  .tactile-press:active {
-    transform: translateY(1px);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
-  }
-
-  /* Universal Tabular Figures for currency & statistics */
+  /* Universal Tabular Figures for monetary values, weights & dates */
   .tnum,
   .tabular-nums {
     font-feature-settings: "tnum" 1, "zero" 1;
@@ -70,7 +131,90 @@
   }
 }
 
-/* Custom minimal scrollbar for tables & lists */
+/* Frosted Dock Surface with explicit prefers-reduced-transparency fallback */
+.ms-glass-dock {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(11, 79, 55, 0.12);
+}
+
+html.dark .ms-glass-dock {
+  background: rgba(12, 26, 19, 0.84);
+  border-color: rgba(52, 211, 153, 0.18);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ms-glass-dock {
+    background: var(--ms-surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Motion Primitives Border Trail helper */
+@keyframes ms-border-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ms-border-trail {
+  animation: ms-border-spin 4s linear infinite;
+}
+
+/* Premium Product Surface & Specular Depth */
+.ms-hero-surface {
+  background:
+    radial-gradient(900px 420px at 14% 8%, rgba(16, 185, 129, 0.08), transparent 65%),
+    radial-gradient(700px 360px at 88% 18%, rgba(217, 119, 6, 0.06), transparent 60%),
+    var(--ms-surface);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.75),
+    0 20px 48px -24px rgba(11, 79, 55, 0.14);
+}
+
+html.dark .ms-hero-surface {
+  background:
+    radial-gradient(900px 420px at 14% 8%, rgba(52, 211, 153, 0.10), transparent 65%),
+    radial-gradient(700px 360px at 88% 18%, rgba(245, 158, 11, 0.07), transparent 60%),
+    var(--ms-surface);
+  box-shadow:
+    inset 0 1px 0 0 rgba(52, 211, 153, 0.14),
+    0 24px 56px -24px rgba(0, 0, 0, 0.65);
+}
+
+.ms-card-interactive {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.ms-card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--ms-border-strong);
+  box-shadow: 0 12px 28px -14px rgba(11, 79, 55, 0.14);
+}
+
+html.dark .ms-card-interactive:hover {
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes ms-shimmer-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.ms-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--ms-surface-subtle) 25%,
+    rgba(16, 185, 129, 0.08) 50%,
+    var(--ms-surface-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: ms-shimmer-sweep 1.6s ease-in-out infinite;
+}
+
+/* Subtle custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -81,17 +225,17 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(37, 53, 44, 0.15);
+  background: rgba(11, 79, 55, 0.18);
   border-radius: 9999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(37, 53, 44, 0.3);
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(52, 211, 153, 0.22);
 }
 
-/* Accessible focus ring */
+/* Accessible focus ring (WCAG AA 3:1+) */
 *:focus-visible {
-  outline: 2px solid #174B35;
+  outline: 2px solid var(--ms-emerald-bright);
   outline-offset: 2px;
 }
 

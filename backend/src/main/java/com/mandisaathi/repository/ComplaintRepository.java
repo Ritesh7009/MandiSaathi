@@ -12,8 +12,9 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Long> {
 
     Optional<Complaint> findByReferenceNumber(String referenceNumber);
 
-    Optional<Complaint> findByReferenceNumberAndTrackingToken(String referenceNumber, String trackingToken);
+    Optional<Complaint> findByReferenceNumberAndTrackingTokenHash(String referenceNumber, String trackingTokenHash);
+
+    boolean existsByTrackingTokenHash(String trackingTokenHash);
 
     List<Complaint> findAllByOrderByCreatedAtDesc();
 }
-

@@ -17,7 +17,10 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.cors.CorsConfigurationSource;
+import jakarta.annotation.PostConstruct;
+import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
@@ -26,15 +29,29 @@ public class SecurityConfig {
     private final CorsConfigurationSource corsConfigurationSource;
     private final ApiKeyAuthenticationFilter apiKeyAuthenticationFilter;
     private final ObjectMapper objectMapper;
+    private final String trustedProxiesConfig;
 
     public SecurityConfig(
             CorsConfigurationSource corsConfigurationSource,
             ApiKeyAuthenticationFilter apiKeyAuthenticationFilter,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @Value("${app.security.trusted-proxies:}") String trustedProxiesConfig
     ) {
         this.corsConfigurationSource = corsConfigurationSource;
         this.apiKeyAuthenticationFilter = apiKeyAuthenticationFilter;
         this.objectMapper = objectMapper;
+        this.trustedProxiesConfig = trustedProxiesConfig;
+    }
+
+    @PostConstruct
+    public void initTrustedProxies() {
+        if (trustedProxiesConfig != null && !trustedProxiesConfig.isBlank()) {
+            java.util.List<String> proxies = Arrays.stream(trustedProxiesConfig.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toList();
+            com.mandisaathi.util.ClientIpResolver.setConfiguredTrustedProxies(proxies);
+        }
     }
 
     @Bean

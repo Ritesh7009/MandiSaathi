@@ -101,7 +101,7 @@ class PriceRecordControllerTest {
     @Test
     void shouldTriggerManualSyncAndReturnSummary() throws Exception {
         mockMvc.perform(post("/api/v1/prices/sync")
-                        .header("X-Admin-Key", "mandisaathi_admin_secret_2026"))
+                        .header("X-Admin-Key", "test_admin_key_32_characters_strictly_for_unit_tests"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").exists())
                 .andExpect(jsonPath("$.message").exists());
@@ -111,11 +111,11 @@ class PriceRecordControllerTest {
     void shouldReturnSyncStatusAndHistory() throws Exception {
         // Trigger a sync first to generate a run
         mockMvc.perform(post("/api/v1/prices/sync")
-                        .header("X-Admin-Key", "mandisaathi_admin_secret_2026"))
+                        .header("X-Admin-Key", "test_admin_key_32_characters_strictly_for_unit_tests"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/prices/sync/status")
-                        .header("X-Admin-Key", "mandisaathi_admin_secret_2026"))
+                        .header("X-Admin-Key", "test_admin_key_32_characters_strictly_for_unit_tests"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cron", is("0 0 19 * * *")))
                 .andExpect(jsonPath("$.zone", is("Asia/Kolkata")))

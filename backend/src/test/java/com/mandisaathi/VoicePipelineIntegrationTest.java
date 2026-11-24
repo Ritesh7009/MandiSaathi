@@ -247,6 +247,107 @@ class VoicePipelineIntegrationTest {
     }
 
     @Test
+    void jodhpurJeeraPriceDoesNotResolveToPaddy() throws Exception {
+        commodityRepository.save(new Commodity("CUMIN", "Cumin (Jeera)", "जीरा", "ਜ਼ੀਰਾ", "SPICES", "QUINTAL"));
+        Mandi jodhpur = new Mandi();
+        jodhpur.setCode("JODHPUR_GRAIN_RJ");
+        jodhpur.setNameEn("Jodhpur (Grain)");
+        jodhpur.setNameHi("जोधपुर (अनाज)");
+        jodhpur.setState("Rajasthan");
+        jodhpur.setDistrict("Jodhpur");
+        jodhpur.setActive(true);
+        mandiRepository.save(jodhpur);
+        Mandi otherMarket = new Mandi();
+        otherMarket.setCode("OTHER_JODHPUR_RJ");
+        otherMarket.setNameEn("Another Jodhpur Yard");
+        otherMarket.setNameHi("जोधपुर यार्ड");
+        otherMarket.setState("Rajasthan");
+        otherMarket.setDistrict("Jodhpur");
+        otherMarket.setActive(true);
+        mandiRepository.save(otherMarket);
+
+
+        String query = """
+                {"queryText":"What is the price of jeera in Jeera Mandi Jodhpur?","language":"en"}
+                """;
+        mockMvc.perform(post("/api/v1/voice/query").contentType(MediaType.APPLICATION_JSON).content(query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.extractedEntities.commodity", is("CUMIN")))
+                .andExpect(jsonPath("$.extractedEntities.mandi", is("JODHPUR_GRAIN_RJ")))
+                .andExpect(jsonPath("$.priceRecords", empty()));
+
+        PriceRecord filing = new PriceRecord();
+        filing.setCommodityCode("CUMIN");
+        filing.setMandiCode(jodhpur.getCode());
+        filing.setPriceDate(LocalDate.now().minusDays(2));
+        filing.setMinPrice(new BigDecimal("24000"));
+        filing.setModalPrice(new BigDecimal("25000"));
+        filing.setMaxPrice(new BigDecimal("26000"));
+        filing.setVariety("Cumin");
+        filing.setProvenanceType("LIVE_INGESTED");
+        filing.setDataSource("Test Agmarknet filing");
+        priceRecordRepository.save(filing);
+
+        String exactMarketQuery = """
+                {"queryText":"What is the cumin price at Jodhpur (Grain)?","language":"en"}
+                """;
+        mockMvc.perform(post("/api/v1/voice/query").contentType(MediaType.APPLICATION_JSON).content(exactMarketQuery))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.responseText", containsString("25000")))
+                .andExpect(jsonPath("$.priceRecords", hasSize(1)))
+                .andExpect(jsonPath("$.priceRecords[0].mandiCode", is("JODHPUR_GRAIN_RJ")))
+                .andExpect(jsonPath("$.priceRecords[0].variety", is("Cumin")));
+
+        // Required Regression Case: What is the price of jeera in Jeera Mandi Jodhpur?
+        mockMvc.perform(post("/api/v1/voice/query").contentType(MediaType.APPLICATION_JSON).content(query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.extractedEntities.commodity", is("CUMIN")))
+                .andExpect(jsonPath("$.extractedEntities.mandi", is("JODHPUR_GRAIN_RJ")))
+                .andExpect(jsonPath("$.responseText", containsString("25000")))
+                .andExpect(jsonPath("$.responseText", containsString("Cumin")))
+                .andExpect(jsonPath("$.source", is("Test Agmarknet filing")))
+                .andExpect(jsonPath("$.priceRecords", hasSize(1)))
+                .andExpect(jsonPath("$.priceRecords[0].modalPrice", closeTo(25000.0, 0.1)));
+    }
+
+    @Test
+    void testFarmingAdvisoryYellowRustInWheat() throws Exception {
+        String query = """
+                {"queryText":"How to control yellow rust in wheat crop?","language":"en"}
+                """;
+        mockMvc.perform(post("/api/v1/voice/query").contentType(MediaType.APPLICATION_JSON).content(query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent", is("FARMING_ADVISORY")))
+                .andExpect(jsonPath("$.responseText", containsString("Propiconazole")))
+                .andExpect(jsonPath("$.responseText", containsString("laboratory diagnosis")))
+                .andExpect(jsonPath("$.source", containsString("ICAR")));
+    }
+
+    @Test
+    void testFarmingAdvisoryWheatIrrigationSchedule() throws Exception {
+        String query = """
+                {"queryText":"When should I irrigate wheat crop?","language":"en"}
+                """;
+        mockMvc.perform(post("/api/v1/voice/query").contentType(MediaType.APPLICATION_JSON).content(query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent", is("FARMING_ADVISORY")))
+                .andExpect(jsonPath("$.responseText", containsString("Crown Root Initiation")))
+                .andExpect(jsonPath("$.source", containsString("PAU")));
+    }
+
+    @Test
+    void testFarmingAdvisorySafeMoistureStorage() throws Exception {
+        String query = """
+                {"queryText":"What is the safe moisture limit for wheat storage?","language":"en"}
+                """;
+        mockMvc.perform(post("/api/v1/voice/query").contentType(MediaType.APPLICATION_JSON).content(query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.intent", is("FARMING_ADVISORY")))
+                .andExpect(jsonPath("$.responseText", containsString("12%")))
+                .andExpect(jsonPath("$.source", containsString("WDRA")));
+    }
+
+    @Test
     void testNoPriceRecordsFound() throws Exception {
         String json = """
             {
@@ -305,11 +406,19 @@ class VoicePipelineIntegrationTest {
 
     @Test
     void testMultipartAudioSubmission() throws Exception {
+        // 44-byte minimal canonical PCM WAV container
+        byte[] validWavBytes = new byte[]{
+                'R', 'I', 'F', 'F', 36, 0, 0, 0, 'W', 'A', 'V', 'E',
+                'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+                (byte) 0x80, (byte) 0x3E, 0, 0, 0, (byte) 0x7D, 0, 0, 2, 0, 16, 0,
+                'd', 'a', 't', 'a', 0, 0, 0, 0
+        };
+
         MockMultipartFile audioFile = new MockMultipartFile(
                 "audio",
                 "farmer_query.wav",
                 "audio/wav",
-                new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+                validWavBytes
         );
 
         mockMvc.perform(multipart("/api/v1/voice/audio")

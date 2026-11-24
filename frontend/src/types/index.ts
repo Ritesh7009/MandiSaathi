@@ -100,6 +100,8 @@ export interface PriceComparison {
   summaryEn: string;
   summaryHi: string;
   summaryPa: string;
+  commonVariety?: string;
+  commonDate?: string;
 }
 
 export interface GovernmentScheme {

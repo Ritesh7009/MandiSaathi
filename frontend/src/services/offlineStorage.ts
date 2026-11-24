@@ -134,18 +134,11 @@ export async function getCachedPrices(
     const db = await getDb();
 
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction([STORE_PRICES, STORE_METADATA], 'readonly');
-      const priceStore = tx.objectStore(STORE_PRICES);
-      const metaStore = tx.objectStore(STORE_METADATA);
-
-      const priceReq = priceStore.getAll();
-      const metaReq = metaStore.get('last_price_sync');
+      const tx = db.transaction(STORE_PRICES, 'readonly');
+      const priceReq = tx.objectStore(STORE_PRICES).getAll();
 
       tx.oncomplete = () => {
         const allRecords = (priceReq.result || []) as CachedPriceRecord[];
-        const meta = metaReq.result as { timestamp: number } | undefined;
-        const lastSyncedAt = meta?.timestamp ?? (allRecords.length > 0 ? (allRecords[0]?.cachedAt ?? null) : null);
-
         let filtered = allRecords;
         if (commodityCode) {
           filtered = filtered.filter((r) => r.commodityCode.toUpperCase() === commodityCode.toUpperCase());
@@ -157,7 +150,13 @@ export async function getCachedPrices(
         // Sort by priceDate desc
         filtered.sort((a, b) => (b.priceDate || '').localeCompare(a.priceDate || ''));
 
-        const isStale = lastSyncedAt ? Date.now() - lastSyncedAt > STALE_THRESHOLD_MS : true;
+        const lastSyncedAt = filtered.reduce<number | null>(
+          (latest, record) => Math.max(latest ?? 0, record.cachedAt), null,
+        );
+        const reportTime = filtered[0]?.priceDate
+          ? Date.parse(`${filtered[0].priceDate}T23:59:59+05:30`)
+          : Number.NaN;
+        const isStale = !Number.isFinite(reportTime) || Date.now() - reportTime > STALE_THRESHOLD_MS;
 
         resolve({
           records: filtered,

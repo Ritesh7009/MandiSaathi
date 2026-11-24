@@ -1,0 +1,82 @@
+server:
+  port: ${PORT:${SERVER_PORT:8080}}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+spring:
+  application:
+    name: mandisaathi-backend
+
+  datasource:
+    url: ${JDBC_DATABASE_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mandisaathi}}}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  version: 0.1.0-prod
+  security:
+    admin-api-key: ${ADMIN_API_KEY}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+
+gnani:
+  enabled: ${GNANI_ENABLED:false}
+  api-key: ${GNANI_API_KEY:}
+  stt-url: ${GNANI_STT_URL:https://api.vachana.ai/stt/v3}
+  tts-url: ${GNANI_TTS_URL:https://api.vachana.ai/api/v1/tts/inference}
+  stt-model: ${GNANI_STT_MODEL:prisma-v2.5}
+  tts-model: ${GNANI_TTS_MODEL:timbre-v2.5}
+  timeout-ms: ${GNANI_TIMEOUT_MS:10000}
+  max-concurrent-requests: ${GNANI_MAX_CONCURRENT_REQUESTS:5}
+  acquire-timeout-ms: ${GNANI_ACQUIRE_TIMEOUT_MS:3000}
+
+mandidata:
+  enabled: ${MANDI_DATA_ENABLED:false}
+  schedule-enabled: ${MANDI_DATA_SCHEDULE_ENABLED:false}
+  cron: ${MANDI_DATA_CRON:0 0 19 * * *}
+  zone: ${MANDI_DATA_ZONE:Asia/Kolkata}
+  api-key: ${DATA_GOV_IN_API_KEY:}
+  api-url: ${DATA_GOV_IN_URL:https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070}
+  limit: ${MANDI_DATA_LIMIT:100}
+  priority-state: ${MANDI_DATA_PRIORITY_STATE:Rajasthan}
+  priority-district: ${MANDI_DATA_PRIORITY_DISTRICT:Jodhpur}
+  timeout-ms: ${MANDI_DATA_TIMEOUT_MS:15000}
+
+logging:
+  level:
+    root: INFO
+    com.mandisaathi: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.flywaydb: INFO

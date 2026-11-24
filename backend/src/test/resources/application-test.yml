@@ -24,3 +24,7 @@ spring:
 gnani:
   enabled: false
 
+app:
+  security:
+    admin-api-key: test_admin_key_32_characters_strictly_for_unit_tests
+

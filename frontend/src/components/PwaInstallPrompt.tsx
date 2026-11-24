@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { X, DownloadSimple } from '@phosphor-icons/react';
 import { subscribeToInstallPrompt, promptPwaInstall, isAppInstalled } from '../pwa';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -8,26 +10,18 @@ export const PwaInstallPrompt: React.FC = () => {
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    // If running in standalone PWA, never show install prompt
-    if (isAppInstalled()) {
-      return;
-    }
-
+    if (isAppInstalled()) return;
     const previouslyDismissed = localStorage.getItem('mandisaathi_pwa_dismissed') === 'true';
     setDismissed(previouslyDismissed);
 
-    const unsubscribe = subscribeToInstallPrompt((installable) => {
+    return subscribeToInstallPrompt((installable) => {
       setCanInstall(installable);
     });
-
-    return unsubscribe;
   }, []);
 
   const handleInstall = async () => {
     const success = await promptPwaInstall();
-    if (success) {
-      setCanInstall(false);
-    }
+    if (success) setCanInstall(false);
   };
 
   const handleDismiss = () => {
@@ -35,51 +29,57 @@ export const PwaInstallPrompt: React.FC = () => {
     localStorage.setItem('mandisaathi_pwa_dismissed', 'true');
   };
 
-  if (!canInstall || dismissed) {
-    return null;
-  }
-
   return (
-    <div
-      role="banner"
-      aria-label="Install MandiSaathi application"
-      className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 bg-forest text-ivory rounded-2xl p-4 shadow-xl border border-gold/30 flex flex-col gap-3 animate-fade-in"
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gold/20 border border-gold/40 flex items-center justify-center shrink-0">
-          <img src="/pwa-192x192.png" alt="MandiSaathi" className="w-7 h-7 rounded-lg" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-semibold text-ivory">{t('installAppTitle')}</h4>
-          <p className="text-xs text-ivory/80 leading-relaxed mt-0.5">
-            {t('installAppSubtitle')}
-          </p>
-        </div>
-        <button
-          onClick={handleDismiss}
-          className="text-ivory/60 hover:text-ivory p-1 -mr-1"
-          aria-label={t('dismissBtnText')}
+    <AnimatePresence>
+      {canInstall && !dismissed && (
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.96 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          role="banner"
+          aria-label="Install MandiSaathi application"
+          className="fixed bottom-24 md:bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 bg-canopy-deep text-white rounded-2xl p-4 shadow-dock border border-canopy-bright/30 flex flex-col gap-3"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-saffron/20 border border-saffron/40 flex items-center justify-center shrink-0">
+              <img src="/pwa-192x192.png" alt="MandiSaathi" className="w-7 h-7 rounded-lg" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-display text-sm font-semibold text-white">{t('installAppTitle')}</h4>
+              <p className="text-xs text-white/80 leading-relaxed mt-0.5">
+                {t('installAppSubtitle')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label={t('dismissBtnText')}
+            >
+              <X weight="bold" className="w-4 h-4" />
+            </button>
+          </div>
 
-      <div className="flex items-center gap-2 pt-1">
-        <button
-          onClick={handleInstall}
-          className="flex-1 bg-gold hover:bg-gold-dark text-forest font-semibold text-xs py-2 px-3 rounded-lg shadow-sm transition-colors text-center"
-        >
-          {t('installBtnText')}
-        </button>
-        <button
-          onClick={handleDismiss}
-          className="bg-white/10 hover:bg-white/15 text-ivory/90 text-xs py-2 px-3 rounded-lg transition-colors"
-        >
-          {t('dismissBtnText')}
-        </button>
-      </div>
-    </div>
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={handleInstall}
+              className="flex-1 min-h-[44px] inline-flex items-center justify-center space-x-1.5 bg-saffron hover:brightness-105 text-[#0d1f17] font-bold text-xs py-2.5 px-3 rounded-xl shadow-subtle transition-all cursor-pointer"
+            >
+              <DownloadSimple weight="bold" className="w-4 h-4" />
+              <span>{t('installBtnText')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              className="bg-white/10 hover:bg-white/15 text-white text-xs font-medium py-2.5 px-3 rounded-xl transition-colors cursor-pointer"
+            >
+              {t('dismissBtnText')}
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

@@ -113,8 +113,8 @@ public class GnaniTtsServiceImpl implements GnaniTtsService {
                 log.error("Gnani TTS HTTP exception: status {}", ex.getStatusCode().value());
                 return SynthesisResult.failure("Gnani TTS service error: HTTP " + ex.getStatusCode().value());
             } catch (Exception ex) {
-                log.error("Unexpected error in Gnani TTS synthesis: {}", ex.getMessage());
-                return SynthesisResult.failure("Unable to synthesize speech audio: " + ex.getMessage());
+                log.error("Unexpected error in Gnani TTS synthesis: {}", ex.getClass().getSimpleName());
+                return SynthesisResult.failure("Unable to synthesize speech audio. Please try again later.");
             }
         }
         return SynthesisResult.failure("Gnani AI TTS rate limit reached after retries.");

@@ -80,16 +80,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets (Vite bundle chunks, fonts, images)
+  // Static assets (Vite bundle chunks, fonts, images) - restricted to same-origin and approved font CDNs
   const isStaticAsset =
-    url.pathname.startsWith('/assets/') ||
-    url.pathname.endsWith('.js') ||
-    url.pathname.endsWith('.css') ||
-    url.pathname.endsWith('.svg') ||
-    url.pathname.endsWith('.png') ||
-    url.pathname.endsWith('.woff2') ||
-    url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('fonts.gstatic.com');
+    (url.origin === self.location.origin && (
+      url.pathname.startsWith('/assets/') ||
+      url.pathname.endsWith('.js') ||
+      url.pathname.endsWith('.css') ||
+      url.pathname.endsWith('.svg') ||
+      url.pathname.endsWith('.png') ||
+      url.pathname.endsWith('.woff2')
+    )) ||
+    url.hostname === 'fonts.googleapis.com' ||
+    url.hostname === 'fonts.gstatic.com';
 
   if (isStaticAsset) {
     event.respondWith(
@@ -123,12 +125,13 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/api/v1/prices') ||
     url.pathname.startsWith('/api/v1/schemes');
 
-  // Explicitly NEVER cache grievance records, personal data, voice endpoints, or administrative routes
+  // Explicitly NEVER cache grievance records, personal data, voice endpoints, admin sync, or administrative routes
   const isExcludedFromCache =
     url.pathname.startsWith('/api/v1/complaints') ||
     url.pathname.startsWith('/api/v1/voice') ||
     url.pathname.startsWith('/api/v1/health') ||
-    url.pathname.startsWith('/actuator');
+    url.pathname.startsWith('/actuator') ||
+    url.pathname.startsWith('/api/v1/prices/sync');
 
   if (isAllowlistedPublicApi && !isExcludedFromCache) {
     event.respondWith(

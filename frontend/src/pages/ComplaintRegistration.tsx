@@ -1,670 +1,880 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { Card } from '@astryxdesign/core/Card';
+import { Badge } from '@astryxdesign/core/Badge';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Button } from '@astryxdesign/core/Button';
+import { Divider } from '@astryxdesign/core/Divider';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Selector, type SelectorOptionData } from '@astryxdesign/core/Selector';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { TextArea } from '@astryxdesign/core/TextArea';
+import { Stepper, Step } from '@astryxdesign/core/Stepper';
+import { useToast } from '@astryxdesign/core/Toast';
 import { useLanguage } from '../context/LanguageContext';
 import { api } from '../services/apiClient';
+import { LottieBadge } from '../components/ui/LottieBadge';
+import { TransitionPanel } from '../components/ui/MotionPrimitives';
 import {
-  FileText,
-  AlertOctagon,
-  CheckCircle2,
-  ArrowRight,
+  ClipboardText,
   ArrowLeft,
-  Building2,
-  Phone,
-  User,
-  Info,
+  PaperPlaneTilt,
+  Ticket,
+  Key,
   Copy,
   Check,
   ShieldCheck,
-  Search,
-  Key,
-} from 'lucide-react';
-import { ComplaintRequest, Complaint } from '../types';
+  MapPin,
+  User,
+  Phone,
+  MagnifyingGlass,
+  Trash,
+} from '@phosphor-icons/react';
+import { Complaint, ComplaintRequest } from '../types';
+
+const FILED_COMPLAINTS_STORAGE_KEY = 'mandisaathi_filed_complaints';
+const ALL_MANDIS_SENTINEL = '__ALL__';
+
+interface StoredComplaintSummary {
+  referenceNumber: string;
+  category: string;
+  state: string;
+  district: string;
+  mandiName: string | null;
+  status: string;
+  createdAt: string;
+}
+
+type FormStep = 'edit' | 'review' | 'success';
 
 export const ComplaintRegistration: React.FC = () => {
-  const { language, t } = useLanguage();
+  const { language, t, getMandiName } = useLanguage();
+  const showToast = useToast();
 
-  // Form State
+  const [step, setStep] = useState<FormStep>('edit');
   const [category, setCategory] = useState<string>('WEIGHMENT_DISPARITY');
-  const [description, setDescription] = useState<string>('');
-  const [state, setState] = useState<string>('Punjab');
-  const [district, setDistrict] = useState<string>('Ludhiana');
-  const [mandiCode, setMandiCode] = useState<string>('KHANNA_PB');
+  const [selectedState, setSelectedState] = useState<string>('');
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
+  const [customState, setCustomState] = useState<string>('');
+  const [customDistrict, setCustomDistrict] = useState<string>('');
+  const [selectedMandiCode, setSelectedMandiCode] = useState<string>('');
   const [farmerName, setFarmerName] = useState<string>('');
   const [farmerPhone, setFarmerPhone] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Workflow State: 'edit' | 'review' | 'success'
-  const [step, setStep] = useState<'edit' | 'review' | 'success'>('edit');
-  const [submittedComplaint, setSubmittedComplaint] = useState<Complaint | null>(null);
-  const [copiedRef, setCopiedRef] = useState(false);
-  const [copiedToken, setCopiedToken] = useState(false);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  // Holds the newly created complaint (and its one-time trackingToken) strictly in memory.
+  const [createdComplaint, setCreatedComplaint] = useState<Complaint | null>(null);
+  const [copiedField, setCopiedField] = useState<'ref' | 'token' | null>(null);
 
-  // Local device grievances storage (Privacy-preserving)
-  const [complaints, setComplaints] = useState<Complaint[]>(() => {
+  // Tracking lookup panel state (X-Tracking-Token header)
+  const [trackRef, setTrackRef] = useState<string>('');
+  const [trackToken, setTrackToken] = useState<string>('');
+  const [trackedComplaint, setTrackedComplaint] = useState<Complaint | null>(null);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const [isTracking, setIsTracking] = useState<boolean>(false);
+
+  // Safe local history (stores metadata only, never tracking tokens)
+  const [filedHistory, setFiledHistory] = useState<StoredComplaintSummary[]>(() => {
     try {
-      const stored = localStorage.getItem('mandisaathi_filed_complaints');
-      return stored ? JSON.parse(stored) : [];
+      const raw = localStorage.getItem(FILED_COMPLAINTS_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
   });
 
-  // Track Grievance state
-  const [trackRef, setTrackRef] = useState<string>('');
-  const [trackToken, setTrackToken] = useState<string>('');
-  const [trackResult, setTrackResult] = useState<Complaint | null>(null);
-  const [trackError, setTrackError] = useState<string | null>(null);
-  const [trackingLoading, setTrackingLoading] = useState<boolean>(false);
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILED_COMPLAINTS_STORAGE_KEY, JSON.stringify(filedHistory.slice(0, 12)));
+    } catch {
+      // Ignore storage quota errors gracefully
+    }
+  }, [filedHistory]);
 
-  // Mandis list for dropdown
   const { data: mandis = [] } = useQuery({
-    queryKey: ['mandisForComplaint'],
+    queryKey: ['mandisList', 'ALL'],
     queryFn: () => api.getMandis(),
     staleTime: 120000,
   });
 
-  // Registration Mutation
+  const uniqueStates = useMemo(
+    () => Array.from(new Set(mandis.map((m) => m.state).filter(Boolean))).sort(),
+    [mandis]
+  );
+
+  const districtsForState = useMemo(() => {
+    if (!selectedState || selectedState === '__OTHER__') return [];
+    return Array.from(
+      new Set(mandis.filter((m) => m.state === selectedState).map((m) => m.district).filter(Boolean))
+    ).sort();
+  }, [mandis, selectedState]);
+
+  const mandisForSelection = useMemo(() => {
+    if (!selectedState || selectedState === '__OTHER__') return [];
+    return mandis.filter(
+      (m) =>
+        m.state === selectedState &&
+        (!selectedDistrict || selectedDistrict === '__OTHER__' || m.district === selectedDistrict)
+    );
+  }, [mandis, selectedState, selectedDistrict]);
+
+  const resolvedState =
+    selectedState === '__OTHER__' || uniqueStates.length === 0 ? customState.trim() : selectedState.trim();
+  const resolvedDistrict =
+    selectedDistrict === '__OTHER__' || districtsForState.length === 0
+      ? customDistrict.trim()
+      : selectedDistrict.trim();
+
+  const categories = useMemo(
+    () => [
+      { value: 'WEIGHMENT_DISPARITY', label: t('catWeighment') },
+      { value: 'DELAYED_PAYMENT', label: t('catPayment') },
+      { value: 'MANDI_INFRASTRUCTURE', label: t('catInfra') },
+      { value: 'UNAUTHORIZED_DEDUCTIONS', label: t('catDeductions') },
+      { value: 'QUALITY_DISPUTE', label: t('catQuality') },
+    ],
+    [t]
+  );
+
+  const categoryLabelMap: Record<string, string> = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.value, c.label])),
+    [categories]
+  );
+
+  const copy = useMemo(() => {
+    if (language === 'hi') {
+      return {
+        eyebrow: '05 · मंडी शिकायत एवं गोपनीयता डेस्क',
+        step1Label: 'विवरण भरें',
+        step2Label: 'समीक्षा व पुष्टि',
+        step3Label: 'संदर्भ जारी',
+        fillDetailsTitle: 'समस्या का विवरण भरें',
+        otherManual: 'अन्य (स्वयं लिखें)',
+        customStatePlaceholder: 'राज्य का नाम लिखें',
+        customDistrictPlaceholder: 'जिला का नाम लिखें',
+        optionalMandiLabel: 'मंडी चुनें (वैकल्पिक)',
+        charCountHint: 'न्यूनतम 10 अक्षर आवश्यक',
+        oneTimeTokenTitle: 'एक-बारगी ट्रैकिंग टोकन (सुरक्षित रखें)',
+        oneTimeTokenWarn:
+          'कृपया इस टोकन को अभी सुरक्षित नोट करें। गोपनीयता के लिए यह टोकन केवल एक बार दिखाया जाता है और इसे स्थानीय स्टोरेज में सहेजा नहीं जाता।',
+        newGrievanceBtn: 'नया रिकॉर्ड दर्ज करें',
+        trackTitle: 'रिकॉर्ड की स्थिति जांचें',
+        trackSubtitle: 'आंतरिक संदर्भ संख्या और ट्रैकिंग टोकन दर्ज करें',
+        refLabel: 'संदर्भ संख्या',
+        tokenLabel: 'ट्रैकिंग टोकन (X-Tracking-Token)',
+        tokenPlaceholder: 'प्राप्त सुरक्षा टोकन दर्ज करें',
+        checkStatusBtn: 'स्थिति जांचें',
+        checkingBtn: 'जांच हो रही है...',
+        trackNotFound: 'संदर्भ संख्या या ट्रैकिंग टोकन मेल नहीं खाया।',
+        clearHistory: 'सूची साफ करें',
+        privacyBadge: 'गोपनीयता सुरक्षित: टोकन केवल एक बार दिखाया जाता है',
+        copiedToast: 'क्लिपबोर्ड में कॉपी किया गया',
+      };
+    }
+    if (language === 'pa') {
+      return {
+        eyebrow: '05 · ਮੰਡੀ ਸ਼ਿਕਾਇਤ ਅਤੇ ਗੋਪਨੀਯਤਾ ਡੈਸਕ',
+        step1Label: 'ਵੇਰਵਾ ਭਰੋ',
+        step2Label: 'ਸਮੀਖਿਆ ਤੇ ਪੁਸ਼ਟੀ',
+        step3Label: 'ਹਵਾਲਾ ਜਾਰੀ',
+        fillDetailsTitle: 'ਸਮੱਸਿਆ ਦਾ ਵੇਰਵਾ ਭਰੋ',
+        otherManual: 'ਹੋਰ (ਖੁਦ ਲਿਖੋ)',
+        customStatePlaceholder: 'ਰਾਜ ਦਾ ਨਾਮ ਲਿਖੋ',
+        customDistrictPlaceholder: 'ਜ਼ਿਲ੍ਹੇ ਦਾ ਨਾਮ ਲਿਖੋ',
+        optionalMandiLabel: 'ਮੰਡੀ ਚੁਣੋ (ਵਿਕਲਪਿਕ)',
+        charCountHint: 'ਘੱਟੋ-ਘੱਟ 10 ਅੱਖਰ ਲੋੜੀਂਦੇ ਹਨ',
+        oneTimeTokenTitle: 'ਇੱਕ-ਵਾਰ ਟਰੈਕਿੰਗ ਟੋਕਨ (ਸੁਰੱਖਿਅਤ ਰੱਖੋ)',
+        oneTimeTokenWarn:
+          'ਕਿਰਪਾ ਕਰਕੇ ਇਹ ਟੋਕਨ ਹੁਣੇ ਸੁਰੱਖਿਅਤ ਨੋਟ ਕਰੋ। ਗੋਪਨੀਯਤਾ ਲਈ ਇਹ ਟੋਕਨ ਸਿਰਫ਼ ਇੱਕ ਵਾਰ ਦਿਖਾਇਆ ਜਾਂਦਾ ਹੈ।',
+        newGrievanceBtn: 'ਨਵਾਂ ਰਿਕਾਰਡ ਦਰਜ ਕਰੋ',
+        trackTitle: 'ਰਿਕਾਰਡ ਦੀ ਸਥਿਤੀ ਜਾਂਚੋ',
+        trackSubtitle: 'ਅੰਦਰੂਨੀ ਹਵਾਲਾ ਨੰਬਰ ਅਤੇ ਟਰੈਕਿੰਗ ਟੋਕਨ ਭਰੋ',
+        refLabel: 'ਹਵਾਲਾ ਨੰਬਰ',
+        tokenLabel: 'ਟਰੈਕਿੰਗ ਟੋਕਨ (X-Tracking-Token)',
+        tokenPlaceholder: 'ਮਿਲਿਆ ਸੁਰੱਖਿਆ ਟੋਕਨ ਭਰੋ',
+        checkStatusBtn: 'ਸਥਿਤੀ ਜਾਂਚੋ',
+        checkingBtn: 'ਜਾਂਚ ਜਾਰੀ ਹੈ...',
+        trackNotFound: 'ਹਵਾਲਾ ਨੰਬਰ ਜਾਂ ਟਰੈਕਿੰਗ ਟੋਕਨ ਮੇਲ ਨਹੀਂ ਖਾਂਦਾ।',
+        clearHistory: 'ਸੂची ਸਾਫ਼ ਕਰੋ',
+        privacyBadge: 'ਗੋਪਨੀਯਤਾ ਸੁਰੱਖਿਅਤ: ਟੋਕਨ ਸਿਰਫ਼ ਇੱਕ ਵਾਰ ਦਿਖਾਇਆ ਜਾਂਦਾ ਹੈ',
+        copiedToast: 'ਕਲਿੱਪਬੋਰਡ ਵਿੱਚ ਕਾਪੀ ਕੀਤਾ ਗਿਆ',
+      };
+    }
+    return {
+      eyebrow: '05 · GRIEVANCE LEDGER & TOKENIZED LOOKUP',
+      step1Label: 'Issue Details',
+      step2Label: 'Review & Confirm',
+      step3Label: 'Reference Issued',
+      fillDetailsTitle: 'Fill Issue Details',
+      otherManual: 'Other (Type manually)',
+      customStatePlaceholder: 'Enter State name',
+      customDistrictPlaceholder: 'Enter District name',
+      optionalMandiLabel: 'Select Mandi (Optional)',
+      charCountHint: 'Minimum 10 characters required',
+      oneTimeTokenTitle: 'One-Time Tracking Token (Save Now)',
+      oneTimeTokenWarn:
+        'Copy and store this token now. For your privacy, raw tracking tokens are shown only once at creation and are never stored in browser history.',
+      newGrievanceBtn: 'Record Another Issue',
+      trackTitle: 'Track a Grievance',
+      trackSubtitle: 'Look up status with your reference number and X-Tracking-Token',
+      refLabel: 'Reference Number',
+      tokenLabel: 'Tracking Token (X-Tracking-Token)',
+      tokenPlaceholder: 'Paste your private tracking token',
+      checkStatusBtn: 'Check Status',
+      checkingBtn: 'Checking...',
+      trackNotFound: 'No matching record found for this reference and tracking token.',
+      clearHistory: 'Clear list',
+      privacyBadge: 'Privacy-first: Token hashed with SHA-256 on server',
+      copiedToast: 'Copied to clipboard',
+    };
+  }, [language]);
+
   const registerMutation = useMutation({
-    mutationFn: (request: ComplaintRequest) => api.registerComplaint(request),
-    onSuccess: (newComplaint) => {
-      setSubmittedComplaint(newComplaint);
+    mutationFn: (payload: ComplaintRequest) => api.registerComplaint(payload),
+    onSuccess: (data) => {
+      setCreatedComplaint(data);
       setStep('success');
-      try {
-        const updated = [newComplaint, ...complaints.filter(c => c.referenceNumber !== newComplaint.referenceNumber)];
-        setComplaints(updated);
-        localStorage.setItem('mandisaathi_filed_complaints', JSON.stringify(updated));
-      } catch (err) {
-        console.error('Failed to save complaint to local storage', err);
+      setFormError(null);
+      setTrackRef(data.referenceNumber);
+      if (data.trackingToken) {
+        setTrackToken(data.trackingToken);
       }
+      const summary: StoredComplaintSummary = {
+        referenceNumber: data.referenceNumber,
+        category: data.category,
+        state: data.state,
+        district: data.district,
+        mandiName: data.mandiName,
+        status: data.status,
+        createdAt: data.createdAt,
+      };
+      setFiledHistory((prev) => [
+        summary,
+        ...prev.filter((item) => item.referenceNumber !== data.referenceNumber),
+      ]);
+      showToast({ body: t('complaintSuccessTitle'), type: 'info' });
     },
     onError: (err: Error) => {
-      setValidationError(err.message || t('errFailedRegisterGrievance'));
+      setFormError(err.message || t('errFailedRegisterGrievance'));
     },
   });
 
-  const handleTrackComplaint = async (refToTrack?: string, tokenToTrack?: string) => {
-    const r = (refToTrack || trackRef).trim();
-    const tok = (tokenToTrack || trackToken).trim();
-    if (!r || !tok) {
-      setTrackError('Both Reference Number and Tracking Token are required.');
-      return;
-    }
-    setTrackingLoading(true);
-    setTrackError(null);
-    try {
-      const res = await api.getComplaintByRef(r, tok);
-      setTrackResult(res);
-      // Update locally cached record
-      const updated = complaints.map(c => c.referenceNumber === res.referenceNumber ? { ...c, ...res } : c);
-      setComplaints(updated);
-      localStorage.setItem('mandisaathi_filed_complaints', JSON.stringify(updated));
-    } catch (err: any) {
-      setTrackError(err.message || 'Grievance not found or invalid tracking token.');
-    } finally {
-      setTrackingLoading(false);
-    }
-  };
-
-  const categories = [
-    { code: 'WEIGHMENT_DISPARITY', labelKey: 'catWeighment' },
-    { code: 'DELAYED_PAYMENT', labelKey: 'catPayment' },
-    { code: 'MANDI_INFRASTRUCTURE', labelKey: 'catInfra' },
-    { code: 'UNAUTHORIZED_DEDUCTIONS', labelKey: 'catDeductions' },
-    { code: 'QUALITY_DISPUTE', labelKey: 'catQuality' },
-  ];
-
-  const handleReview = (e: React.FormEvent) => {
+  const handleProceedReview = (e: React.FormEvent) => {
     e.preventDefault();
-    setValidationError(null);
+    setFormError(null);
 
-    if (!description.trim() || description.trim().length < 10) {
-      setValidationError(t('errMinComplaintDesc'));
+    if (!resolvedState || !resolvedDistrict) {
+      setFormError(t('errStateDistrictReq'));
       return;
     }
-    if (!state.trim() || !district.trim()) {
-      setValidationError(t('errStateDistrictReq'));
+    if (description.trim().length < 10) {
+      setFormError(t('errMinComplaintDesc'));
       return;
     }
-
     setStep('review');
   };
 
   const handleConfirmSubmit = () => {
-    setValidationError(null);
+    setFormError(null);
     const payload: ComplaintRequest = {
       category,
       description: description.trim(),
-      state: state.trim(),
-      district: district.trim(),
-      mandiCode: mandiCode || undefined,
-      farmerName: farmerName.trim() || undefined,
-      farmerPhone: farmerPhone.trim() || undefined,
+      state: resolvedState,
+      district: resolvedDistrict,
+      ...(selectedMandiCode ? { mandiCode: selectedMandiCode } : {}),
+      ...(farmerName.trim() ? { farmerName: farmerName.trim() } : {}),
+      ...(farmerPhone.trim() ? { farmerPhone: farmerPhone.trim() } : {}),
     };
     registerMutation.mutate(payload);
   };
 
   const handleResetForm = () => {
-    setDescription('');
+    setCategory('WEIGHMENT_DISPARITY');
+    setSelectedMandiCode('');
     setFarmerName('');
     setFarmerPhone('');
-    setSubmittedComplaint(null);
-    setValidationError(null);
+    setDescription('');
+    setCreatedComplaint(null);
+    setFormError(null);
     setStep('edit');
   };
 
-  const handleCopyReference = (ref: string) => {
-    navigator.clipboard.writeText(ref);
-    setCopiedRef(true);
-    setTimeout(() => setCopiedRef(false), 2000);
+  const handleTrackLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const ref = trackRef.trim();
+    const tok = trackToken.trim();
+    if (!ref || !tok) return;
+
+    setIsTracking(true);
+    setTrackError(null);
+    setTrackedComplaint(null);
+    try {
+      const result = await api.getComplaintByRef(ref, tok);
+      setTrackedComplaint(result);
+    } catch (err) {
+      setTrackError((err as Error).message || copy.trackNotFound);
+    } finally {
+      setIsTracking(false);
+    }
   };
 
-  const handleCopyToken = (tok: string) => {
-    navigator.clipboard.writeText(tok);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
+  const copyToClipboard = async (value: string, field: 'ref' | 'token') => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      showToast({ body: copy.copiedToast, type: 'info' });
+      setTimeout(() => setCopiedField(null), 1800);
+    } catch {
+      // Clipboard fallback not critical
+    }
   };
 
-  const getCategoryLabel = (catCode: string) => {
-    const match = categories.find((c) => c.code === catCode);
-    return match ? t(match.labelKey) : catCode;
-  };
+  const selectedMandiName = useMemo(() => {
+    if (!selectedMandiCode) return null;
+    const found = mandis.find((m) => m.code === selectedMandiCode);
+    return found ? getMandiName(found.code, found.nameHi || found.nameEn) : selectedMandiCode;
+  }, [mandis, selectedMandiCode, getMandiName]);
 
-  const selectedMandiObj = mandis.find((m) => m.code === mandiCode);
+  const descLength = description.trim().length;
+  const activeStepIndex = step === 'edit' ? 0 : step === 'review' ? 1 : 2;
+
+  const stateOptions: SelectorOptionData[] = useMemo(
+    () => [
+      ...uniqueStates.map((st) => ({ value: st, label: st })),
+      { value: '__OTHER__', label: copy.otherManual },
+    ],
+    [uniqueStates, copy.otherManual]
+  );
+
+  const districtOptions: SelectorOptionData[] = useMemo(
+    () => [
+      ...districtsForState.map((d) => ({ value: d, label: d })),
+      { value: '__OTHER__', label: copy.otherManual },
+    ],
+    [districtsForState, copy.otherManual]
+  );
+
+  const mandiOptions: SelectorOptionData[] = useMemo(
+    () => [
+      { value: ALL_MANDIS_SENTINEL, label: t('allMandis') },
+      ...mandisForSelection.map((m) => ({
+        value: m.code,
+        label: `${getMandiName(m.code, m.nameHi || m.nameEn)} (${m.district})`,
+      })),
+    ],
+    [mandisForSelection, getMandiName, t]
+  );
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16 lg:pb-8">
-      {/* Screen Header */}
-      <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center space-x-2 text-forest text-xs font-semibold uppercase tracking-wider mb-1">
-            <FileText className="w-3.5 h-3.5 text-harvest-dark" />
-            <span>Mandi Transparency & Grievances</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-charcoal tracking-tight">
-            {t('complaintsTitle')}
-          </h1>
-          <p className="text-xs sm:text-sm text-charcoal-muted mt-0.5 max-w-2xl">
-            {t('complaintsSubtitle')}
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-2 text-xs font-mono bg-surface border border-hairline px-3 py-1.5 rounded-lg text-charcoal-muted self-start sm:self-center">
-          <Building2 className="w-3.5 h-3.5 text-forest" />
-          <span>Platform Issue Record</span>
-        </div>
-      </section>
-
-      {/* Statutory Disclaimer Alert */}
-      <div className="rounded-xl bg-surface border border-hairline p-4 flex items-start space-x-3 text-xs text-charcoal shadow-subtle">
-        <Info className="w-4 h-4 text-harvest-dark shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <span className="font-bold text-forest-dark uppercase tracking-wider text-xs">
-            Platform Governance Notice
-          </span>
-          <p className="text-charcoal-muted leading-relaxed">
-            {t('complaintLegalDisclaimer')}
-          </p>
-        </div>
-      </div>
-
-      {/* Main Flow: Form / Review / Success */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Interactive Form Workflow */}
-        <section className="lg:col-span-7">
-          <div className="rounded-xl border border-hairline bg-surface-white p-5 sm:p-6 shadow-subtle">
-            {/* Step 1: Input Form */}
-            {step === 'edit' && (
-              <form onSubmit={handleReview} className="space-y-4 text-xs">
-                <div className="flex items-center justify-between border-b border-hairline pb-3">
-                  <h2 className="text-sm font-bold text-charcoal flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-forest text-white text-xs flex items-center justify-center font-bold">
-                      1
-                    </span>
-                    <span>Fill Issue Details</span>
-                  </h2>
-                  <span className="text-xs text-charcoal-muted font-mono">
-                    Step 1 of 2: Details
-                  </span>
-                </div>
-
-                {validationError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center space-x-2">
-                    <AlertOctagon className="w-4 h-4 shrink-0" />
-                    <span>{validationError}</span>
-                  </div>
-                )}
-
-                {/* Category Selection */}
-                <div>
-                  <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-                    {t('complaintCategory')} *
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {t(c.labelKey)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* State & District */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-                      {t('selectState')} *
-                    </label>
-                    <input
-                      type="text"
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                      placeholder="e.g. Punjab, Haryana, Rajasthan"
-                      required
-                      className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-                      {t('selectDistrict')} *
-                    </label>
-                    <input
-                      type="text"
-                      value={district}
-                      onChange={(e) => setDistrict(e.target.value)}
-                      placeholder="e.g. Ludhiana, Karnal, Sirsa"
-                      required
-                      className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-                    />
-                  </div>
-                </div>
-
-                {/* Mandi (Optional / Applicable) */}
-                <div>
-                  <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-                    APMC Mandi Yard (Where applicable)
-                  </label>
-                  <select
-                    value={mandiCode}
-                    onChange={(e) => setMandiCode(e.target.value)}
-                    className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-                  >
-                    <option value="">General District Mandi / Other</option>
-                    {mandis.map((m) => (
-                      <option key={m.code} value={m.code}>
-                        {language === 'hi' ? m.nameHi : language === 'pa' && m.namePa ? m.namePa : m.nameEn} ({m.district}, {m.state})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Detailed Description */}
-                <div>
-                  <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1">
-                    {t('descriptionLabel')} *
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder={t('descriptionPlaceholder')}
-                    required
-                    className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest leading-relaxed"
-                  />
-                  <div className="flex justify-between text-xs text-charcoal-muted mt-1 font-mono">
-                    <span>Minimum 10 characters. Include lot numbers if available.</span>
-                    <span>{description.length} chars</span>
-                  </div>
-                </div>
-
-                {/* Farmer Contact Info (Optional) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-hairline">
-                  <div>
-                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1 flex items-center space-x-1">
-                      <User className="w-3.5 h-3.5 text-charcoal-muted" />
-                      <span>{t('farmerNameLabel')}</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={farmerName}
-                      onChange={(e) => setFarmerName(e.target.value)}
-                      placeholder="e.g. Gurpreet Singh / राम कुमार"
-                      className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-charcoal-subtle uppercase tracking-wider mb-1 flex items-center space-x-1">
-                      <Phone className="w-3.5 h-3.5 text-charcoal-muted" />
-                      <span>{t('farmerPhoneLabel')}</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={farmerPhone}
-                      onChange={(e) => setFarmerPhone(e.target.value)}
-                      placeholder="e.g. 9876543210"
-                      className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-charcoal focus:outline-none focus:border-forest"
-                    />
-                  </div>
-                </div>
-
-                {/* CTA Button */}
-                <div className="pt-3">
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-forest hover:bg-forest-light text-white text-xs font-semibold rounded-lg shadow-subtle flex items-center justify-center space-x-2 transition-all cursor-pointer active:scale-[0.98]"
-                  >
-                    <span>{t('reviewBtn')}</span>
-                    <ArrowRight className="w-4 h-4 text-harvest" />
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Step 2: Review Before Submitting */}
-            {step === 'review' && (
-              <div className="space-y-4 text-xs">
-                <div className="flex items-center justify-between border-b border-hairline pb-3">
-                  <h2 className="text-sm font-bold text-charcoal flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-harvest-dark text-white text-xs flex items-center justify-center font-bold">
-                      2
-                    </span>
-                    <span>Review Issue Report Before Saving</span>
-                  </h2>
-                  <span className="text-xs text-charcoal-muted font-mono">
-                    Step 2 of 2: Confirmation
-                  </span>
-                </div>
-
-                <p className="text-charcoal-muted text-xs leading-relaxed">
-                  {t('reviewNotice')}
-                </p>
-
-                <div className="bg-surface border border-hairline rounded-xl p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-2 pb-2 border-b border-hairline">
-                    <div>
-                      <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Category</div>
-                      <div className="font-semibold text-charcoal mt-0.5">
-                        {getCategoryLabel(category)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Location</div>
-                      <div className="font-semibold text-charcoal mt-0.5">
-                        {district}, {state}
-                      </div>
-                    </div>
-                  </div>
-
-                  {mandiCode && selectedMandiObj && (
-                    <div className="pb-2 border-b border-hairline">
-                      <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Mandi Yard</div>
-                      <div className="font-semibold text-charcoal mt-0.5">
-                        {selectedMandiObj.nameEn} ({selectedMandiObj.code})
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pb-2 border-b border-hairline">
-                    <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Grievance Description</div>
-                    <div className="text-charcoal mt-1 whitespace-pre-wrap leading-relaxed font-sans bg-surface-white p-3 rounded-lg border border-hairline">
-                      {description}
-                    </div>
-                  </div>
-
-                  {(farmerName || farmerPhone) && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Farmer Contact</div>
-                        <div className="font-medium text-charcoal mt-0.5">
-                          {farmerName || 'Anonymous'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-semibold text-charcoal-subtle uppercase tracking-wider">Phone</div>
-                        <div className="font-medium text-charcoal mt-0.5">
-                          {farmerPhone || 'Not provided'}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center space-x-3 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep('edit')}
-                    disabled={registerMutation.isPending}
-                    className="flex-1 py-2.5 px-4 bg-surface hover:bg-forest-50 border border-hairline text-charcoal text-xs font-semibold rounded-lg flex items-center justify-center space-x-1 transition-all cursor-pointer"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>{t('backToEditBtn')}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleConfirmSubmit}
-                    disabled={registerMutation.isPending}
-                    className="flex-1 py-2.5 px-4 bg-forest hover:bg-forest-light text-white text-xs font-semibold rounded-lg shadow-subtle flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-60 active:scale-[0.98]"
-                  >
-                    {registerMutation.isPending ? (
-                      <span>Recording...</span>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 text-harvest" />
-                        <span>{t('confirmSubmitBtn')}</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+    <div className="space-y-6 pb-8">
+      {/* Editorial Masthead + Legal Disclaimer Banner */}
+      <Card padding={6} className="bg-surface">
+        <div className="space-y-4">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center flex-wrap gap-2">
+                <Badge
+                  variant="success"
+                  icon={<ClipboardText weight="duotone" className="w-3.5 h-3.5" />}
+                  label={t('moreComplaintsBadge')}
+                />
+                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-muted">
+                  {copy.eyebrow}
+                </span>
               </div>
-            )}
+              <h1 className="font-display font-semibold text-2xl sm:text-3xl text-ink tracking-tight">
+                {t('complaintsTitle')}
+              </h1>
+              <p className="text-sm text-ink-muted max-w-2xl leading-relaxed">
+                {t('complaintsSubtitle')}
+              </p>
+            </div>
 
-            {/* Step 3: Success Confirmation with Reference Number */}
-            {step === 'success' && submittedComplaint && (
-              <div className="space-y-4 text-xs text-center py-4">
-                <div className="w-12 h-12 bg-forest text-harvest rounded-full flex items-center justify-center mx-auto shadow-subtle">
-                  <CheckCircle2 className="w-7 h-7 stroke-[2.2]" />
-                </div>
-
-                <div>
-                  <h2 className="text-base font-bold text-charcoal">
-                    {t('complaintSuccessTitle')}
-                  </h2>
-                  <p className="text-xs text-charcoal-muted mt-1">
-                    {t('complaintRefNotice')}
-                  </p>
-                </div>
-
-                {/* Reference Number & Tracking Token Cards */}
-                <div className="space-y-3 max-w-sm mx-auto">
-                  <div className="bg-forest-50 border border-forest/25 rounded-xl p-3 flex items-center justify-between shadow-subtle">
-                    <div className="text-left">
-                      <div className="text-[10px] uppercase font-bold text-forest">Reference Number</div>
-                      <span className="font-mono text-sm font-bold text-forest tracking-wider">
-                        {submittedComplaint.referenceNumber}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyReference(submittedComplaint.referenceNumber)}
-                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-surface-white text-forest border border-forest/20 text-xs font-semibold hover:bg-forest hover:text-white transition-all cursor-pointer shadow-subtle"
-                    >
-                      {copiedRef ? <Check className="w-3.5 h-3.5 text-forest" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedRef ? 'Copied' : 'Copy'}</span>
-                    </button>
-                  </div>
-
-                  {submittedComplaint.trackingToken && (
-                    <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between shadow-subtle">
-                      <div className="text-left">
-                        <div className="text-[10px] uppercase font-bold text-amber-800 flex items-center space-x-1">
-                          <Key className="w-3 h-3 text-amber-700" />
-                          <span>Secret Tracking Token</span>
-                        </div>
-                        <span className="font-mono text-xs font-semibold text-amber-900 tracking-wider">
-                          {submittedComplaint.trackingToken}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyToken(submittedComplaint.trackingToken!)}
-                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-surface-white text-amber-900 border border-amber-300 text-xs font-semibold hover:bg-amber-700 hover:text-white transition-all cursor-pointer shadow-subtle"
-                      >
-                        {copiedToken ? <Check className="w-3.5 h-3.5 text-amber-700" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedToken ? 'Copied' : 'Copy'}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="text-[11px] text-charcoal-muted max-w-md mx-auto leading-relaxed pt-2">
-                  Status: <span className="font-semibold text-forest">RECORDED</span>. Your grievance has been recorded and safely saved to your local device. Keep your secret tracking token to track updates privately.
-                </div>
-
-                <div className="pt-3">
-                  <button
-                    type="button"
-                    onClick={handleResetForm}
-                    className="px-4 py-2 bg-surface hover:bg-forest-50 border border-hairline text-charcoal text-xs font-semibold rounded-lg transition-all cursor-pointer"
-                  >
-                    Register Another Grievance
-                  </button>
-                </div>
-              </div>
-            )}
+            <Badge
+              variant="success"
+              icon={<ShieldCheck weight="fill" className="w-3.5 h-3.5" />}
+              label={copy.privacyBadge}
+            />
           </div>
-        </section>
 
-        {/* Right Column: Local Device Grievances & Private Tracking */}
-        <section className="lg:col-span-5 space-y-4">
-          <div className="rounded-xl border border-hairline bg-surface-white p-5 shadow-subtle space-y-4">
-            <div className="flex items-center justify-between border-b border-hairline pb-3">
-              <h2 className="text-xs font-bold text-charcoal uppercase tracking-wider flex items-center space-x-1.5">
-                <ShieldCheck className="w-4 h-4 text-forest" />
-                <span>My Filed Grievances</span>
+          <Banner
+            status="warning"
+            collapsible={false}
+            title={t('complaintLegalDisclaimer')}
+          />
+        </div>
+      </Card>
+
+      {/* Main Two-Column Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Registration Flow */}
+        <Card padding={6} className="lg:col-span-7 bg-surface">
+          <div className="space-y-5">
+            <div className="space-y-4">
+              <h2 className="font-display font-semibold text-base sm:text-lg text-ink">
+                {step === 'edit'
+                  ? copy.fillDetailsTitle
+                  : step === 'review'
+                  ? copy.step2Label
+                  : t('complaintSuccessTitle')}
               </h2>
-              <span className="text-[11px] font-mono text-charcoal-muted">
-                {complaints.length} Saved on Device
-              </span>
-            </div>
 
-            {/* Privacy Guarantee Banner */}
-            <div className="p-3 bg-surface rounded-lg text-[11px] text-charcoal-muted flex items-start space-x-2 leading-relaxed">
-              <Info className="w-4 h-4 text-forest flex-shrink-0 mt-0.5" />
-              <span>
-                <strong>Privacy Protected:</strong> Grievance listings are never exposed publicly. Your filings are stored locally on this device, and status lookups require your unguessable tracking token.
-              </span>
-            </div>
-
-            {/* Quick Track Input */}
-            <div className="p-3.5 bg-forest-50/40 border border-forest/15 rounded-lg space-y-2.5">
-              <div className="text-xs font-bold text-charcoal flex items-center space-x-1">
-                <Search className="w-3.5 h-3.5 text-forest" />
-                <span>Track a Grievance</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  placeholder="Ref (MS-2026-XXXXX)"
-                  value={trackRef}
-                  onChange={(e) => setTrackRef(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs font-mono rounded border border-hairline bg-surface-white focus:outline-none focus:ring-1 focus:ring-forest"
-                />
-                <input
-                  type="text"
-                  placeholder="Secret Tracking Token"
-                  value={trackToken}
-                  onChange={(e) => setTrackToken(e.target.value)}
-                  className="px-2.5 py-1.5 text-xs font-mono rounded border border-hairline bg-surface-white focus:outline-none focus:ring-1 focus:ring-forest"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => handleTrackComplaint()}
-                disabled={trackingLoading || !trackRef.trim() || !trackToken.trim()}
-                className="w-full py-1.5 bg-forest text-surface-white text-xs font-semibold rounded hover:bg-forest-light transition-all disabled:opacity-50 cursor-pointer"
+              <Stepper
+                activeStep={activeStepIndex}
+                indicatorPosition="on-track"
+                density="balanced"
+                label={t('complaintsTitle')}
+                onStepClick={(idx) => {
+                  if (idx === 0 && step === 'review' && !registerMutation.isPending) {
+                    setStep('edit');
+                  }
+                }}
               >
-                {trackingLoading ? 'Verifying...' : 'Check Status'}
-              </button>
+                <Step step={0} label={copy.step1Label} />
+                <Step step={1} label={copy.step2Label} isDisabled={step === 'edit'} />
+                <Step step={2} label={copy.step3Label} isDisabled={step !== 'success'} />
+              </Stepper>
 
-              {trackError && (
-                <div className="text-[11px] text-red-600 bg-red-50 p-2 rounded border border-red-200">
-                  {trackError}
-                </div>
-              )}
-
-              {trackResult && (
-                <div className="p-3 bg-surface-white border border-forest/30 rounded-lg space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-forest">{trackResult.referenceNumber}</span>
-                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-forest-50 text-forest border border-forest/20">
-                      {trackResult.status}
-                    </span>
-                  </div>
-                  <div className="text-xs font-semibold text-charcoal">{getCategoryLabel(trackResult.category)}</div>
-                  <p className="text-[11px] text-charcoal-muted line-clamp-2">{trackResult.description}</p>
-                  <div className="text-[10px] text-charcoal-muted pt-1 flex justify-between font-mono">
-                    <span>{trackResult.district}, {trackResult.state}</span>
-                    {trackResult.farmerPhone && <span>Phone: {trackResult.farmerPhone}</span>}
-                  </div>
-                </div>
-              )}
+              <Divider />
             </div>
 
-            {/* List of Grievances Filed on This Device */}
-            {complaints.length === 0 ? (
-              <div className="text-center py-6 text-charcoal-muted text-xs">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p>No grievances filed on this device yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-                {complaints.map((c) => (
-                  <div
-                    key={c.id || c.referenceNumber}
-                    className="p-3.5 rounded-lg border border-hairline bg-surface space-y-1.5 hover:bg-forest-50/20 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold text-forest">
-                        {c.referenceNumber}
-                      </span>
-                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-forest-50 text-forest border border-forest/15 font-mono">
-                        {c.status}
-                      </span>
+            <TransitionPanel activeKey={step}>
+              {step === 'edit' && (
+                <form onSubmit={handleProceedReview} className="space-y-4">
+                  <Selector
+                    label={t('complaintCategory')}
+                    options={categories}
+                    value={category}
+                    onChange={setCategory}
+                    presentation="adaptive"
+                    size="lg"
+                    width="100%"
+                    isRequired
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2.5">
+                      {uniqueStates.length > 0 && (
+                        <Selector
+                          label={t('selectState')}
+                          options={stateOptions}
+                          value={selectedState || undefined}
+                          onChange={(val) => {
+                            setSelectedState(val);
+                            setSelectedDistrict('');
+                            setSelectedMandiCode('');
+                          }}
+                          placeholder={t('selectState')}
+                          presentation="adaptive"
+                          hasSearch={uniqueStates.length > 6}
+                          size="lg"
+                          width="100%"
+                          isRequired
+                        />
+                      )}
+                      {(selectedState === '__OTHER__' || uniqueStates.length === 0) && (
+                        <TextInput
+                          label={copy.customStatePlaceholder}
+                          isLabelHidden={uniqueStates.length > 0}
+                          value={customState}
+                          onChange={setCustomState}
+                          placeholder={copy.customStatePlaceholder}
+                          size="lg"
+                          width="100%"
+                          isRequired
+                        />
+                      )}
                     </div>
 
-                    <div className="text-xs font-semibold text-charcoal">
-                      {getCategoryLabel(c.category)}
-                    </div>
-
-                    <p className="text-[11px] text-charcoal-muted line-clamp-2 leading-relaxed">
-                      {c.description}
-                    </p>
-
-                    <div className="pt-1.5 border-t border-hairline flex items-center justify-between text-[10px] text-charcoal-muted font-mono">
-                      <span>
-                        {c.district}, {c.state}
-                      </span>
-                      {c.trackingToken && (
-                        <button
-                          type="button"
-                          onClick={() => handleTrackComplaint(c.referenceNumber, c.trackingToken)}
-                          className="text-forest hover:underline font-sans font-semibold cursor-pointer"
-                        >
-                          Verify Status
-                        </button>
+                    <div className="space-y-2.5">
+                      {districtsForState.length > 0 && (
+                        <Selector
+                          label={t('selectDistrict')}
+                          options={districtOptions}
+                          value={selectedDistrict || undefined}
+                          onChange={(val) => {
+                            setSelectedDistrict(val);
+                            setSelectedMandiCode('');
+                          }}
+                          placeholder={t('selectDistrict')}
+                          presentation="adaptive"
+                          hasSearch={districtsForState.length > 6}
+                          size="lg"
+                          width="100%"
+                          isRequired
+                        />
+                      )}
+                      {(districtsForState.length === 0 || selectedDistrict === '__OTHER__') && (
+                        <TextInput
+                          label={t('selectDistrict')}
+                          isLabelHidden={districtsForState.length > 0}
+                          value={customDistrict}
+                          onChange={setCustomDistrict}
+                          placeholder={copy.customDistrictPlaceholder}
+                          size="lg"
+                          width="100%"
+                          isRequired
+                        />
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+
+                  {mandisForSelection.length > 0 && (
+                    <Selector
+                      label={copy.optionalMandiLabel}
+                      options={mandiOptions}
+                      value={selectedMandiCode || ALL_MANDIS_SENTINEL}
+                      onChange={(val) =>
+                        setSelectedMandiCode(val === ALL_MANDIS_SENTINEL ? '' : val)
+                      }
+                      presentation="adaptive"
+                      hasSearch={mandisForSelection.length > 6}
+                      size="lg"
+                      width="100%"
+                      isOptional
+                    />
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <TextInput
+                      label={t('farmerNameLabel')}
+                      value={farmerName}
+                      onChange={(v) => setFarmerName(v.slice(0, 100))}
+                      startIcon={<User weight="duotone" className="w-4 h-4" />}
+                      size="lg"
+                      width="100%"
+                      isOptional
+                    />
+
+                    <TextInput
+                      label={t('farmerPhoneLabel')}
+                      type="tel"
+                      value={farmerPhone}
+                      onChange={(v) => setFarmerPhone(v.slice(0, 20))}
+                      startIcon={<Phone weight="duotone" className="w-4 h-4" />}
+                      size="lg"
+                      width="100%"
+                      isOptional
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <TextArea
+                      label={t('descriptionLabel')}
+                      description={`${descLength} / 10 (${copy.charCountHint})`}
+                      value={description}
+                      onChange={setDescription}
+                      placeholder={t('descriptionPlaceholder')}
+                      rows={4}
+                      maxLength={2000}
+                      width="100%"
+                      isRequired
+                    />
+                  </div>
+
+                  {formError && (
+                    <Banner status="error" role="alert" collapsible={false} title={formError} />
+                  )}
+
+                  <Button
+                    type="submit"
+                    label={t('reviewBtn')}
+                    variant="primary"
+                    size="lg"
+                    width="100%"
+                  />
+                </form>
+              )}
+
+              {step === 'review' && (
+                <div className="space-y-4">
+                  <Card variant="muted" padding={4}>
+                    <div className="space-y-3 text-xs">
+                      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-line">
+                        <span className="text-ink-muted">{t('complaintCategory')}</span>
+                        <span className="font-semibold text-canopy dark:text-canopy-bright">
+                          {categoryLabelMap[category] || category}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-line">
+                        <span className="text-ink-muted">
+                          {t('selectState')} / {t('selectDistrict')}
+                        </span>
+                        <span className="font-medium text-ink text-right">
+                          {resolvedDistrict}, {resolvedState}
+                          {selectedMandiName ? ` (${selectedMandiName})` : ''}
+                        </span>
+                      </div>
+
+                      {(farmerName.trim() || farmerPhone.trim()) && (
+                        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-line">
+                          <span className="text-ink-muted">{t('farmerNameLabel')}</span>
+                          <span className="font-medium text-ink">
+                            {[farmerName.trim(), farmerPhone.trim()].filter(Boolean).join(' · ')}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <span className="text-ink-muted block">{t('descriptionLabel')}</span>
+                        <p className="text-ink leading-relaxed bg-surface rounded-lg p-3 border border-line">
+                          {description.trim()}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <p className="text-xs text-ink-muted leading-relaxed">{t('reviewNotice')}</p>
+
+                  {formError && (
+                    <Banner status="error" role="alert" collapsible={false} title={formError} />
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      label={t('backToEditBtn')}
+                      variant="secondary"
+                      size="lg"
+                      icon={<ArrowLeft weight="bold" className="w-4 h-4" />}
+                      isDisabled={registerMutation.isPending}
+                      onClick={() => setStep('edit')}
+                    />
+                    <div className="flex-1">
+                      <Button
+                        label={registerMutation.isPending ? t('processing') : t('confirmSubmitBtn')}
+                        variant="primary"
+                        size="lg"
+                        width="100%"
+                        icon={<PaperPlaneTilt weight="bold" className="w-4 h-4" />}
+                        isLoading={registerMutation.isPending}
+                        onClick={handleConfirmSubmit}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {step === 'success' && createdComplaint && (
+                <div className="space-y-5 text-center">
+                  <LottieBadge variant="check" loop={false} className="w-20 h-20 mx-auto" />
+
+                  <div className="space-y-1">
+                    <h3 className="font-display font-semibold text-lg text-ink">
+                      {t('complaintSuccessTitle')}
+                    </h3>
+                    <p className="text-xs text-ink-muted">{t('complaintRefNotice')}</p>
+                  </div>
+
+                  {/* Reference Number & One-Time Token */}
+                  <div className="rounded-xl bg-canopy-soft border border-canopy/25 p-4 space-y-3 text-left">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div>
+                        <span className="text-[11px] font-medium text-ink-muted block">
+                          {copy.refLabel}
+                        </span>
+                        <span className="font-mono tnum text-base font-bold text-canopy dark:text-canopy-bright">
+                          {createdComplaint.referenceNumber}
+                        </span>
+                      </div>
+                      <Button
+                        label={createdComplaint.referenceNumber}
+                        variant="secondary"
+                        size="sm"
+                        icon={
+                          copiedField === 'ref' ? (
+                            <Check weight="bold" className="w-3.5 h-3.5 text-canopy dark:text-canopy-bright" />
+                          ) : (
+                            <Copy weight="duotone" className="w-3.5 h-3.5" />
+                          )
+                        }
+                        onClick={() => copyToClipboard(createdComplaint.referenceNumber, 'ref')}
+                      />
+                    </div>
+
+                    {createdComplaint.trackingToken && (
+                      <div className="pt-3 border-t border-canopy/20 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-semibold text-saffron-text flex items-center gap-1">
+                              <Key weight="fill" className="w-3.5 h-3.5" />
+                              <span>{copy.oneTimeTokenTitle}</span>
+                            </span>
+                            <p className="font-mono text-xs text-ink break-all mt-1 select-all">
+                              {createdComplaint.trackingToken}
+                            </p>
+                          </div>
+                          <Button
+                            label={copiedField === 'token' ? 'Copied' : 'Copy'}
+                            variant="secondary"
+                            size="sm"
+                            icon={
+                              copiedField === 'token' ? (
+                                <Check weight="bold" className="w-3.5 h-3.5 text-canopy dark:text-canopy-bright" />
+                              ) : (
+                                <Copy weight="duotone" className="w-3.5 h-3.5" />
+                              )
+                            }
+                            onClick={() => copyToClipboard(createdComplaint.trackingToken!, 'token')}
+                          />
+                        </div>
+                        <p className="text-[11px] text-ink-muted leading-relaxed">
+                          {copy.oneTimeTokenWarn}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    label={copy.newGrievanceBtn}
+                    variant="secondary"
+                    size="lg"
+                    width="100%"
+                    onClick={handleResetForm}
+                  />
+                </div>
+              )}
+            </TransitionPanel>
           </div>
-        </section>
+        </Card>
+
+        {/* Right Sidebar: Track Grievance + Saved Local References */}
+        <aside className="lg:col-span-5 space-y-6">
+          {/* Track Grievance via X-Tracking-Token */}
+          <Card padding={5} className="bg-surface">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-canopy-soft text-canopy dark:text-canopy-bright shrink-0">
+                  <Ticket weight="duotone" className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-display font-semibold text-base text-ink">{copy.trackTitle}</h2>
+                  <p className="text-xs text-ink-muted mt-0.5">{copy.trackSubtitle}</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleTrackLookup} className="space-y-3">
+                <TextInput
+                  label={copy.refLabel}
+                  value={trackRef}
+                  onChange={setTrackRef}
+                  placeholder="MS-COMP-..."
+                  size="md"
+                  width="100%"
+                  isRequired
+                />
+
+                <TextInput
+                  label={copy.tokenLabel}
+                  value={trackToken}
+                  onChange={setTrackToken}
+                  placeholder={copy.tokenPlaceholder}
+                  size="md"
+                  width="100%"
+                  isRequired
+                />
+
+                <Button
+                  type="submit"
+                  label={isTracking ? copy.checkingBtn : copy.checkStatusBtn}
+                  variant="primary"
+                  size="lg"
+                  width="100%"
+                  isLoading={isTracking}
+                  isDisabled={isTracking || !trackRef.trim() || !trackToken.trim()}
+                  icon={<MagnifyingGlass weight="bold" className="w-3.5 h-3.5" />}
+                />
+              </form>
+
+              {trackError && (
+                <Banner status="error" role="alert" collapsible={false} title={trackError} />
+              )}
+
+              {trackedComplaint && (
+                <Card variant="muted" padding={4}>
+                  <div className="space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono tnum font-bold text-ink">
+                        {trackedComplaint.referenceNumber}
+                      </span>
+                      <Badge variant="success" label={t('statusRecorded')} />
+                    </div>
+                    <p className="font-medium text-ink">
+                      {categoryLabelMap[trackedComplaint.category] || trackedComplaint.category}
+                    </p>
+                    <p className="text-ink-muted flex items-center gap-1.5">
+                      <MapPin weight="duotone" className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {trackedComplaint.district}, {trackedComplaint.state}
+                        {trackedComplaint.mandiName ? ` (${trackedComplaint.mandiName})` : ''}
+                      </span>
+                    </p>
+                    <p className="text-ink leading-relaxed bg-surface rounded-lg p-2.5 border border-line">
+                      {trackedComplaint.description}
+                    </p>
+                  </div>
+                </Card>
+              )}
+            </div>
+          </Card>
+
+          {/* Local Reference History (Metadata only, zero tokens) */}
+          <Card padding={5} className="bg-surface">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display font-semibold text-sm text-ink">
+                  {t('registeredComplaintsTitle')}
+                </h2>
+                {filedHistory.length > 0 && (
+                  <Button
+                    label={copy.clearHistory}
+                    variant="ghost"
+                    size="sm"
+                    icon={<Trash weight="duotone" className="w-3.5 h-3.5" />}
+                    onClick={() => setFiledHistory([])}
+                  />
+                )}
+              </div>
+
+              {filedHistory.length === 0 ? (
+                <EmptyState
+                  isCompact
+                  icon={<LottieBadge variant="empty" loop className="w-12 h-12" />}
+                  title={t('noComplaintsRecorded')}
+                />
+              ) : (
+                <div className="space-y-2">
+                  {filedHistory.map((item) => (
+                    <button
+                      key={item.referenceNumber}
+                      type="button"
+                      onClick={() => setTrackRef(item.referenceNumber)}
+                      className="w-full text-left p-3 rounded-xl bg-surface-subtle/80 border border-line hover:border-canopy/40 transition-colors cursor-pointer space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono tnum text-xs font-semibold text-canopy dark:text-canopy-bright">
+                          {item.referenceNumber}
+                        </span>
+                        <span className="text-[10px] font-mono text-ink-muted">
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium text-ink truncate">
+                        {categoryLabelMap[item.category] || item.category}
+                      </p>
+                      <p className="text-[11px] text-ink-muted truncate">
+                        {item.district}, {item.state}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </aside>
       </div>
     </div>
   );

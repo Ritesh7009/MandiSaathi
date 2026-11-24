@@ -1,27 +1,50 @@
 <!doctype html>
-<html lang="en">
+<html lang="hi">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-    <meta name="theme-color" content="#174B35" />
-    <meta name="description" content="Multilingual AI Voice Mandi Assistant & Real-Time Price Discovery for Indian Farmers" />
+    <meta name="theme-color" content="#0B4F37" />
+    <meta name="description" content="Multilingual AI Voice Mandi Assistant and Real-Time APMC Price Discovery for Indian Farmers" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MandiSaathi" />
-    
-    <title>MandiSaathi — Multilingual Agricultural Intelligence</title>
+
+    <title>MandiSaathi · Multilingual Agricultural Intelligence</title>
 
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
 
-    <!-- Google Fonts: Inter and All 10 Supported Indic Scripts for Gnani AI -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=Noto+Sans+Gurmukhi:wght@400;500;600;700&family=Noto+Sans+Kannada:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Consolidated Fonts: Outfit (Display), Plus Jakarta Sans (Body), Fira Code (Numeric), & 10 Indic Scripts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=Noto+Sans+Gurmukhi:wght@400;500;600;700&family=Noto+Sans+Kannada:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('mandisaathi_theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-ivory text-charcoal font-sans antialiased min-h-screen">
+  <body class="bg-canvas text-ink font-sans antialiased min-h-[100dvh] selection:bg-emerald-500/20 selection:text-emerald-700 dark:selection:text-emerald-300">
+    <noscript>
+      <div style="max-width: 680px; margin: 48px auto; padding: 24px; border-radius: 16px; border: 1px solid #d1dfd6; background: #ffffff; color: #0d1f17; font-family: sans-serif; line-height: 1.6;">
+        <h1 style="margin-top: 0; font-size: 20px; color: #0b4f37;">MandiSaathi · मंडी साथी</h1>
+        <p>JavaScript is required to run the interactive Gnani AI voice market assistant and APMC comparison engine. Please enable JavaScript in your browser settings.</p>
+        <p><strong>Kisan Call Centre Helpline (India):</strong> 1800-180-1551 · <strong>Official Agmarknet Portal:</strong> agmarknet.gov.in</p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

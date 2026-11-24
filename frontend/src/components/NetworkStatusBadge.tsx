@@ -9,23 +9,23 @@ export const NetworkStatusBadge: React.FC = () => {
   if (isOnline) {
     return (
       <div
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-forest-50 text-forest border border-forest/20 shadow-subtle"
-        title="Network Online — Backend Connected"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-canopy-soft text-canopy dark:text-canopy-bright border border-canopy/20"
+        title="Network Online · Backend Connected"
         data-testid="network-status-online"
       >
-        <span className="w-1.5 h-1.5 rounded-full bg-forest animate-pulse" />
-        <span className="hidden sm:inline font-medium">{t('connected')}</span>
+        <span className="w-1.5 h-1.5 rounded-full bg-canopy-bright animate-pulse" />
+        <span className="hidden lg:inline">{t('connected')}</span>
       </div>
     );
   }
 
   return (
     <div
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-300 shadow-subtle"
-      title="Operating in Offline Mode — Serving Cached Mandi Data"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-saffron-soft text-saffron-ink dark:text-saffron border border-saffron/30"
+      title="Offline Mode · Serving Cached Mandi Data"
       data-testid="network-status-offline"
     >
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+      <span className="w-1.5 h-1.5 rounded-full bg-saffron" />
       <span>{t('offline')}</span>
     </div>
   );

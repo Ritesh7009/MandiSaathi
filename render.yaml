@@ -43,7 +43,7 @@ services:
           name: mandisaathi-postgres
           property: password
       - key: CORS_ALLOWED_ORIGINS
-        value: https://mandisaathi-frontend.onrender.com,http://localhost:5173,http://localhost:3000
+        value: https://mandisaathi-frontend.onrender.com
       - key: GNANI_ENABLED
         value: "true"
       - key: GNANI_API_KEY
@@ -51,7 +51,11 @@ services:
       - key: ADMIN_API_KEY
         sync: false
       - key: MANDI_DATA_ENABLED
-        value: "false"
+        value: "true"
+      - key: MANDI_DATA_SCHEDULE_ENABLED
+        value: "true"
+      - key: DATA_GOV_IN_API_KEY
+        sync: false
 
   # Frontend Static Site (React 19 / TypeScript / Vite 6)
   - type: web
