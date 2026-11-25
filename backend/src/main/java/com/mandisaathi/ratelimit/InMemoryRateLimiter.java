@@ -4,25 +4,40 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Thread-safe, memory-bounded sliding-window rate limiter for local development
- * and single-instance deployments. Automatically prunes stale minute windows to prevent memory exhaustion.
+ * and single-instance deployments.
+ *
+ * Enforces strict capacity limits without evicting active counters:
+ * - Only expired windows are pruned.
+ * - New identifiers are rejected when capacity is exhausted.
+ * - Key structure is strongly typed, natively supporting IPv6.
  */
 @Component("inMemoryRateLimiter")
 public class InMemoryRateLimiter implements RateLimiter {
 
-    private static final int MAX_MAP_ENTRIES = 10000;
-    private final ConcurrentHashMap<String, AtomicInteger> windowCounters = new ConcurrentHashMap<>();
+    public static final int MAX_MAP_ENTRIES = 10000;
+
+    public record RateLimitWindowKey(String category, String clientIdentifier, long window) {
+        public RateLimitWindowKey {
+            Objects.requireNonNull(category, "category cannot be null");
+            Objects.requireNonNull(clientIdentifier, "clientIdentifier cannot be null");
+        }
+    }
+
+    private final ConcurrentHashMap<RateLimitWindowKey, AtomicInteger> windowCounters = new ConcurrentHashMap<>();
     private Clock clock = Clock.systemUTC();
 
     public void setClock(Clock clock) {
         this.clock = clock;
+    }
+
+    public int getCurrentEntryCount() {
+        return windowCounters.size();
     }
 
     @Override
@@ -32,14 +47,32 @@ public class InMemoryRateLimiter implements RateLimiter {
         long secondsIntoWindow = nowEpochSec % 60;
         long retryAfter = Math.max(1, 60 - secondsIntoWindow);
 
-        String key = category + ":" + clientIdentifier + ":" + currentWindow;
+        RateLimitWindowKey key = new RateLimitWindowKey(
+                category != null ? category : "default",
+                clientIdentifier != null ? clientIdentifier : "unknown",
+                currentWindow
+        );
 
-        // Bounded capacity check: evict stale and excess entries safely without resetting blocked clients
-        if (windowCounters.size() >= MAX_MAP_ENTRIES) {
-            evictExcessEntries(MAX_MAP_ENTRIES / 5, currentWindow);
+        // Lock-free path for existing active identifiers in this window
+        AtomicInteger counter = windowCounters.get(key);
+        if (counter == null) {
+            // Atomic check-and-insert path for new identifiers
+            synchronized (this) {
+                counter = windowCounters.get(key);
+                if (counter == null) {
+                    if (windowCounters.size() >= MAX_MAP_ENTRIES) {
+                        pruneStaleWindows(currentWindow);
+                    }
+                    if (windowCounters.size() >= MAX_MAP_ENTRIES) {
+                        // Strict capacity exhausted: reject new identifiers without evicting active clients
+                        return RateLimitResult.reject(retryAfter, true);
+                    }
+                    counter = new AtomicInteger(0);
+                    windowCounters.put(key, counter);
+                }
+            }
         }
 
-        AtomicInteger counter = windowCounters.computeIfAbsent(key, k -> new AtomicInteger(0));
         int count = counter.incrementAndGet();
 
         if (count <= limitPerMinute) {
@@ -50,49 +83,7 @@ public class InMemoryRateLimiter implements RateLimiter {
     }
 
     private void pruneStaleWindows(long currentWindow) {
-        windowCounters.entrySet().removeIf(entry -> {
-            String[] parts = entry.getKey().split(":");
-            if (parts.length < 3) return true;
-            try {
-                long window = Long.parseLong(parts[2]);
-                return window < currentWindow;
-            } catch (NumberFormatException ignored) {
-                return true;
-            }
-        });
-    }
-
-    private void evictExcessEntries(int countToEvict, long currentWindow) {
-        // Step 1: Remove entries from past windows
-        pruneStaleWindows(currentWindow);
-        if (windowCounters.size() < MAX_MAP_ENTRIES) {
-            return;
-        }
-
-        // Step 2: Under flood in the current window, evict single-request probe keys first,
-        // strictly preserving keys that are currently blocked (count > 1) so attackers cannot reset blocks!
-        List<String> lowActivityKeys = windowCounters.entrySet().stream()
-                .filter(e -> e.getValue().get() == 1)
-                .map(Map.Entry::getKey)
-                .limit(countToEvict)
-                .toList();
-
-        for (String k : lowActivityKeys) {
-            windowCounters.remove(k);
-        }
-
-        // Step 3: If still over capacity, evict entries with lowest counts, but NEVER evict blocked violators
-        if (windowCounters.size() >= MAX_MAP_ENTRIES) {
-            List<String> secondaryKeys = windowCounters.entrySet().stream()
-                    .filter(e -> e.getValue().get() <= 5)
-                    .sorted(Comparator.comparingInt(e -> e.getValue().get()))
-                    .map(Map.Entry::getKey)
-                    .limit(countToEvict)
-                    .toList();
-            for (String k : secondaryKeys) {
-                windowCounters.remove(k);
-            }
-        }
+        windowCounters.entrySet().removeIf(entry -> entry.getKey().window() < currentWindow);
     }
 
     public void reset() {

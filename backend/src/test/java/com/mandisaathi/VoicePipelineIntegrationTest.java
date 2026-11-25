@@ -18,6 +18,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -97,6 +99,7 @@ class VoicePipelineIntegrationTest {
         wheatKhanna.setPriceDate(LocalDate.now());
         wheatKhanna.setUnit("QUINTAL");
         wheatKhanna.setDataSource("Agmarknet / Punjab Mandi Board");
+        wheatKhanna.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
         wheatKhanna.setVerified(true);
         priceRecordRepository.save(wheatKhanna);
 
@@ -109,6 +112,7 @@ class VoicePipelineIntegrationTest {
         wheatSirsa.setPriceDate(LocalDate.now());
         wheatSirsa.setUnit("QUINTAL");
         wheatSirsa.setDataSource("Agmarknet / Haryana HSAMB");
+        wheatSirsa.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
         wheatSirsa.setVerified(true);
         priceRecordRepository.save(wheatSirsa);
 
@@ -121,6 +125,7 @@ class VoicePipelineIntegrationTest {
         mustardSirsa.setPriceDate(LocalDate.now());
         mustardSirsa.setUnit("QUINTAL");
         mustardSirsa.setDataSource("Agmarknet / Haryana HSAMB");
+        mustardSirsa.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
         mustardSirsa.setVerified(true);
         priceRecordRepository.save(mustardSirsa);
     }
@@ -284,7 +289,8 @@ class VoicePipelineIntegrationTest {
         filing.setModalPrice(new BigDecimal("25000"));
         filing.setMaxPrice(new BigDecimal("26000"));
         filing.setVariety("Cumin");
-        filing.setProvenanceType("LIVE_INGESTED");
+        filing.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        filing.setVerified(true);
         filing.setDataSource("Test Agmarknet filing");
         priceRecordRepository.save(filing);
 
@@ -444,6 +450,53 @@ class VoicePipelineIntegrationTest {
                         .param("language", "hi"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.aiServiceStatus", is("FAILED")));
+    }
+
+    @Test
+    void testGeographicFilterBypassesNationwidePaginationLimit() throws Exception {
+        // Seed 60 records for Sirsa (district Sirsa) with newer timestamps
+        LocalDate baseDate = LocalDate.now();
+        List<PriceRecord> clutter = new ArrayList<>();
+        for (int i = 0; i < 60; i++) {
+            PriceRecord p = new PriceRecord();
+            p.setCommodityCode("WHEAT");
+            p.setMandiCode("SIRSA_HR");
+            p.setMinPrice(new BigDecimal("2100.00"));
+            p.setMaxPrice(new BigDecimal("2300.00"));
+            p.setModalPrice(new BigDecimal("2200.00"));
+            p.setPriceDate(baseDate);
+            p.setVariety("Standard");
+            p.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+            p.setVerified(true);
+            clutter.add(p);
+        }
+        priceRecordRepository.saveAll(clutter);
+
+        // Seed 1 record for Khanna (district Ludhiana)
+        PriceRecord ludhianaPrice = new PriceRecord();
+        ludhianaPrice.setCommodityCode("WHEAT");
+        ludhianaPrice.setMandiCode("KHANNA_PB");
+        ludhianaPrice.setMinPrice(new BigDecimal("2500.00"));
+        ludhianaPrice.setMaxPrice(new BigDecimal("2600.00"));
+        ludhianaPrice.setModalPrice(new BigDecimal("2550.00"));
+        ludhianaPrice.setPriceDate(baseDate);
+        ludhianaPrice.setVariety("Standard");
+        ludhianaPrice.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        ludhianaPrice.setVerified(true);
+        priceRecordRepository.save(ludhianaPrice);
+
+        // A voice query filtering by district Ludhiana must find the record even though 60+ records exist nationwide
+        String query = """
+                {"queryText":"What is the wheat price in Ludhiana?","language":"en"}
+                """;
+        mockMvc.perform(post("/api/v1/voice/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.responseText", containsString("2550")))
+                .andExpect(jsonPath("$.priceRecords", hasSize(2)))
+                .andExpect(jsonPath("$.priceRecords[0].mandiCode", is("KHANNA_PB")))
+                .andExpect(jsonPath("$.priceRecords[1].mandiCode", is("KHANNA_PB")));
     }
 }
 

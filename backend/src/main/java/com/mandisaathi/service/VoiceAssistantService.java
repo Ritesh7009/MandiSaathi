@@ -5,6 +5,7 @@ import com.mandisaathi.client.gnani.GnaniTtsService;
 import com.mandisaathi.client.gnani.SynthesisResult;
 import com.mandisaathi.client.gnani.TranscriptionResult;
 import com.mandisaathi.config.GnaniProperties;
+import com.mandisaathi.dto.PriceComparisonDto;
 import com.mandisaathi.dto.PriceRecordDto;
 import com.mandisaathi.dto.VoiceQueryRequest;
 import com.mandisaathi.dto.VoiceQueryResponse;
@@ -164,7 +165,7 @@ public class VoiceAssistantService {
                     if (mandiCode == null && district == null && state == null) {
                         List<PriceRecord> allCommodityRecords = priceRecordRepository.findTop50ByCommodityCode(commodityCode, PageRequest.of(0, 50));
                         if (!allCommodityRecords.isEmpty()) {
-                            matchedPriceRecords = priceRecordService.getPrices(commodityCode, null);
+                            matchedPriceRecords = priceRecordService.getPricePage(commodityCode, null, null, null, null, null, null, 0, 50).getContent();
                             List<String> marketCodes = allCommodityRecords.stream()
                                     .map(PriceRecord::getMandiCode)
                                     .distinct()
@@ -191,7 +192,7 @@ public class VoiceAssistantService {
                             Mandi singleMandi = districtMandis.get(0);
                             List<PriceRecord> records = priceRecordRepository.findTop50ByCommodityCodeAndMandiCode(commodityCode, singleMandi.getCode(), PageRequest.of(0, 50));
                             if (!records.isEmpty()) {
-                                matchedPriceRecords = priceRecordService.getPrices(commodityCode, singleMandi.getCode());
+                                matchedPriceRecords = priceRecordService.getPricePage(commodityCode, singleMandi.getCode(), state, district, null, null, null, 0, 50).getContent();
                                 PriceRecord latest = records.get(0);
                                 reportingDate = latest.getPriceDate().toString();
                                 sourceProvenance = ("DEMO_BENCHMARK".equalsIgnoreCase(latest.getProvenanceType()) || "SEEDED_BASELINE".equalsIgnoreCase(latest.getProvenanceType()))
@@ -206,10 +207,7 @@ public class VoiceAssistantService {
                                 responsePa = buildNotFoundResponse("pa", getLocalizedCommodityName(commodityCode, "pa"), singleMandi.getNamePa() != null ? singleMandi.getNamePa() : singleMandi.getNameEn());
                             }
                         } else {
-                            matchedPriceRecords = priceRecordService.getPrices(commodityCode, null).stream()
-                                    .filter(p -> district.equalsIgnoreCase(p.district()))
-                                    .filter(p -> state == null || state.equalsIgnoreCase(p.state()))
-                                    .toList();
+                            matchedPriceRecords = priceRecordService.getPricePage(commodityCode, null, state, district, null, null, null, 0, 50).getContent();
                             List<String> codes = districtMandis.stream().map(Mandi::getCode).toList();
                             activeResponse = buildClarificationResponse(langPrefix, commodityCode, codes);
                             responseHi = buildClarificationResponse("hi", commodityCode, codes);
@@ -218,14 +216,11 @@ public class VoiceAssistantService {
                     } else {
                         List<PriceRecord> records = fetchPriceRecords(commodityCode, state, district, mandiCode);
                         if (!records.isEmpty()) {
-                            Set<String> matchingMarkets = records.stream().map(PriceRecord::getMandiCode).collect(Collectors.toSet());
-                            matchedPriceRecords = priceRecordService.getPrices(commodityCode, mandiCode).stream()
-                                    .filter(record -> matchingMarkets.contains(record.mandiCode()))
-                                    .toList();
+                            matchedPriceRecords = priceRecordService.getPricePage(commodityCode, mandiCode, state, district, null, null, null, 0, 50).getContent();
                             PriceRecord latest = records.get(0);
                             reportingDate = latest.getPriceDate().toString();
                             sourceProvenance = ("DEMO_BENCHMARK".equalsIgnoreCase(latest.getProvenanceType()) || "SEEDED_BASELINE".equalsIgnoreCase(latest.getProvenanceType()))
-                                    ? "MandiSaathi Demonstration Benchmark" : latest.getDataSource();
+                                        ? "MandiSaathi Demonstration Benchmark" : latest.getDataSource();
 
                             activeResponse = buildPriceResponse(langPrefix, commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
                             responseHi = buildPriceResponse("hi", commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
@@ -260,42 +255,28 @@ public class VoiceAssistantService {
                                 || matchesName(normalizedQuery, m.getNameEn().replaceFirst("(?i)\\s+mandi$", "")))
                         .map(Mandi::getCode)
                         .collect(Collectors.toSet());
-                List<PriceRecordDto> allPrices = priceRecordService.getPrices(targetComm, null);
-
-                if (specifiedMarkets.size() > 1) {
-                    allPrices = allPrices.stream().filter(p -> specifiedMarkets.contains(p.mandiCode())).toList();
-                } else if (district != null && !district.isBlank()) {
-                    allPrices = allPrices.stream().filter(p -> p.district() != null && p.district().equalsIgnoreCase(district)).toList();
-                } else if (state != null && !state.isBlank()) {
-                    allPrices = allPrices.stream().filter(p -> p.state() != null && p.state().equalsIgnoreCase(state)).toList();
+                List<String> targetMandiCodes = new ArrayList<>(specifiedMarkets);
+                if (targetMandiCodes.isEmpty() && district != null && !district.isBlank()) {
+                    targetMandiCodes = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district).stream()
+                            .filter(m -> state == null || state.equalsIgnoreCase(m.getState()))
+                            .map(Mandi::getCode)
+                            .toList();
+                } else if (targetMandiCodes.isEmpty() && state != null && !state.isBlank()) {
+                    targetMandiCodes = mandiRepository.findByStateIgnoreCaseAndActiveTrue(state).stream()
+                            .map(Mandi::getCode)
+                            .toList();
                 }
 
-                List<PriceRecordDto> scopedPrices = allPrices;
-                Map<LocalDate, List<PriceRecordDto>> pricesByDate = scopedPrices.stream()
-                        .filter(p -> p.priceDate() != null)
-                        .collect(Collectors.groupingBy(PriceRecordDto::priceDate));
-                List<PriceRecordDto> consistentDateRecords = pricesByDate.keySet().stream()
-                        .sorted(Comparator.reverseOrder())
-                        .flatMap(date -> pricesByDate.get(date).stream()
-                                .collect(Collectors.groupingBy(
-                                        p -> p.variety() == null ? "" : p.variety().trim().toLowerCase(Locale.ROOT),
-                                        TreeMap::new, Collectors.toList()))
-                                .values().stream())
-                        .map(group -> group.stream().collect(Collectors.toMap(
-                                PriceRecordDto::mandiCode, p -> p, (first, second) -> first,
-                                LinkedHashMap::new)).values().stream().toList())
-                        .filter(group -> group.size() >= 2)
-                        .filter(group -> specifiedMarkets.size() < 2 || group.size() == specifiedMarkets.size())
-                        .findFirst()
-                        .orElseGet(() -> scopedPrices.isEmpty() ? List.of() : List.of(scopedPrices.getFirst()));
-                LocalDate latestDate = consistentDateRecords.isEmpty() ? null : consistentDateRecords.getFirst().priceDate();
-
+                // Reuse PriceRecordService.comparePrices for voice comparisons
+                PriceComparisonDto comparison = priceRecordService.comparePrices(targetComm, targetMandiCodes, null);
+                List<PriceRecordDto> consistentDateRecords = comparison.records();
                 matchedPriceRecords = consistentDateRecords;
 
                 if (consistentDateRecords.size() >= 2) {
                     PriceRecordDto best = consistentDateRecords.stream().max(Comparator.comparing(PriceRecordDto::modalPrice)).orElse(consistentDateRecords.get(0));
                     PriceRecordDto lowest = consistentDateRecords.stream().min(Comparator.comparing(PriceRecordDto::modalPrice)).orElse(consistentDateRecords.get(0));
                     BigDecimal spread = best.modalPrice().subtract(lowest.modalPrice());
+                    LocalDate latestDate = consistentDateRecords.get(0).priceDate();
                     reportingDate = latestDate != null ? latestDate.toString() : "";
 
                     activeResponse = buildComparisonResponse(langPrefix, targetComm, consistentDateRecords.size(), best, lowest, spread, reportingDate);

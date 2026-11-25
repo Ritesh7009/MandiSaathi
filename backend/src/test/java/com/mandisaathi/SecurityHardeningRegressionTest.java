@@ -207,5 +207,95 @@ class SecurityHardeningRegressionTest {
                 .andExpect(header().string("Access-Control-Expose-Headers", not(containsString("X-Tracking-Token"))))
                 .andExpect(header().string("Access-Control-Expose-Headers", containsString("X-Total-Count")));
     }
+
+    @Test
+    @DisplayName("7. Rate Limiter: Partially consumed allowances and low limits")
+    void testPartiallyConsumedAllowancesAndLowLimits() {
+        inMemoryRateLimiter.reset();
+
+        // 1. Partially consumed allowance (3 of 5)
+        String clientA = "192.168.1.50";
+        RateLimitResult r1 = inMemoryRateLimiter.tryAcquire("test_quota", clientA, 5);
+        assertTrue(r1.allowed());
+        assertEquals(4, r1.remaining());
+
+        RateLimitResult r2 = inMemoryRateLimiter.tryAcquire("test_quota", clientA, 5);
+        assertTrue(r2.allowed());
+        assertEquals(3, r2.remaining());
+
+        RateLimitResult r3 = inMemoryRateLimiter.tryAcquire("test_quota", clientA, 5);
+        assertTrue(r3.allowed());
+        assertEquals(2, r3.remaining());
+
+        // 2. Low request limit (limit = 1)
+        String clientB = "192.168.1.51";
+        RateLimitResult low1 = inMemoryRateLimiter.tryAcquire("test_strict", clientB, 1);
+        assertTrue(low1.allowed());
+        assertEquals(0, low1.remaining());
+
+        RateLimitResult low2 = inMemoryRateLimiter.tryAcquire("test_strict", clientB, 1);
+        assertFalse(low2.allowed());
+        assertEquals(0, low2.remaining());
+        assertTrue(low2.retryAfterSeconds() > 0);
+        inMemoryRateLimiter.reset();
+    }
+
+    @Test
+    @DisplayName("8. Rate Limiter: IPv6 Client Identifier Native Support")
+    void testIpv6ClientIdentifiersSupportedWithoutParsingErrors() {
+        inMemoryRateLimiter.reset();
+
+        String ipv6Standard = "2001:0db8:85a3:0000:0000:8a2e:0370:7334";
+        String ipv6Loopback = "::1";
+
+        // Check standard IPv6
+        for (int i = 0; i < 3; i++) {
+            RateLimitResult res = inMemoryRateLimiter.tryAcquire("ipv6_cat", ipv6Standard, 3);
+            assertTrue(res.allowed(), "Requests within limit must succeed for IPv6");
+        }
+        RateLimitResult rejectedIpv6 = inMemoryRateLimiter.tryAcquire("ipv6_cat", ipv6Standard, 3);
+        assertFalse(rejectedIpv6.allowed(), "Requests exceeding limit must reject for IPv6");
+
+        // Check loopback IPv6
+        RateLimitResult loopbackRes = inMemoryRateLimiter.tryAcquire("ipv6_cat", ipv6Loopback, 2);
+        assertTrue(loopbackRes.allowed());
+        assertEquals(1, loopbackRes.remaining());
+
+        inMemoryRateLimiter.reset();
+    }
+
+    @Test
+    @DisplayName("9. Rate Limiter: Strict Maximum Capacity and Rejection of New Identifiers")
+    void testStrictMaximumCapacityEnforcement() {
+        inMemoryRateLimiter.reset();
+        inMemoryRateLimiter.setClock(Clock.fixed(Instant.parse("2026-11-25T12:00:10Z"), ZoneOffset.UTC));
+
+        // 1. Existing client consumes partial quota (2 of 5)
+        String existingClient = "10.0.0.1";
+        inMemoryRateLimiter.tryAcquire("cap_test", existingClient, 5);
+        inMemoryRateLimiter.tryAcquire("cap_test", existingClient, 5);
+
+        // 2. Fill the map up to strict capacity of 10,000 entries
+        int capacity = InMemoryRateLimiter.MAX_MAP_ENTRIES;
+        // We already have 1 entry (existingClient). Add capacity - 1 more.
+        for (int i = 1; i < capacity; i++) {
+            inMemoryRateLimiter.tryAcquire("cap_test", "bulk-ip-" + i, 10);
+        }
+        assertEquals(capacity, inMemoryRateLimiter.getCurrentEntryCount(), "Map should be exactly at capacity");
+
+        // 3. New identifier 10,001 must be REJECTED because capacity is exhausted
+        String newFlooder = "flood-attacker-ip";
+        RateLimitResult floodRes = inMemoryRateLimiter.tryAcquire("cap_test", newFlooder, 10);
+        assertFalse(floodRes.allowed(), "New identifier must be rejected when capacity is exhausted");
+        assertTrue(floodRes.degraded(), "Rejected result must report degraded status");
+        assertEquals(capacity, inMemoryRateLimiter.getCurrentEntryCount(), "Map capacity must strictly not be exceeded");
+
+        // 4. Existing active client with partial allowance is NOT evicted and can finish their quota
+        RateLimitResult existingRes = inMemoryRateLimiter.tryAcquire("cap_test", existingClient, 5);
+        assertTrue(existingRes.allowed(), "Active client in map must NOT be evicted or locked out");
+        assertEquals(2, existingRes.remaining(), "Remaining quota must continue normally");
+
+        inMemoryRateLimiter.reset();
+    }
 }
 

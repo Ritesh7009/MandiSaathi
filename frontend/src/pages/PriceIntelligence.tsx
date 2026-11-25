@@ -188,16 +188,18 @@ export const PriceIntelligence: React.FC = () => {
     enabled: isOnline,
   });
 
-  const [adminKey] = useState<string | null>(() => {
+  const [adminKey, setAdminKey] = useState<string | null>(null);
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       // Remove legacy keys from persistent storage to prevent credential leakage
       localStorage.removeItem('mandisaathi_admin_key');
       sessionStorage.removeItem('mandisaathi_admin_session_key');
     }
-    return null;
-  });
+  }, []);
+
   const { data: syncStatus } = useQuery({
-    queryKey: ['syncScheduleStatus', adminKey],
+    queryKey: ['syncScheduleStatus'],
     queryFn: () => api.getSyncStatus(adminKey || undefined),
     staleTime: 60000,
     enabled: isOnline && !!adminKey,
@@ -333,8 +335,16 @@ export const PriceIntelligence: React.FC = () => {
     setSyncError(null);
     setSyncSummary(null);
     try {
-      if (adminKey) {
-        const res = await api.syncMandiPrices(adminKey);
+      let activeKey = adminKey;
+      if (!activeKey && typeof window !== 'undefined') {
+        const inputKey = window.prompt('Enter Administrator API Key to run official ingestion (or leave empty to refresh price view):');
+        if (inputKey && inputKey.trim()) {
+          activeKey = inputKey.trim();
+          setAdminKey(activeKey);
+        }
+      }
+      if (activeKey) {
+        const res = await api.syncMandiPrices(activeKey);
         setSyncSummary(res);
         if (res.status !== 'CONNECTED') {
           await refetchPrices();

@@ -44,19 +44,20 @@ public interface PriceRecordRepository extends JpaRepository<PriceRecord, Long> 
 
     @Query("SELECT p FROM PriceRecord p WHERE (:commodityCode IS NULL OR p.commodityCode = :commodityCode) " +
            "AND (:mandiCode IS NULL OR p.mandiCode = :mandiCode) " +
+           "AND p.verified = true AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED') " +
            "ORDER BY p.priceDate DESC, p.verified DESC, p.id DESC")
     List<PriceRecord> searchPrices(
             @Param("commodityCode") String commodityCode,
             @Param("mandiCode") String mandiCode
     );
 
-    @Query("SELECT p FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK') ORDER BY p.priceDate DESC, p.verified DESC, p.id DESC")
+    @Query("SELECT p FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND p.verified = true AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED') ORDER BY p.priceDate DESC, p.verified DESC, p.id DESC")
     List<PriceRecord> findTop50ByCommodityCode(@Param("commodityCode") String commodityCode, Pageable pageable);
 
-    @Query("SELECT p FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND p.mandiCode = :mandiCode AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK') ORDER BY p.priceDate DESC, p.verified DESC, p.id DESC")
+    @Query("SELECT p FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND p.mandiCode = :mandiCode AND p.verified = true AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED') ORDER BY p.priceDate DESC, p.verified DESC, p.id DESC")
     List<PriceRecord> findTop50ByCommodityCodeAndMandiCode(@Param("commodityCode") String commodityCode, @Param("mandiCode") String mandiCode, Pageable pageable);
 
-    @Query("SELECT p FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND p.mandiCode IN :mandiCodes AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK') ORDER BY p.priceDate DESC, p.verified DESC, p.id DESC")
+    @Query("SELECT p FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND p.mandiCode IN :mandiCodes AND p.verified = true AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED') ORDER BY p.priceDate DESC, p.verified DESC, p.id DESC")
     List<PriceRecord> findTop50ByCommodityCodeAndMandiCodes(@Param("commodityCode") String commodityCode, @Param("mandiCodes") List<String> mandiCodes, Pageable pageable);
 
     @Query(value = """
@@ -64,7 +65,7 @@ public interface PriceRecordRepository extends JpaRepository<PriceRecord, Long> 
             WHERE (:commodityCode = '' OR p.commodityCode = :commodityCode)
               AND (:mandiCode = '' OR p.mandiCode = :mandiCode)
               AND (:variety = '' OR lower(p.variety) = lower(:variety))
-              AND ((:provenanceType = '' AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK'))
+              AND ((:provenanceType = '' AND p.verified = true AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED'))
                    OR (:provenanceType = 'ALL')
                    OR (p.provenanceType = :provenanceType))
               AND (:priceDate IS NULL OR p.priceDate = :priceDate)
@@ -79,7 +80,7 @@ public interface PriceRecordRepository extends JpaRepository<PriceRecord, Long> 
             WHERE (:commodityCode = '' OR p.commodityCode = :commodityCode)
               AND (:mandiCode = '' OR p.mandiCode = :mandiCode)
               AND (:variety = '' OR lower(p.variety) = lower(:variety))
-              AND ((:provenanceType = '' AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK'))
+              AND ((:provenanceType = '' AND p.verified = true AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED'))
                    OR (:provenanceType = 'ALL')
                    OR (p.provenanceType = :provenanceType))
               AND (:priceDate IS NULL OR p.priceDate = :priceDate)
@@ -99,14 +100,15 @@ public interface PriceRecordRepository extends JpaRepository<PriceRecord, Long> 
             Pageable pageable
     );
 
-    @Query("SELECT DISTINCT p.variety FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK') AND p.variety IS NOT NULL AND p.variety <> '' ORDER BY p.variety ASC")
+    @Query("SELECT DISTINCT p.variety FROM PriceRecord p WHERE p.commodityCode = :commodityCode AND p.verified = true AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED') AND p.variety IS NOT NULL AND p.variety <> '' ORDER BY p.variety ASC")
     List<String> findDistinctVarietiesByCommodityCode(@Param("commodityCode") String commodityCode);
 
     @Query("""
             SELECT p.priceDate AS priceDate, p.variety AS variety, count(DISTINCT p.mandiCode) AS mandiCount
             FROM PriceRecord p
             WHERE p.commodityCode = :commodityCode
-              AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK')
+              AND p.verified = true
+              AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED')
               AND (:targetVariety = '' OR lower(p.variety) = lower(:targetVariety))
               AND (:hasSpecificMandis = false OR p.mandiCode IN :mandiCodes)
             GROUP BY p.priceDate, p.variety
@@ -125,7 +127,8 @@ public interface PriceRecordRepository extends JpaRepository<PriceRecord, Long> 
     @Query("""
             SELECT p FROM PriceRecord p
             WHERE p.commodityCode = :commodityCode
-              AND (p.verified = true OR p.provenanceType <> 'DEMO_BENCHMARK')
+              AND p.verified = true
+              AND p.provenanceType IN ('OFFICIAL_INGESTION', 'HISTORICAL_VERIFIED')
               AND p.priceDate = :priceDate
               AND p.variety = :variety
               AND (:hasSpecificMandis = false OR p.mandiCode IN :mandiCodes)

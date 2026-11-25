@@ -69,7 +69,7 @@ public class PostgresFlywayMigrationIntegrationTest {
                     .load();
 
             int applied = flyway.migrate().migrationsExecuted;
-            assertTrue(applied >= 14, "All migrations V1 through V14 must execute successfully on clean schema");
+            assertTrue(applied >= 15, "All migrations V1 through V15 must execute successfully on clean schema");
 
             // Verify PostgreSQL schema integrity
             try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
@@ -228,6 +228,80 @@ public class PostgresFlywayMigrationIntegrationTest {
                 assertEquals("DEMO_BENCHMARK", rs.getString("provenance_type"), "Must be reclassified to DEMO_BENCHMARK");
                 assertFalse(rs.getBoolean("verified"), "Must be marked unverified");
                 assertEquals("MandiSaathi Demonstration Benchmark", rs.getString("data_source"));
+            }
+        } finally {
+            try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("DROP SCHEMA IF EXISTS " + schemaName + " CASCADE");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Flyway V15 safely corrects overly broad V14 classification and preserves authentic official ingestion")
+    void testIncrementalUpgradeFromV14ToV15() throws Exception {
+        assumeTrue(postgresAvailable, "PostgreSQL 16 is required for this integration test");
+
+        String schemaName = "flyway_test_v14_upgrade_" + System.currentTimeMillis();
+
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE SCHEMA " + schemaName);
+        }
+
+        try {
+            // Step 1: Migrate up to V14
+            Flyway flywayV14 = Flyway.configure()
+                    .dataSource(jdbcUrl, DB_USER, DB_PASS)
+                    .schemas(schemaName)
+                    .locations("classpath:db/migration")
+                    .target("14")
+                    .baselineOnMigrate(true)
+                    .load();
+
+            flywayV14.migrate();
+
+            // Step 2: Insert two records:
+            // a) Erroneously promoted record with DAC&FW source
+            // b) Genuine authentic record with data.gov.in API source
+            try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("SET search_path TO " + schemaName);
+                stmt.execute("INSERT INTO price_records (commodity_code, mandi_code, min_price, max_price, modal_price, price_date, variety, provenance_type, verified, data_source) " +
+                             "VALUES ('WHEAT', 'SIRSA_HR', 2200, 2400, 2300, '2024-11-20', 'Standard', 'OFFICIAL_INGESTION', true, 'Agmarknet (DAC&FW)')");
+                stmt.execute("INSERT INTO price_records (commodity_code, mandi_code, min_price, max_price, modal_price, price_date, variety, provenance_type, verified, data_source) " +
+                             "VALUES ('WHEAT', 'KHANNA_PB', 2300, 2500, 2400, '2024-11-20', 'Standard', 'OFFICIAL_INGESTION', true, 'Agmarknet (data.gov.in API)')");
+            }
+
+            // Step 3: Migrate forward to V15
+            Flyway flywayV15 = Flyway.configure()
+                    .dataSource(jdbcUrl, DB_USER, DB_PASS)
+                    .schemas(schemaName)
+                    .locations("classpath:db/migration")
+                    .target("15")
+                    .load();
+
+            int forwardApplied = flywayV15.migrate().migrationsExecuted;
+            assertEquals(1, forwardApplied, "Only migration V15 should execute");
+
+            // Step 4: Verify DAC&FW record was reverted to DEMO_BENCHMARK / unverified,
+            // while authentic data.gov.in API record remains OFFICIAL_INGESTION / verified!
+            try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("SET search_path TO " + schemaName);
+
+                // Verify unverified DAC&FW record reverted
+                ResultSet rsDac = stmt.executeQuery("SELECT provenance_type, verified, data_source FROM price_records WHERE mandi_code = 'SIRSA_HR'");
+                assertTrue(rsDac.next());
+                assertEquals("DEMO_BENCHMARK", rsDac.getString("provenance_type"));
+                assertFalse(rsDac.getBoolean("verified"));
+
+                // Verify authentic official record preserved
+                ResultSet rsApi = stmt.executeQuery("SELECT provenance_type, verified, data_source FROM price_records WHERE mandi_code = 'KHANNA_PB' AND data_source = 'Agmarknet (data.gov.in API)'");
+                assertTrue(rsApi.next());
+                assertEquals("OFFICIAL_INGESTION", rsApi.getString("provenance_type"));
+                assertTrue(rsApi.getBoolean("verified"));
+                assertEquals("Agmarknet (data.gov.in API)", rsApi.getString("data_source"));
             }
         } finally {
             try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);

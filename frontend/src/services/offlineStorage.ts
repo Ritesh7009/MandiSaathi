@@ -89,6 +89,12 @@ function getDb(): Promise<IDBDatabase> {
  */
 export async function savePriceRecords(records: PriceRecord[]): Promise<void> {
   if (!records || records.length === 0) return;
+  // Strict prevention of demo contamination: only cache verified official or historical records
+  const validRecords = records.filter(
+    (r) => r.verified && (r.provenanceType === 'OFFICIAL_INGESTION' || r.provenanceType === 'HISTORICAL_VERIFIED')
+  );
+  if (validRecords.length === 0) return;
+
   try {
     const db = await getDb();
     const now = Date.now();
@@ -99,7 +105,7 @@ export async function savePriceRecords(records: PriceRecord[]): Promise<void> {
       const priceStore = tx.objectStore(STORE_PRICES);
       const metaStore = tx.objectStore(STORE_METADATA);
 
-      for (const record of records) {
+      for (const record of validRecords) {
         const cachedRecord: CachedPriceRecord = {
           ...record,
           cachedAt: now,
@@ -112,7 +118,7 @@ export async function savePriceRecords(records: PriceRecord[]): Promise<void> {
         key: 'last_price_sync',
         timestamp: now,
         iso: syncIso,
-        count: records.length,
+        count: validRecords.length,
       });
 
       tx.oncomplete = () => resolve();
@@ -139,7 +145,10 @@ export async function getCachedPrices(
 
       tx.oncomplete = () => {
         const allRecords = (priceReq.result || []) as CachedPriceRecord[];
-        let filtered = allRecords;
+        // Defense-in-depth: exclude unverified or demonstration records from offline cache reads
+        let filtered = allRecords.filter(
+          (r) => r.verified && (r.provenanceType === 'OFFICIAL_INGESTION' || r.provenanceType === 'HISTORICAL_VERIFIED')
+        );
         if (commodityCode) {
           filtered = filtered.filter((r) => r.commodityCode.toUpperCase() === commodityCode.toUpperCase());
         }

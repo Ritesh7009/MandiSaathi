@@ -199,7 +199,8 @@ class SameDateMandiComparisonTest {
         r.setUnit("QUINTAL");
         r.setDataSource("Agmarknet");
         r.setVariety(variety != null ? variety : "Standard / FAQ");
-        r.setProvenanceType("SEEDED_BASELINE");
+        r.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        r.setVerified(true);
         return r;
     }
 }

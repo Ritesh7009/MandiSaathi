@@ -97,6 +97,7 @@ class PriceRecordOptimizationTest {
         p1.setPriceDate(today);
         p1.setVariety("Sharbati");
         p1.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p1.setVerified(true);
         priceRecordRepository.save(p1);
 
         // Record 2: WHEAT, Lokwan, Haryana, DEMO
