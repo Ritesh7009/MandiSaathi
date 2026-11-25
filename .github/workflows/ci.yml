@@ -43,7 +43,7 @@ jobs:
           DB_PORT: 5433
           SPRING_PROFILES_ACTIVE: test
         run: |
-          ./mvnw test -B
+          mvn test -B
 
       - name: Report Test Results Summary
         if: always()
