@@ -1,0 +1,83 @@
+name: MandiSaathi Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    name: Backend Tests & PostgreSQL Migrations
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: mandisaathi
+          POSTGRES_USER: mandisaathi
+          POSTGRES_PASSWORD: mandisaathi_secret
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Backend Maven Tests & Flyway Migrations
+        working-directory: backend
+        env:
+          DB_PORT: 5433
+          SPRING_PROFILES_ACTIVE: test
+        run: |
+          ./mvnw test -B
+
+      - name: Report Test Results Summary
+        if: always()
+        working-directory: backend
+        run: |
+          echo "=== Backend Test Execution Summary ==="
+          if [ -d target/surefire-reports ]; then
+            grep -h "Tests run:" target/surefire-reports/*.txt | tail -n 20 || true
+          fi
+
+  frontend:
+    name: Frontend Typecheck & Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: TypeScript Type Check
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: Build Production Assets
+        working-directory: frontend
+        run: npm run build
+
