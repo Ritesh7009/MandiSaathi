@@ -16,6 +16,7 @@ import com.mandisaathi.repository.MandiRepository;
 import com.mandisaathi.repository.PriceRecordRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -161,7 +162,7 @@ public class VoiceAssistantService {
             case "MANDI_PRICE_LOOKUP" -> {
                 if (commodityCode != null) {
                     if (mandiCode == null && district == null && state == null) {
-                        List<PriceRecord> allCommodityRecords = priceRecordRepository.findByCommodityCodeOrderByPriceDateDesc(commodityCode);
+                        List<PriceRecord> allCommodityRecords = priceRecordRepository.findTop50ByCommodityCode(commodityCode, PageRequest.of(0, 50));
                         if (!allCommodityRecords.isEmpty()) {
                             matchedPriceRecords = priceRecordService.getPrices(commodityCode, null);
                             List<String> marketCodes = allCommodityRecords.stream()
@@ -188,7 +189,7 @@ public class VoiceAssistantService {
                             responsePa = buildNoMandisFoundResponse("pa", district);
                         } else if (districtMandis.size() == 1) {
                             Mandi singleMandi = districtMandis.get(0);
-                            List<PriceRecord> records = priceRecordRepository.findByCommodityCodeAndMandiCodeOrderByPriceDateDesc(commodityCode, singleMandi.getCode());
+                            List<PriceRecord> records = priceRecordRepository.findTop50ByCommodityCodeAndMandiCode(commodityCode, singleMandi.getCode(), PageRequest.of(0, 50));
                             if (!records.isEmpty()) {
                                 matchedPriceRecords = priceRecordService.getPrices(commodityCode, singleMandi.getCode());
                                 PriceRecord latest = records.get(0);
@@ -426,7 +427,7 @@ public class VoiceAssistantService {
 
     private List<PriceRecord> fetchPriceRecords(String commCode, String state, String district, String mandiCode) {
         if (mandiCode != null && !mandiCode.isBlank()) {
-            return priceRecordRepository.findByCommodityCodeAndMandiCodeOrderByPriceDateDesc(commCode, mandiCode);
+            return priceRecordRepository.findTop50ByCommodityCodeAndMandiCode(commCode, mandiCode, PageRequest.of(0, 50));
         }
         if (district != null && !district.isBlank()) {
             List<Mandi> districtMandis = mandiRepository.findByDistrictIgnoreCaseAndActiveTrue(district).stream()
@@ -434,7 +435,7 @@ public class VoiceAssistantService {
                     .toList();
             if (!districtMandis.isEmpty()) {
                 List<String> codes = districtMandis.stream().map(Mandi::getCode).toList();
-                return priceRecordRepository.findByCommodityCodeAndMandiCodeInOrderByPriceDateDesc(commCode, codes);
+                return priceRecordRepository.findTop50ByCommodityCodeAndMandiCodes(commCode, codes, PageRequest.of(0, 50));
             }
             return List.of();
         }
@@ -442,11 +443,11 @@ public class VoiceAssistantService {
             List<Mandi> stateMandis = mandiRepository.findByStateIgnoreCaseAndActiveTrue(state);
             if (!stateMandis.isEmpty()) {
                 List<String> codes = stateMandis.stream().map(Mandi::getCode).toList();
-                return priceRecordRepository.findByCommodityCodeAndMandiCodeInOrderByPriceDateDesc(commCode, codes);
+                return priceRecordRepository.findTop50ByCommodityCodeAndMandiCodes(commCode, codes, PageRequest.of(0, 50));
             }
             return List.of();
         }
-        return priceRecordRepository.findByCommodityCodeOrderByPriceDateDesc(commCode);
+        return priceRecordRepository.findTop50ByCommodityCode(commCode, PageRequest.of(0, 50));
     }
 
     private Map<String, String> extractEntities(String text) {

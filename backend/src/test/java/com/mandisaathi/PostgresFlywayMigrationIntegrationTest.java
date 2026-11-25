@@ -69,7 +69,7 @@ public class PostgresFlywayMigrationIntegrationTest {
                     .load();
 
             int applied = flyway.migrate().migrationsExecuted;
-            assertTrue(applied >= 7, "All migrations V1 through V7 must execute successfully on clean schema");
+            assertTrue(applied >= 14, "All migrations V1 through V14 must execute successfully on clean schema");
 
             // Verify PostgreSQL schema integrity
             try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
@@ -94,6 +94,12 @@ public class PostgresFlywayMigrationIntegrationTest {
                         "WHERE table_schema = '" + schemaName + "' AND table_name = 'price_records' AND column_name = 'variety'");
                 assertTrue(rsVar.next(), "variety column must exist in price_records");
                 assertEquals("NO", rsVar.getString("is_nullable"), "variety column must be NOT NULL");
+
+                // Check V14 correction: check constraint exists
+                ResultSet rsChk = stmt.executeQuery(
+                        "SELECT constraint_name FROM information_schema.check_constraints " +
+                        "WHERE constraint_name = 'chk_price_records_provenance'");
+                assertTrue(rsChk.next(), "chk_price_records_provenance constraint must exist in clean schema");
             }
         } finally {
             try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
@@ -161,6 +167,67 @@ public class PostgresFlywayMigrationIntegrationTest {
                 assertTrue(rs.next(), "Complaint record must be retained after V7 migration");
                 String actualHash = rs.getString("tracking_token_hash");
                 assertEquals(expectedHash, actualHash, "tracking_token_hash must equal the SHA-256 hex digest of the raw token");
+            }
+        } finally {
+            try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("DROP SCHEMA IF EXISTS " + schemaName + " CASCADE");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Flyway V14 successfully upgrades pre-existing V12/V13 PostgreSQL database and corrects unsupported verification")
+    void testIncrementalUpgradeFromV13ToV14() throws Exception {
+        assumeTrue(postgresAvailable, "PostgreSQL 16 is required for this integration test");
+
+        String schemaName = "flyway_test_v13_upgrade_" + System.currentTimeMillis();
+
+        try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE SCHEMA " + schemaName);
+        }
+
+        try {
+            // Step 1: Migrate up to target V13
+            Flyway flywayV13 = Flyway.configure()
+                    .dataSource(jdbcUrl, DB_USER, DB_PASS)
+                    .schemas(schemaName)
+                    .locations("classpath:db/migration")
+                    .target("13")
+                    .baselineOnMigrate(true)
+                    .load();
+
+            flywayV13.migrate();
+
+            // Step 2: Insert a seeded record with synthetic HISTORICAL_VERIFIED status (as created by V12)
+            try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("SET search_path TO " + schemaName);
+                stmt.execute("INSERT INTO price_records (commodity_code, mandi_code, min_price, max_price, modal_price, price_date, variety, provenance_type, verified, data_source) " +
+                             "VALUES ('WHEAT', 'SIRSA_HR', 2200, 2400, 2300, '2024-11-20', 'Standard', 'HISTORICAL_VERIFIED', true, 'Agmarknet Official Archive (DES/MoAFW)')");
+            }
+
+            // Step 3: Migrate forward to V14
+            Flyway flywayV14 = Flyway.configure()
+                    .dataSource(jdbcUrl, DB_USER, DB_PASS)
+                    .schemas(schemaName)
+                    .locations("classpath:db/migration")
+                    .target("14")
+                    .load();
+
+            int forwardApplied = flywayV14.migrate().migrationsExecuted;
+            assertEquals(1, forwardApplied, "Only migration V14 should execute");
+
+            // Step 4: Verify record was corrected to DEMO_BENCHMARK and verified=false
+            try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);
+                 Statement stmt = conn.createStatement()) {
+                stmt.execute("SET search_path TO " + schemaName);
+                ResultSet rs = stmt.executeQuery("SELECT provenance_type, verified, data_source FROM price_records WHERE commodity_code = 'WHEAT' AND mandi_code = 'SIRSA_HR'");
+                assertTrue(rs.next(), "Record must exist after V14 migration");
+                assertEquals("DEMO_BENCHMARK", rs.getString("provenance_type"), "Must be reclassified to DEMO_BENCHMARK");
+                assertFalse(rs.getBoolean("verified"), "Must be marked unverified");
+                assertEquals("MandiSaathi Demonstration Benchmark", rs.getString("data_source"));
             }
         } finally {
             try (Connection conn = DriverManager.getConnection(jdbcUrl, DB_USER, DB_PASS);

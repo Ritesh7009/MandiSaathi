@@ -14,8 +14,12 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -35,6 +39,7 @@ class SecurityHardeningRegressionTest {
     @DisplayName("1. Rate Limiter Flood Attack Resilience: High volume of keys does not cause global counter wipe")
     void testRateLimiterFloodDoesNotWipeActiveCounters() {
         inMemoryRateLimiter.reset();
+        inMemoryRateLimiter.setClock(Clock.fixed(Instant.parse("2026-11-25T12:00:10Z"), ZoneOffset.UTC));
 
         // Client A consumes all 5 allowed tokens
         String targetClient = "192.0.2.1";
@@ -47,39 +52,89 @@ class SecurityHardeningRegressionTest {
         RateLimitResult blockedRes = inMemoryRateLimiter.tryAcquire("test_cat", targetClient, 5);
         assertFalse(blockedRes.allowed(), "6th request must be rejected");
 
-        // Attacker floods 1,200 distinct keys to trigger eviction
-        for (int i = 0; i < 1200; i++) {
+        // Attacker floods 15,000 distinct keys to exceed the 10,000-entry capacity threshold
+        for (int i = 0; i < 15000; i++) {
             inMemoryRateLimiter.tryAcquire("test_cat", "spoofed-ip-" + i, 10);
         }
 
-        // Assert Target Client is STILL blocked and was NOT reset by a global clear()
+        // Assert Target Client is STILL blocked and was NOT reset by capacity eviction
         RateLimitResult stillBlocked = inMemoryRateLimiter.tryAcquire("test_cat", targetClient, 5);
         assertFalse(stillBlocked.allowed(), "Rate limiter must NOT wipe active blocked clients upon capacity eviction (No DoS/Evasion)");
+        inMemoryRateLimiter.reset();
     }
 
     @Test
-    @DisplayName("2. ClientIpResolver Strict Proxy Validation: Configured proxy strictly rejects spoofing from untrusted remote IPs")
+    @DisplayName("1b. Rate Limiter Concurrent Flood: Multi-threaded key saturation protects active blocked clients")
+    void testRateLimiterConcurrentFloodSafety() throws Exception {
+        inMemoryRateLimiter.reset();
+        inMemoryRateLimiter.setClock(Clock.fixed(Instant.parse("2026-11-25T12:00:10Z"), ZoneOffset.UTC));
+
+        String targetClient = "192.0.2.100";
+        for (int i = 0; i < 5; i++) {
+            inMemoryRateLimiter.tryAcquire("test_concurrent", targetClient, 5);
+        }
+        assertFalse(inMemoryRateLimiter.tryAcquire("test_concurrent", targetClient, 5).allowed());
+
+        // Launch 10 parallel threads each generating 1,500 keys (15,000 keys total)
+        int threadCount = 10;
+        int keysPerThread = 1500;
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(threadCount);
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(threadCount);
+
+        for (int t = 0; t < threadCount; t++) {
+            final int threadId = t;
+            executor.submit(() -> {
+                try {
+                    for (int k = 0; k < keysPerThread; k++) {
+                        inMemoryRateLimiter.tryAcquire("test_concurrent", "thread-" + threadId + "-ip-" + k, 10);
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+
+        boolean finished = latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+        executor.shutdown();
+        assertTrue(finished, "Concurrent rate limiter flood completed within timeout");
+
+        // Target client MUST remain blocked
+        assertFalse(inMemoryRateLimiter.tryAcquire("test_concurrent", targetClient, 5).allowed(),
+                "Target client must remain blocked even under concurrent saturation");
+        inMemoryRateLimiter.reset();
+    }
+
+    @Test
+    @DisplayName("2. ClientIpResolver Exact IP & CIDR Validation: Prevents prefix spoofing and evaluates subnets")
     void testClientIpResolverStrictProxyValidation() {
         try {
-            // Explicitly configure only 10.50.0.1 as a trusted proxy
+            // Case 1: Exact IP configured (10.50.0.1)
             ClientIpResolver.setConfiguredTrustedProxies(List.of("10.50.0.1"));
 
-            // Case A: Request from an internal pod (10.0.0.99) that is NOT in the configured proxy list
-            MockHttpServletRequest untrustedInternal = new MockHttpServletRequest();
-            untrustedInternal.setRemoteAddr("10.0.0.99");
-            untrustedInternal.addHeader("X-Forwarded-For", "203.0.113.195");
-            untrustedInternal.addHeader("Render-Client-IP", "203.0.113.195");
+            // 10.50.0.100 must NOT match via prefix!
+            MockHttpServletRequest prefixSpoof = new MockHttpServletRequest();
+            prefixSpoof.setRemoteAddr("10.50.0.100");
+            prefixSpoof.addHeader("Render-Client-IP", "203.0.113.195");
+            assertEquals("10.50.0.100", ClientIpResolver.resolve(prefixSpoof));
 
-            // Header MUST be ignored because 10.0.0.99 is not in configured trusted proxies
-            assertEquals("10.0.0.99", ClientIpResolver.resolve(untrustedInternal));
+            // 10.50.0.1 must match exactly
+            MockHttpServletRequest exactMatch = new MockHttpServletRequest();
+            exactMatch.setRemoteAddr("10.50.0.1");
+            exactMatch.addHeader("Render-Client-IP", "203.0.113.195");
+            assertEquals("203.0.113.195", ClientIpResolver.resolve(exactMatch));
 
-            // Case B: Request from the legitimately configured proxy (10.50.0.1)
-            MockHttpServletRequest trustedProxy = new MockHttpServletRequest();
-            trustedProxy.setRemoteAddr("10.50.0.1");
-            trustedProxy.addHeader("Render-Client-IP", "203.0.113.195");
+            // Case 2: CIDR subnet configured (192.168.10.0/24)
+            ClientIpResolver.setConfiguredTrustedProxies(List.of("192.168.10.0/24"));
 
-            // Header MUST be accepted from configured trusted proxy
-            assertEquals("203.0.113.195", ClientIpResolver.resolve(trustedProxy));
+            MockHttpServletRequest subnetMatch = new MockHttpServletRequest();
+            subnetMatch.setRemoteAddr("192.168.10.45");
+            subnetMatch.addHeader("Render-Client-IP", "203.0.113.195");
+            assertEquals("203.0.113.195", ClientIpResolver.resolve(subnetMatch));
+
+            MockHttpServletRequest subnetMismatch = new MockHttpServletRequest();
+            subnetMismatch.setRemoteAddr("192.168.11.45");
+            subnetMismatch.addHeader("Render-Client-IP", "203.0.113.195");
+            assertEquals("192.168.11.45", ClientIpResolver.resolve(subnetMismatch));
         } finally {
             ClientIpResolver.setConfiguredTrustedProxies(null);
         }
@@ -139,6 +194,18 @@ class SecurityHardeningRegressionTest {
         mockMvc.perform(get("/api/v1/prices/sync/status")
                         .header("X-Admin-Key", validAdminKey))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("6. CORS Configuration: Does NOT expose sensitive admin or tracking token headers")
+    void testCorsDoesNotExposeSensitiveHeaders() throws Exception {
+        mockMvc.perform(options("/api/v1/prices")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Expose-Headers", not(containsString("X-Admin-Key"))))
+                .andExpect(header().string("Access-Control-Expose-Headers", not(containsString("X-Tracking-Token"))))
+                .andExpect(header().string("Access-Control-Expose-Headers", containsString("X-Total-Count")));
     }
 }
 

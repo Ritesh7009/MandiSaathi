@@ -137,6 +137,96 @@ class PriceRecordOptimizationTest {
     }
 
     @Test
+    void testDefaultQueryExcludesDemoBenchmarkRecords() throws Exception {
+        LocalDate today = LocalDate.now();
+
+        PriceRecord demo = new PriceRecord();
+        demo.setCommodityCode("WHEAT");
+        demo.setMandiCode("SIRSA_HR");
+        demo.setMinPrice(new BigDecimal("2100.00"));
+        demo.setMaxPrice(new BigDecimal("2200.00"));
+        demo.setModalPrice(new BigDecimal("2150.00"));
+        demo.setPriceDate(today);
+        demo.setVariety("Standard");
+        demo.setProvenanceType(PriceRecord.PROVENANCE_DEMO);
+        demo.setVerified(false);
+        priceRecordRepository.save(demo);
+
+        PriceRecord official = new PriceRecord();
+        official.setCommodityCode("WHEAT");
+        official.setMandiCode("KHANNA_PB");
+        official.setMinPrice(new BigDecimal("2300.00"));
+        official.setMaxPrice(new BigDecimal("2400.00"));
+        official.setModalPrice(new BigDecimal("2350.00"));
+        official.setPriceDate(today);
+        official.setVariety("Standard");
+        official.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        official.setVerified(true);
+        priceRecordRepository.save(official);
+
+        // 1. Default query with no provenanceType specified MUST strictly exclude DEMO_BENCHMARK
+        mockMvc.perform(get("/api/v1/prices?commodityCode=WHEAT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].mandiCode", is("KHANNA_PB")))
+                .andExpect(jsonPath("$[0].provenanceType", is("OFFICIAL_INGESTION")));
+
+        // 2. Explicit DEMO_BENCHMARK parameter allows querying demo benchmark
+        mockMvc.perform(get("/api/v1/prices?commodityCode=WHEAT&provenanceType=DEMO_BENCHMARK"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].mandiCode", is("SIRSA_HR")));
+
+        // 3. Explicit ALL parameter returns both
+        mockMvc.perform(get("/api/v1/prices?commodityCode=WHEAT&provenanceType=ALL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    @Test
+    void testComparisonExcludesDemoBenchmarkRecords() throws Exception {
+        LocalDate commonDate = LocalDate.now();
+
+        // 2 mandis have demo benchmark records on the same date
+        PriceRecord d1 = new PriceRecord();
+        d1.setCommodityCode("WHEAT");
+        d1.setMandiCode("KHANNA_PB");
+        d1.setMinPrice(new BigDecimal("2300"));
+        d1.setMaxPrice(new BigDecimal("2400"));
+        d1.setModalPrice(new BigDecimal("2350"));
+        d1.setPriceDate(commonDate);
+        d1.setVariety("Standard");
+        d1.setProvenanceType(PriceRecord.PROVENANCE_DEMO);
+        priceRecordRepository.save(d1);
+
+        PriceRecord d2 = new PriceRecord();
+        d2.setCommodityCode("WHEAT");
+        d2.setMandiCode("SIRSA_HR");
+        d2.setMinPrice(new BigDecimal("2200"));
+        d2.setMaxPrice(new BigDecimal("2300"));
+        d2.setModalPrice(new BigDecimal("2250"));
+        d2.setPriceDate(commonDate);
+        d2.setVariety("Standard");
+        d2.setProvenanceType(PriceRecord.PROVENANCE_DEMO);
+        priceRecordRepository.save(d2);
+
+        String json = """
+            {
+                "commodityCode": "WHEAT",
+                "mandiCodes": ["KHANNA_PB", "SIRSA_HR"]
+            }
+            """;
+
+        // Comparison MUST exclude demo benchmark records and report insufficient data
+        mockMvc.perform(post("/api/v1/prices/compare")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.records", hasSize(0)))
+                .andExpect(jsonPath("$.summaryEn", containsString("Insufficient comparative data")));
+    }
+
+    @Test
     void testDeterministicSortingAndStablePagination() throws Exception {
         LocalDate baseDate = LocalDate.now().minusDays(20);
         List<PriceRecord> records = new ArrayList<>();
@@ -150,6 +240,8 @@ class PriceRecordOptimizationTest {
             p.setModalPrice(new BigDecimal("2050.00").add(BigDecimal.valueOf(i * 10)));
             p.setPriceDate(baseDate.plusDays(i));
             p.setVariety("Standard");
+            p.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+            p.setVerified(true);
             records.add(p);
         }
         priceRecordRepository.saveAll(records);
@@ -190,6 +282,8 @@ class PriceRecordOptimizationTest {
         p1.setModalPrice(new BigDecimal("2350"));
         p1.setPriceDate(today);
         p1.setVariety("Sharbati");
+        p1.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p1.setVerified(true);
         priceRecordRepository.save(p1);
 
         PriceRecord p2 = new PriceRecord();
@@ -200,6 +294,8 @@ class PriceRecordOptimizationTest {
         p2.setModalPrice(new BigDecimal("2250"));
         p2.setPriceDate(today);
         p2.setVariety("Lokwan");
+        p2.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p2.setVerified(true);
         priceRecordRepository.save(p2);
 
         mockMvc.perform(get("/api/v1/prices/varieties?commodityCode=WHEAT"))
@@ -223,6 +319,8 @@ class PriceRecordOptimizationTest {
         p1.setModalPrice(new BigDecimal("2450"));
         p1.setPriceDate(unalignedDate);
         p1.setVariety("Lokwan");
+        p1.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p1.setVerified(true);
         priceRecordRepository.save(p1);
 
         // Both mandis have common date with Sharbati
@@ -234,6 +332,8 @@ class PriceRecordOptimizationTest {
         p2.setModalPrice(new BigDecimal("2350"));
         p2.setPriceDate(commonDate);
         p2.setVariety("Sharbati");
+        p2.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p2.setVerified(true);
         priceRecordRepository.save(p2);
 
         PriceRecord p3 = new PriceRecord();
@@ -244,6 +344,8 @@ class PriceRecordOptimizationTest {
         p3.setModalPrice(new BigDecimal("2250"));
         p3.setPriceDate(commonDate);
         p3.setVariety("Sharbati");
+        p3.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p3.setVerified(true);
         priceRecordRepository.save(p3);
 
         String json = """

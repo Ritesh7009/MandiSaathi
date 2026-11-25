@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -122,8 +123,7 @@ public final class ClientIpResolver {
         List<String> configured = configuredTrustedProxies;
         if (configured != null && !configured.isEmpty()) {
             for (String trusted : configured) {
-                String t = trusted.trim();
-                if (t.equalsIgnoreCase(trimmed) || trimmed.startsWith(t)) {
+                if (matchesIpOrCidr(trimmed, trusted.trim())) {
                     return true;
                 }
             }
@@ -152,6 +152,45 @@ public final class ClientIpResolver {
             }
         }
 
+        return false;
+    }
+
+    private static boolean matchesIpOrCidr(String candidateIp, String rule) {
+        if (rule == null || rule.isBlank() || candidateIp == null || candidateIp.isBlank()) {
+            return false;
+        }
+        if (rule.equalsIgnoreCase(candidateIp)) {
+            return true;
+        }
+        if (rule.contains("/")) {
+            try {
+                String[] parts = rule.split("/");
+                if (parts.length != 2) return false;
+                InetAddress targetAddr = InetAddress.getByName(candidateIp);
+                InetAddress subnetAddr = InetAddress.getByName(parts[0].trim());
+                int prefixLength = Integer.parseInt(parts[1].trim());
+
+                byte[] targetBytes = targetAddr.getAddress();
+                byte[] subnetBytes = subnetAddr.getAddress();
+                if (targetBytes.length != subnetBytes.length) return false;
+
+                int fullBytes = prefixLength / 8;
+                int remainingBits = prefixLength % 8;
+
+                for (int i = 0; i < fullBytes; i++) {
+                    if (targetBytes[i] != subnetBytes[i]) return false;
+                }
+                if (remainingBits > 0 && fullBytes < targetBytes.length) {
+                    int mask = (0xFF << (8 - remainingBits)) & 0xFF;
+                    if ((targetBytes[fullBytes] & mask) != (subnetBytes[fullBytes] & mask)) {
+                        return false;
+                    }
+                }
+                return true;
+            } catch (Exception ignored) {
+                return false;
+            }
+        }
         return false;
     }
 

@@ -58,6 +58,8 @@ class PriceRecordControllerTest {
         p1.setModalPrice(new BigDecimal("2320.00"));
         p1.setPriceDate(LocalDate.now());
         p1.setArrivalQuantity(new BigDecimal("400.00"));
+        p1.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p1.setVerified(true);
         priceRecordRepository.save(p1);
     }
 
@@ -81,6 +83,8 @@ class PriceRecordControllerTest {
         p2.setModalPrice(new BigDecimal("2300.00"));
         p2.setPriceDate(LocalDate.now());
         p2.setArrivalQuantity(new BigDecimal("350.00"));
+        p2.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+        p2.setVerified(true);
         priceRecordRepository.save(p2);
 
         String json = """

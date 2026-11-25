@@ -190,9 +190,9 @@ export const PriceIntelligence: React.FC = () => {
 
   const [adminKey] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
-      // Remove legacy insecure persistent localStorage key if present
+      // Remove legacy keys from persistent storage to prevent credential leakage
       localStorage.removeItem('mandisaathi_admin_key');
-      return sessionStorage.getItem('mandisaathi_admin_session_key');
+      sessionStorage.removeItem('mandisaathi_admin_session_key');
     }
     return null;
   });

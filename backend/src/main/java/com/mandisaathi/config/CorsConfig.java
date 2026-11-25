@@ -40,8 +40,6 @@ public class CorsConfig {
         configuration.setExposedHeaders(List.of(
                 "Authorization",
                 "Retry-After",
-                "X-Admin-Key",
-                "X-Tracking-Token",
                 "X-Total-Count",
                 "X-Total-Pages",
                 "X-Page-Number",
