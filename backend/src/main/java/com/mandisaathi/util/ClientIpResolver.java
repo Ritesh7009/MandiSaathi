@@ -120,13 +120,14 @@ public final class ClientIpResolver {
 
         // Check configured trusted list if provided
         List<String> configured = configuredTrustedProxies;
-        if (configured != null) {
+        if (configured != null && !configured.isEmpty()) {
             for (String trusted : configured) {
                 String t = trusted.trim();
                 if (t.equalsIgnoreCase(trimmed) || trimmed.startsWith(t)) {
                     return true;
                 }
             }
+            return false; // When explicit trusted proxies are configured, do NOT fall through to arbitrary private IPs!
         }
 
         // Check standard RFC 1918 / RFC 3927 prefixes

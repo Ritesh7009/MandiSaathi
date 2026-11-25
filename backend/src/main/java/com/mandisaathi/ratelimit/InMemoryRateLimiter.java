@@ -30,9 +30,12 @@ public class InMemoryRateLimiter implements RateLimiter {
             pruneStaleWindows(currentWindow);
         }
 
-        // Bounded safety check
-        if (windowCounters.size() > MAX_MAP_ENTRIES) {
-            windowCounters.clear(); // Emergency reset to prevent OutOfMemoryError
+        // Bounded safety check: evict stale and oldest entries safely without global reset
+        if (windowCounters.size() >= MAX_MAP_ENTRIES) {
+            pruneStaleWindows(currentWindow);
+            if (windowCounters.size() >= MAX_MAP_ENTRIES) {
+                evictOldestBatch(MAX_MAP_ENTRIES / 5);
+            }
         }
 
         AtomicInteger counter = windowCounters.computeIfAbsent(key, k -> new AtomicInteger(0));
@@ -51,11 +54,21 @@ public class InMemoryRateLimiter implements RateLimiter {
             if (parts.length < 3) return true;
             try {
                 long window = Long.parseLong(parts[2]);
-                return window < currentWindow - 1;
+                return window < currentWindow;
             } catch (NumberFormatException ignored) {
                 return true;
             }
         });
+    }
+
+    private void evictOldestBatch(int countToEvict) {
+        java.util.Iterator<String> it = windowCounters.keySet().iterator();
+        int evicted = 0;
+        while (it.hasNext() && evicted < countToEvict) {
+            it.next();
+            it.remove();
+            evicted++;
+        }
     }
 
     public void reset() {

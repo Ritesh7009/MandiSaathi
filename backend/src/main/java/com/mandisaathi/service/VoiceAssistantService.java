@@ -193,8 +193,8 @@ public class VoiceAssistantService {
                                 matchedPriceRecords = priceRecordService.getPrices(commodityCode, singleMandi.getCode());
                                 PriceRecord latest = records.get(0);
                                 reportingDate = latest.getPriceDate().toString();
-                                sourceProvenance = "SEEDED_BASELINE".equals(latest.getProvenanceType())
-                                        ? "Historical baseline" : latest.getDataSource();
+                                sourceProvenance = ("DEMO_BENCHMARK".equalsIgnoreCase(latest.getProvenanceType()) || "SEEDED_BASELINE".equalsIgnoreCase(latest.getProvenanceType()))
+                                        ? "MandiSaathi Demonstration Benchmark" : latest.getDataSource();
 
                                 activeResponse = buildPriceResponse(langPrefix, commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
                                 responseHi = buildPriceResponse("hi", commodityCode, singleMandi.getCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
@@ -223,8 +223,8 @@ public class VoiceAssistantService {
                                     .toList();
                             PriceRecord latest = records.get(0);
                             reportingDate = latest.getPriceDate().toString();
-                            sourceProvenance = "SEEDED_BASELINE".equals(latest.getProvenanceType())
-                                        ? "Historical baseline" : latest.getDataSource();
+                            sourceProvenance = ("DEMO_BENCHMARK".equalsIgnoreCase(latest.getProvenanceType()) || "SEEDED_BASELINE".equalsIgnoreCase(latest.getProvenanceType()))
+                                    ? "MandiSaathi Demonstration Benchmark" : latest.getDataSource();
 
                             activeResponse = buildPriceResponse(langPrefix, commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
                             responseHi = buildPriceResponse("hi", commodityCode, latest.getMandiCode(), latest.getModalPrice(), latest.getMinPrice(), latest.getMaxPrice(), reportingDate, latest.getVariety(), sourceProvenance);
@@ -345,15 +345,17 @@ public class VoiceAssistantService {
         }
 
         if ("MANDI_PRICE_LOOKUP".equals(intent) && !reportingDate.isBlank()) {
-            boolean isBaseline = "Historical baseline".equals(sourceProvenance);
+            boolean isDemo = "MandiSaathi Demonstration Benchmark".equalsIgnoreCase(sourceProvenance)
+                    || "Historical baseline".equalsIgnoreCase(sourceProvenance);
             String lowerQuery = query.toLowerCase(Locale.ROOT);
             boolean askedForToday = TODAY_WORD.matcher(lowerQuery).find()
-                    || lowerQuery.contains("आज") || lowerQuery.contains("ਅੱਜ");
+                    || lowerQuery.contains("आज") || lowerQuery.contains("ਅੱਜ")
+                    || lowerQuery.contains("today");
             boolean noFilingToday = askedForToday && !LocalDate.now(MARKET_ZONE).toString().equals(reportingDate);
 
-            activeResponse = describePriceFreshness(langPrefix, activeResponse, isBaseline, noFilingToday);
-            responseHi = describePriceFreshness("hi", responseHi, isBaseline, noFilingToday);
-            responsePa = describePriceFreshness("pa", responsePa, isBaseline, noFilingToday);
+            activeResponse = describePriceFreshness(langPrefix, activeResponse, isDemo, noFilingToday, reportingDate);
+            responseHi = describePriceFreshness("hi", responseHi, isDemo, noFilingToday, reportingDate);
+            responsePa = describePriceFreshness("pa", responsePa, isDemo, noFilingToday, reportingDate);
         }
 
         // 2. Gnani Timbre TTS Audio Synthesis
@@ -394,20 +396,32 @@ public class VoiceAssistantService {
         );
     }
 
-    private String describePriceFreshness(String language, String response, boolean baseline, boolean noFilingToday) {
-        if (baseline) {
+    private String describePriceFreshness(String language, String response, boolean demo, boolean noFilingToday, String reportingDate) {
+        String dateNotice = (reportingDate != null && !reportingDate.isBlank()) ? " (" + reportingDate + ")" : "";
+        if (noFilingToday) {
+            String notice = switch (language) {
+                case "hi" -> "आज की आधिकारिक रिपोर्ट उपलब्ध नहीं है। अंतिम उपलब्ध भाव" + dateNotice + ": ";
+                case "pa" -> "ਅੱਜ ਦੀ ਅਧਿਕਾਰਤ ਰਿਪੋਰਟ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਆਖ਼ਰੀ ਉਪਲਬਧ ਭਾਅ" + dateNotice + ": ";
+                default -> "Today's official filing is not yet released. Last available reported rate" + dateNotice + ": ";
+            };
+            if (demo) {
+                String demoSuffix = switch (language) {
+                    case "hi" -> "[डेमो संदर्भ] ";
+                    case "pa" -> "[ਡੈਮੋ ਹਵਾਲਾ] ";
+                    default -> "[Demo Reference] ";
+                };
+                return notice + demoSuffix + response;
+            }
+            return notice + response;
+        }
+        if (demo) {
             return switch (language) {
-                case "hi" -> "ऐप का पुराना संदर्भ भाव। " + response;
-                case "pa" -> "ਐਪ ਦਾ ਪੁਰਾਣਾ ਹਵਾਲਾ ਭਾਅ। " + response;
-                default -> (noFilingToday ? "No filing for today. " : "") + "Historical baseline. " + response;
+                case "hi" -> "डेमो संदर्भ भाव: " + response;
+                case "pa" -> "ਡੈਮੋ ਹਵਾਲਾ ਭਾਅ: " + response;
+                default -> "Demonstration reference price: " + response;
             };
         }
-        if (!noFilingToday) return response;
-        return switch (language) {
-            case "hi" -> "आज की रिपोर्ट उपलब्ध नहीं है। " + response;
-            case "pa" -> "ਅੱਜ ਦੀ ਰਿਪੋਰਟ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। " + response;
-            default -> "No filing for today. " + response;
-        };
+        return response;
     }
 
     private List<PriceRecord> fetchPriceRecords(String commCode, String state, String district, String mandiCode) {

@@ -26,7 +26,8 @@ public class VoiceAssistantController {
 
     private static final Logger log = LoggerFactory.getLogger(VoiceAssistantController.class);
     private static final int MAX_VOICE_REQUESTS_PER_MINUTE = 30;
-    private static final long MAX_AUDIO_BYTES = 15L * 1024L * 1024L;
+    private static final long MAX_AUDIO_BYTES = 4L * 1024L * 1024L; // 4MB maximum payload limit
+    private static final double MAX_AUDIO_DURATION_SECONDS = 60.0; // 60s maximum audio duration
 
     private final VoiceAssistantService voiceAssistantService;
     private final RateLimiter rateLimiter;
@@ -66,9 +67,13 @@ public class VoiceAssistantController {
         }
 
         long startTime = System.currentTimeMillis();
-        String contentType = audioFile != null ? audioFile.getContentType() : "unknown";
-        String filename = audioFile != null ? audioFile.getOriginalFilename() : "unknown";
+        String rawContentType = audioFile != null ? audioFile.getContentType() : "unknown";
+        String rawFilename = audioFile != null ? audioFile.getOriginalFilename() : "unknown";
         long byteSize = audioFile != null ? audioFile.getSize() : 0;
+
+        // Sanitize strings against CRLF log injection (CWE-117)
+        String filename = rawFilename != null ? rawFilename.replaceAll("[\\r\\n\\t\\x00-\\x1F]", "_") : "unknown";
+        String contentType = rawContentType != null ? rawContentType.replaceAll("[\\r\\n\\t\\x00-\\x1F]", "_") : "unknown";
 
         if (audioFile == null || audioFile.isEmpty()) {
             log.warn("Voice request rejected: Empty audio payload. filename='{}', contentType='{}', byteSize={}",
@@ -105,15 +110,15 @@ public class VoiceAssistantController {
                     "UNKNOWN",
                     Map.of(),
                     List.of(),
-                    "Audio recording too large. Maximum size is 15MB.",
-                    "ऑडियो रिकॉर्डिंग बहुत बड़ी है। अधिकतम आकार 15MB है।",
-                    "ਆਡੀਓ ਫ਼ਾਈਲ ਬਹੁਤ ਵੱਡੀ ਹੈ।",
+                    "Audio recording too large. Maximum size is 4MB.",
+                    "ऑडियो रिकॉर्डिंग बहुत बड़ी है। अधिकतम आकार 4MB है।",
+                    "ਆਡੀਓ ਫ਼ਾਈਲ ਬਹੁਤ ਵੱਡੀ ਹੈ। ਅਧਿਕਤਮ 4MB।",
                     null,
                     "MandiSaathi Engine",
                     "",
                     "FAILED",
                     false,
-                    "Audio payload exceeds 15MB limit.",
+                    "Audio payload exceeds 4MB limit.",
                     List.of(),
                     0L,
                     0L,
@@ -152,6 +157,31 @@ public class VoiceAssistantController {
         }
 
         Double durationSec = calculateWavDurationSeconds(audioBytes);
+        if (durationSec != null && durationSec > MAX_AUDIO_DURATION_SECONDS) {
+            log.warn("Voice request rejected: Audio duration {}s exceeds {}s limit", durationSec, MAX_AUDIO_DURATION_SECONDS);
+            return ResponseEntity.badRequest().body(new VoiceQueryResponse(
+                    "",
+                    defaultLang,
+                    "UNKNOWN",
+                    Map.of(),
+                    List.of(),
+                    "Audio recording too long. Maximum allowed duration is 60 seconds.",
+                    "ऑडियो रिकॉर्डिंग बहुत लंबी है। अधिकतम अवधि 60 सेकंड है।",
+                    "ਆਡੀਓ ਬਹੁਤ ਲੰਬੀ ਹੈ। ਵੱਧ ਤੋਂ ਵੱਧ ਸਮਾਂ 60 ਸਕਿੰਟ ਹੈ।",
+                    null,
+                    "MandiSaathi Engine",
+                    "",
+                    "FAILED",
+                    false,
+                    "Audio duration exceeds 60 seconds limit.",
+                    List.of(),
+                    0L,
+                    0L,
+                    400,
+                    "AUDIO_TOO_LONG"
+            ));
+        }
+
         String durationStr = durationSec != null ? String.format("%.2fs", durationSec) : "unknown";
 
         log.info("Voice audio upload received: filename='{}', contentType='{}', byteSize={} bytes, duration={}, lang='{}'",

@@ -44,6 +44,16 @@ import { IngestionSummary, PriceRecord } from '../types';
 
 type PriceTableRow = PriceRecord & Record<string, unknown>;
 
+export const renderProvenanceBadge = (provenanceType?: string, verified?: boolean, t?: (k: string) => string) => {
+  if (provenanceType === 'OFFICIAL_INGESTION' || (verified && provenanceType !== 'HISTORICAL_VERIFIED' && provenanceType !== 'DEMO_BENCHMARK' && provenanceType !== 'SEEDED_BASELINE')) {
+    return <Badge label={t ? t('provenanceOfficial') : 'Official Filing'} variant="success" />;
+  }
+  if (provenanceType === 'HISTORICAL_VERIFIED') {
+    return <Badge label={t ? t('provenanceHistorical') : 'Historical Archive'} variant="neutral" />;
+  }
+  return <Badge label={t ? t('provenanceDemo') : 'Demo Reference'} variant="warning" />;
+};
+
 const ALL_INDIAN_STATES = [
   'Andhra Pradesh',
   'Arunachal Pradesh',
@@ -90,6 +100,8 @@ export const PriceIntelligence: React.FC = () => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>('');
   const [pageSelection, setPageSelection] = useState({ filters: '', page: 0 });
   const [selectedMandi, setSelectedMandi] = useState<string>(() => searchParams.get('mandi') || '');
+  const [selectedVariety, setSelectedVariety] = useState<string>('');
+  const [selectedProvenanceType, setSelectedProvenanceType] = useState<string>('');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncJustSucceeded, setSyncJustSucceeded] = useState<boolean>(false);
@@ -145,8 +157,15 @@ export const PriceIntelligence: React.FC = () => {
     staleTime: 120000,
   });
 
+  const { data: commodityVarieties = [] } = useQuery({
+    queryKey: ['commodityVarietiesForFilter', selectedCommodity],
+    queryFn: () => (selectedCommodity ? api.getVarieties(selectedCommodity) : Promise.resolve([])),
+    staleTime: 120000,
+    enabled: isOnline && !!selectedCommodity,
+  });
+
   const pageSize = 50;
-  const filterKey = [selectedCommodity, selectedState, selectedDistrict, selectedMandi].join('|');
+  const filterKey = [selectedCommodity, selectedState, selectedDistrict, selectedMandi, selectedVariety, selectedProvenanceType].join('|');
   const page = pageSelection.filters === filterKey ? pageSelection.page : 0;
 
   const {
@@ -160,6 +179,8 @@ export const PriceIntelligence: React.FC = () => {
     queryFn: () => api.getPrices(selectedCommodity || undefined, selectedMandi || undefined, {
       state: selectedState || undefined,
       district: selectedDistrict || undefined,
+      variety: selectedVariety || undefined,
+      provenanceType: selectedProvenanceType || undefined,
       page,
       size: pageSize,
     }),
@@ -167,7 +188,14 @@ export const PriceIntelligence: React.FC = () => {
     enabled: isOnline,
   });
 
-  const adminKey = typeof window !== 'undefined' ? localStorage.getItem('mandisaathi_admin_key') : null;
+  const [adminKey] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      // Remove legacy insecure persistent localStorage key if present
+      localStorage.removeItem('mandisaathi_admin_key');
+      return sessionStorage.getItem('mandisaathi_admin_session_key');
+    }
+    return null;
+  });
   const { data: syncStatus } = useQuery({
     queryKey: ['syncScheduleStatus', adminKey],
     queryFn: () => api.getSyncStatus(adminKey || undefined),
@@ -240,7 +268,10 @@ export const PriceIntelligence: React.FC = () => {
     setSelectedState('');
     setSelectedDistrict('');
     setSelectedMandi('');
+    setSelectedVariety('');
+    setSelectedProvenanceType('');
     setSearchQuery('');
+    setPageSelection({ filters: '', page: 0 });
   };
 
   const displayedRecords = useMemo(() => {
@@ -440,7 +471,7 @@ export const PriceIntelligence: React.FC = () => {
         </div>
       </section>
 
-      {activeRecords.some((row) => row.provenanceType === 'SEEDED_BASELINE') && (
+      {activeRecords.some((row) => row.provenanceType === 'DEMO_BENCHMARK' || row.provenanceType === 'SEEDED_BASELINE') && (
         <p className="text-sm text-ink-muted border-l-2 border-saffron pl-3">{t('baselinePriceNotice')}</p>
       )}
 
@@ -500,7 +531,7 @@ export const PriceIntelligence: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between sm:justify-end space-x-3 shrink-0">
-            {(selectedCommodity || selectedState || selectedDistrict || selectedMandi || searchQuery) && (
+            {(selectedCommodity || selectedState || selectedDistrict || selectedMandi || selectedVariety || selectedProvenanceType || searchQuery) && (
               <button
                 type="button"
                 onClick={handleResetFilters}
@@ -660,12 +691,33 @@ export const PriceIntelligence: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              {commodityVarieties.length > 0 && (
+                <div>
+                  <label htmlFor={`${prefix}-variety`} className="block text-[11px] font-semibold text-ink-muted mb-1">
+                    Variety
+                  </label>
+                  <select
+                    id={`${prefix}-variety`}
+                    value={selectedVariety}
+                    onChange={(e) => setSelectedVariety(e.target.value)}
+                    className={selectClass}
+                  >
+                    <option value="">All Varieties</option>
+                    {commodityVarieties.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           );
 
           return (
             <>
-              <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 pt-1">
                 {locationControls('price-filter')}
               </div>
               <BottomSheet
@@ -814,6 +866,7 @@ export const PriceIntelligence: React.FC = () => {
                               {r.variety}
                             </span>
                           )}
+                          {renderProvenanceBadge(r.provenanceType, r.verified, t)}
                         </div>
                         <div className="text-xs text-ink-muted flex items-center space-x-1 mt-0.5 truncate">
                           <MapPin weight="duotone" className="w-3.5 h-3.5 text-saffron shrink-0" />
@@ -942,6 +995,7 @@ const SortablePriceTable: React.FC<SortablePriceTableProps> = ({
               {getCommodityName(r.commodityCode, r.commodityNameEn)}
             </span>
             {r.variety && <Badge label={r.variety} variant="neutral" />}
+            {renderProvenanceBadge(r.provenanceType, r.verified, t)}
           </div>
         ),
       },

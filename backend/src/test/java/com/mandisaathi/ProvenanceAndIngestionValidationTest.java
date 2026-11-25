@@ -113,7 +113,8 @@ class ProvenanceAndIngestionValidationTest {
         assertEquals("PARTIAL", summary.status());
         assertEquals(1, summary.insertedCount());
         PriceRecord record = priceRecordRepository.findByCommodityCodeOrderByPriceDateDesc("CUMIN").getFirst();
-        assertEquals("LIVE_INGESTED", record.getProvenanceType());
+        assertEquals(PriceRecord.PROVENANCE_OFFICIAL, record.getProvenanceType());
+        assertTrue(record.isVerified());
         Mandi market = mandiRepository.findByCode(record.getMandiCode()).orElseThrow();
         assertEquals("Jodhpur", market.getDistrict());
         assertEquals("Rajasthan", market.getState());
@@ -262,17 +263,18 @@ class ProvenanceAndIngestionValidationTest {
         assertEquals(0, summary.skippedCount());
 
         PriceRecord saved = priceRecordRepository.findAll().get(0);
-        assertEquals("LIVE_INGESTED", saved.getProvenanceType());
+        assertEquals(PriceRecord.PROVENANCE_OFFICIAL, saved.getProvenanceType());
+        assertTrue(saved.isVerified());
         assertEquals("Lokwan", saved.getVariety());
         assertTrue(saved.getMandiCode().endsWith("_RJ"), "Rajasthan should map to _RJ state code");
     }
 
     @Test
-    @DisplayName("SEEDED_BASELINE records are preserved and cannot be overwritten by live ingestion")
-    void seededBaselineRecordsArePreserved() {
+    @DisplayName("Demonstration and baseline records are safely superseded by authentic live ingestion")
+    void demonstrationRecordsAreSupersededByOfficialLiveIngestion() {
         LocalDate date = LocalDate.of(2026, 11, 8);
 
-        // Pre-seed a baseline record
+        // Pre-seed a demonstration benchmark record
         PriceRecord baseline = new PriceRecord();
         baseline.setCommodityCode("WHEAT");
         baseline.setMandiCode("KHANNA_PB");
@@ -281,12 +283,13 @@ class ProvenanceAndIngestionValidationTest {
         baseline.setMaxPrice(new BigDecimal("2380.00"));
         baseline.setModalPrice(new BigDecimal("2320.00"));
         baseline.setUnit("QUINTAL");
-        baseline.setDataSource("Agmarknet / Punjab Mandi Board");
+        baseline.setDataSource("MandiSaathi Demonstration Benchmark");
         baseline.setVariety("Standard / FAQ");
-        baseline.setProvenanceType("SEEDED_BASELINE");
+        baseline.setProvenanceType(PriceRecord.PROVENANCE_DEMO);
+        baseline.setVerified(false);
         priceRecordRepository.save(baseline);
 
-        // Attempt live ingestion of same commodity, mandi, date, variety with different prices
+        // Official live ingestion of same commodity, mandi, date, variety with authentic filed prices
         String json = """
         {
             "records": [
@@ -308,13 +311,15 @@ class ProvenanceAndIngestionValidationTest {
         mockServer.expect(method(HttpMethod.GET))
                 .andRespond(withSuccess(json, MediaType.APPLICATION_JSON));
 
-        IngestionSummaryDto summary = testIngestionService.ingestLatestMandiPrices("TEST_PRESERVE");
+        IngestionSummaryDto summary = testIngestionService.ingestLatestMandiPrices("TEST_SUPERSEDE");
         assertEquals(0, summary.insertedCount());
-        assertEquals(0, summary.updatedCount(), "Baseline record must NOT be updated");
-        assertEquals(1, summary.skippedCount(), "Baseline duplicate must be skipped");
+        assertEquals(1, summary.updatedCount(), "Demonstration record must be updated/superseded");
+        assertEquals(0, summary.skippedCount(), "Record must not be skipped");
 
-        PriceRecord retained = priceRecordRepository.findById(baseline.getId()).orElseThrow();
-        assertEquals("SEEDED_BASELINE", retained.getProvenanceType());
-        assertEquals(new BigDecimal("2320.00"), retained.getModalPrice());
+        PriceRecord superseded = priceRecordRepository.findById(baseline.getId()).orElseThrow();
+        assertEquals(PriceRecord.PROVENANCE_OFFICIAL, superseded.getProvenanceType(), "Provenance must be upgraded to OFFICIAL_INGESTION");
+        assertTrue(superseded.isVerified(), "Superseded record must be marked verified");
+        assertEquals("Agmarknet (data.gov.in API)", superseded.getDataSource());
+        assertEquals(new BigDecimal("2150.00"), superseded.getModalPrice(), "Modal price must be updated to official rate");
     }
 }

@@ -27,6 +27,7 @@ import { ErrorMessage } from '../components/ErrorMessage';
 import { GsapStaggerGrid } from '../components/ui/MotionPrimitives';
 import { LottieBadge } from '../components/ui/LottieBadge';
 import { MandiCorridorViz } from '../components/ui/MandiCorridorViz';
+import { renderProvenanceBadge } from './PriceIntelligence';
 import {
   Scales,
   Grains,
@@ -89,19 +90,11 @@ export const MandiComparison: React.FC = () => {
   });
 
   // Discover distinct varieties reported for selectedCommodity so farmers can switch varieties cleanly
-  const { data: commodityPrices = [] } = useQuery({
+  const { data: availableVarieties = [] } = useQuery({
     queryKey: ['commodityVarietiesForCompare', selectedCommodity],
-    queryFn: () => api.getPrices(selectedCommodity, undefined),
+    queryFn: () => (selectedCommodity ? api.getVarieties(selectedCommodity) : Promise.resolve([])),
     staleTime: 120000,
   });
-
-  const availableVarieties = useMemo(() => {
-    const vars = new Set<string>();
-    commodityPrices.forEach((p) => {
-      if (p.variety && p.variety.trim()) vars.add(p.variety.trim());
-    });
-    return Array.from(vars).sort();
-  }, [commodityPrices]);
 
   const filteredMandis = useMemo(() => {
     if (!mandiSearchQuery.trim()) return mandis;
@@ -611,6 +604,10 @@ export const MandiComparison: React.FC = () => {
             <Banner status="success" collapsible={false} title={ui.advisoryTitle} description={summaryText} />
           )}
 
+          {comparison?.records.some((row) => row.provenanceType === 'DEMO_BENCHMARK' || row.provenanceType === 'SEEDED_BASELINE') && (
+            <p className="text-sm text-ink-muted border-l-2 border-saffron pl-3">{t('baselinePriceNotice')}</p>
+          )}
+
           {/* ThreeUI-Inspired APMC Price Corridor Spread Topology */}
           {comparison?.records && (
             <MandiCorridorViz
@@ -759,6 +756,7 @@ const CompareLedgerTable: React.FC<CompareLedgerTableProps> = ({
   ui,
   getMandiName,
 }) => {
+  const { t } = useLanguage();
   const columns: TableColumn<CompareTableRow>[] = useMemo(
     () => [
       {
@@ -774,6 +772,7 @@ const CompareLedgerTable: React.FC<CompareLedgerTableProps> = ({
                 {getMandiName(r.mandiCode, r.mandiNameHi || r.mandiNameEn)}
               </span>
               {isBest && <Badge variant="success" label={ui.bestBadge} />}
+              {renderProvenanceBadge(r.provenanceType, r.verified, t)}
             </div>
           );
         },

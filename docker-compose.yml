@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ${DB_USER:-mandisaathi}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-mandisaathi_secret}
     ports:
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro

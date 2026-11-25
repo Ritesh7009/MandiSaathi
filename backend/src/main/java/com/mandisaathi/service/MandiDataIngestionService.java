@@ -246,21 +246,25 @@ public class MandiDataIngestionService {
 
                     if (existing.isPresent()) {
                         PriceRecord rec = existing.get();
-                        // NEVER overwrite SEEDED_BASELINE records!
-                        if ("SEEDED_BASELINE".equalsIgnoreCase(rec.getProvenanceType())) {
-                            log.info("Preserving SEEDED_BASELINE record for commodity {} at mandi {} on date {}. Skipping overwrite.",
-                                    commCode, mandiCode, priceDate);
-                            skipped++;
-                            continue;
-                        }
+                        boolean wasDemoOrBaseline = "DEMO_BENCHMARK".equalsIgnoreCase(rec.getProvenanceType())
+                                || "SEEDED_BASELINE".equalsIgnoreCase(rec.getProvenanceType());
 
                         rec.setMinPrice(minPrice);
                         rec.setMaxPrice(maxPrice);
                         rec.setModalPrice(modalPrice);
                         rec.setDataSource("Agmarknet (data.gov.in API)");
                         rec.setVariety(variety);
-                        rec.setProvenanceType("LIVE_INGESTED");
+                        rec.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
+                        rec.setVerified(true);
                         priceRecordRepository.save(rec);
+
+                        if (wasDemoOrBaseline) {
+                            log.info("Superseded demonstration benchmark with official live Agmarknet filing for commodity {} at mandi {} on date {}",
+                                    commCode, mandiCode, priceDate);
+                        } else {
+                            log.debug("Updated official Agmarknet record for commodity {} at mandi {} on date {}",
+                                    commCode, mandiCode, priceDate);
+                        }
                         updated++;
                     } else {
                         PriceRecord newRec = new PriceRecord();
@@ -273,7 +277,7 @@ public class MandiDataIngestionService {
                         newRec.setUnit("QUINTAL");
                         newRec.setDataSource("Agmarknet (data.gov.in API)");
                         newRec.setVariety(variety);
-                        newRec.setProvenanceType("LIVE_INGESTED");
+                        newRec.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
                         newRec.setVerified(true);
                         priceRecordRepository.save(newRec);
                         inserted++;

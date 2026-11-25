@@ -178,7 +178,14 @@ export const Home: React.FC = () => {
 
   const { data: priceRecords = [] } = useQuery({
     queryKey: ['featuredPricesHome'],
-    queryFn: () => api.getPrices(undefined, undefined),
+    queryFn: () => api.getPrices(undefined, undefined, { size: 8 }),
+    staleTime: 60000,
+  });
+
+  const { data: inspectedMandiRates = [] } = useQuery({
+    queryKey: ['inspectedMandiPrices', inspectedMandi?.code],
+    queryFn: () => (inspectedMandi ? api.getPrices(undefined, inspectedMandi.code, { size: 10 }) : Promise.resolve([])),
+    enabled: !!inspectedMandi,
     staleTime: 60000,
   });
 
@@ -888,7 +895,7 @@ export const Home: React.FC = () => {
         width={540}
       >
         {inspectedMandi && (() => {
-          const mandiRates = priceRecords.filter((r) => r.mandiCode === inspectedMandi.code);
+          const mandiRates = inspectedMandiRates;
           return (
             <div className="space-y-4">
               <DialogHeader

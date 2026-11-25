@@ -37,17 +37,21 @@ public class PriceRecord {
     @Column(name = "unit", nullable = false, length = 32)
     private String unit = "QUINTAL";
 
+    public static final String PROVENANCE_OFFICIAL = "OFFICIAL_INGESTION";
+    public static final String PROVENANCE_HISTORICAL = "HISTORICAL_VERIFIED";
+    public static final String PROVENANCE_DEMO = "DEMO_BENCHMARK";
+
     @Column(name = "data_source", nullable = false, length = 128)
-    private String dataSource = "Agmarknet (DAC&FW)";
+    private String dataSource = "MandiSaathi Demonstration Benchmark";
 
     @Column(name = "variety", nullable = false, length = 64)
     private String variety = "Standard / FAQ";
 
     @Column(name = "provenance_type", nullable = false, length = 32)
-    private String provenanceType = "SEEDED_BASELINE";
+    private String provenanceType = PROVENANCE_DEMO;
 
     @Column(nullable = false)
-    private boolean verified = true;
+    private boolean verified = false;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

@@ -90,18 +90,32 @@ export const api = {
   getPrices: (
     commodityCode?: string,
     mandiCode?: string,
-    filters?: { state?: string; district?: string; page?: number; size?: number },
+    filters?: {
+      state?: string;
+      district?: string;
+      variety?: string;
+      provenanceType?: string;
+      priceDate?: string;
+      page?: number;
+      size?: number;
+    },
   ): Promise<PriceRecord[]> => {
     const params = new URLSearchParams();
     if (commodityCode) params.append('commodityCode', commodityCode);
     if (mandiCode) params.append('mandiCode', mandiCode);
     if (filters?.state) params.set('state', filters.state);
     if (filters?.district) params.set('district', filters.district);
+    if (filters?.variety) params.set('variety', filters.variety);
+    if (filters?.provenanceType) params.set('provenanceType', filters.provenanceType);
+    if (filters?.priceDate) params.set('priceDate', filters.priceDate);
     if (filters?.page !== undefined) params.set('page', String(filters.page));
     if (filters?.size !== undefined) params.set('size', String(filters.size));
     const qs = params.toString() ? `?${params.toString()}` : '';
     return fetchJson<PriceRecord[]>(`/api/v1/prices${qs}`);
   },
+
+  getVarieties: (commodityCode: string): Promise<string[]> =>
+    fetchJson<string[]>(`/api/v1/prices/varieties?commodityCode=${encodeURIComponent(commodityCode)}`),
 
   comparePrices: (commodityCode: string, mandiCodes?: string[], variety?: string): Promise<PriceComparison> =>
     fetchJson<PriceComparison>('/api/v1/prices/compare', {

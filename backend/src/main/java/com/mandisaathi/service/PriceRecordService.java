@@ -10,6 +10,8 @@ import com.mandisaathi.exception.ResourceNotFoundException;
 import com.mandisaathi.repository.CommodityRepository;
 import com.mandisaathi.repository.MandiRepository;
 import com.mandisaathi.repository.PriceRecordRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,16 +40,38 @@ public class PriceRecordService {
     }
 
     public List<PriceRecordDto> getPrices(String commodityCode, String mandiCode) {
-        List<PriceRecord> records = priceRecordRepository.searchPrices(commodityCode, mandiCode);
-        return enrichRecords(records);
+        return getPricePage(commodityCode, mandiCode, null, null, null, null, null, 0, 50).getContent();
+    }
+
+    public Page<PriceRecordDto> getPricePage(
+            String commodityCode, String mandiCode, String state, String district,
+            String variety, String provenanceType, LocalDate priceDate, int page, int size
+    ) {
+        Page<PriceRecord> recordsPage = priceRecordRepository.searchPricePage(
+                Objects.toString(commodityCode, "").trim(),
+                Objects.toString(mandiCode, "").trim(),
+                Objects.toString(state, "").trim(),
+                Objects.toString(district, "").trim(),
+                Objects.toString(variety, "").trim(),
+                Objects.toString(provenanceType, "").trim(),
+                priceDate,
+                PageRequest.of(page, size)
+        );
+        List<PriceRecordDto> dtos = enrichRecords(recordsPage.getContent());
+        return new PageImpl<>(dtos, recordsPage.getPageable(), recordsPage.getTotalElements());
     }
 
     public List<PriceRecordDto> getPricePage(
             String commodityCode, String mandiCode, String state, String district, int page, int size
     ) {
-        return enrichRecords(priceRecordRepository.searchPricePage(
-                Objects.toString(commodityCode, ""), Objects.toString(mandiCode, ""),
-                Objects.toString(state, ""), Objects.toString(district, ""), PageRequest.of(page, size)));
+        return getPricePage(commodityCode, mandiCode, state, district, null, null, null, page, size).getContent();
+    }
+
+    public List<String> getDistinctVarieties(String commodityCode) {
+        if (commodityCode == null || commodityCode.isBlank()) {
+            return Collections.emptyList();
+        }
+        return priceRecordRepository.findDistinctVarietiesByCommodityCode(commodityCode.trim());
     }
 
     public PriceComparisonDto comparePrices(String commodityCode, List<String> mandiCodes) {
@@ -57,123 +81,23 @@ public class PriceRecordService {
     public PriceComparisonDto comparePrices(String commodityCode, List<String> mandiCodes, String targetVariety) {
         Commodity commodity = commodityRepository.findByCode(commodityCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Commodity not found with code: " + commodityCode));
-
-        List<PriceRecord> candidates;
-        boolean specificMandisRequested = mandiCodes != null && !mandiCodes.isEmpty();
-        if (specificMandisRequested) {
-            candidates = priceRecordRepository.findByCommodityCodeAndMandiCodeInOrderByPriceDateDesc(commodityCode, mandiCodes);
-        } else {
-            candidates = priceRecordRepository.findByCommodityCodeOrderByPriceDateDesc(commodityCode);
-        }
-
         CommodityDto commodityDto = toCommodityDto(commodity);
 
+        boolean specificMandisRequested = mandiCodes != null && !mandiCodes.isEmpty();
+        List<String> effectiveMandiCodes = specificMandisRequested ? mandiCodes : Collections.emptyList();
+        long requiredCount = specificMandisRequested ? mandiCodes.size() : 2L;
+        String normalizedTargetVariety = targetVariety != null ? targetVariety.trim() : "";
+
+        List<PriceRecordRepository.ComparisonCandidateProjection> candidates = priceRecordRepository.findComparisonCandidates(
+                commodityCode,
+                effectiveMandiCodes,
+                specificMandisRequested,
+                normalizedTargetVariety,
+                requiredCount,
+                PageRequest.of(0, 1)
+        );
+
         if (candidates.isEmpty()) {
-            return new PriceComparisonDto(
-                    commodityDto,
-                    Collections.emptyList(),
-                    "No market price records are currently filed for " + commodity.getNameEn() + ".",
-                    commodity.getNameHi() + " के लिए कोई भाव उपलब्ध नहीं है।",
-                    (commodity.getNamePa() != null ? commodity.getNamePa() : commodity.getNameEn()) + " ਲਈ ਕੋਈ ਭਾਅ ਉਪਲਬਧ ਨਹੀਂ ਹੈ。",
-                    null,
-                    null
-            );
-        }
-
-        // Group candidate records by reporting date
-        Map<LocalDate, List<PriceRecord>> recordsByDate = candidates.stream()
-                .collect(Collectors.groupingBy(PriceRecord::getPriceDate));
-
-        // Sort reporting dates in descending order (newest first)
-        List<LocalDate> sortedDates = recordsByDate.keySet().stream()
-                .sorted(Comparator.reverseOrder())
-                .toList();
-
-        LocalDate commonDate = null;
-        String commonVariety = null;
-        List<PriceRecord> validRecordsForComparison = Collections.emptyList();
-
-        for (LocalDate date : sortedDates) {
-            List<PriceRecord> recordsOnDate = recordsByDate.get(date);
-
-            // Group by normalized variety on this date
-            Map<String, List<PriceRecord>> recordsByVariety = recordsOnDate.stream()
-                    .collect(Collectors.groupingBy(r -> r.getVariety() != null && !r.getVariety().isBlank()
-                            ? r.getVariety().trim() : "Common"));
-
-            if (specificMandisRequested) {
-                // Find varieties reported by ALL requested mandis on this date
-                List<String> qualifyingVarieties = recordsByVariety.entrySet().stream()
-                        .filter(entry -> {
-                            if (targetVariety != null && !targetVariety.isBlank()) {
-                                if (!entry.getKey().equalsIgnoreCase(targetVariety.trim())) {
-                                    return false;
-                                }
-                            }
-                            Set<String> mandisForVar = entry.getValue().stream()
-                                    .map(PriceRecord::getMandiCode)
-                                    .collect(Collectors.toSet());
-                            return mandisForVar.containsAll(mandiCodes);
-                        })
-                        .map(Map.Entry::getKey)
-                        .sorted() // deterministic alphabetical sorting
-                        .toList();
-
-                if (!qualifyingVarieties.isEmpty()) {
-                    commonDate = date;
-                    commonVariety = qualifyingVarieties.get(0);
-                    List<PriceRecord> varRecords = recordsByVariety.get(commonVariety);
-
-                    // Pick exactly one record per mandi deterministically (by highest arrival quantity or newest ID, NEVER highest modal price)
-                    validRecordsForComparison = varRecords.stream()
-                            .filter(r -> mandiCodes.contains(r.getMandiCode()))
-                            .collect(Collectors.toMap(
-                                    PriceRecord::getMandiCode,
-                                    r -> r,
-                                    (r1, r2) -> (r1.getId() != null && r2.getId() != null && r1.getId() >= r2.getId()) ? r1 : r2
-                            ))
-                            .values().stream().toList();
-                    break;
-                }
-            } else {
-                // National comparison: find varieties reported by at least 2 distinct mandis on this date
-                List<Map.Entry<String, List<PriceRecord>>> qualifyingEntries = recordsByVariety.entrySet().stream()
-                        .filter(entry -> {
-                            if (targetVariety != null && !targetVariety.isBlank()) {
-                                if (!entry.getKey().equalsIgnoreCase(targetVariety.trim())) {
-                                    return false;
-                                }
-                            }
-                            Set<String> mandis = entry.getValue().stream()
-                                    .map(PriceRecord::getMandiCode)
-                                    .collect(Collectors.toSet());
-                            return mandis.size() >= 2;
-                        })
-                        .sorted((e1, e2) -> {
-                            int countDiff = Integer.compare(e2.getValue().size(), e1.getValue().size());
-                            return countDiff != 0 ? countDiff : e1.getKey().compareTo(e2.getKey());
-                        })
-                        .toList();
-
-                if (!qualifyingEntries.isEmpty()) {
-                    commonDate = date;
-                    commonVariety = qualifyingEntries.get(0).getKey();
-                    List<PriceRecord> varRecords = qualifyingEntries.get(0).getValue();
-
-                    // Deduplicate per mandi deterministically
-                    validRecordsForComparison = varRecords.stream()
-                            .collect(Collectors.toMap(
-                                    PriceRecord::getMandiCode,
-                                    r -> r,
-                                    (r1, r2) -> (r1.getId() != null && r2.getId() != null && r1.getId() >= r2.getId()) ? r1 : r2
-                            ))
-                            .values().stream().toList();
-                    break;
-                }
-            }
-        }
-
-        if (commonDate == null || validRecordsForComparison.isEmpty() || (specificMandisRequested && validRecordsForComparison.size() < mandiCodes.size())) {
             String varietyNotice = (targetVariety != null && !targetVariety.isBlank())
                     ? "for requested variety '" + targetVariety + "'"
                     : "for the same crop variety";
@@ -181,6 +105,34 @@ public class PriceRecordService {
             String summaryHi = "अपर्याप्त तुलनात्मक डेटा: चयनित मंडियों में एक ही रिपोर्टिंग तिथि और समान किस्म के लिए मूल्य रिकॉर्ड उपलब्ध नहीं हैं। भ्रामक मूल्य अंतर से बचने के लिए समान तिथि और समान किस्म आवश्यक है।";
             String summaryPa = "ਨਾਕਾਫ਼ੀ ਤੁਲਨਾਤਮਕ ਡਾਟਾ: ਚੁਣੀਆਂ ਗਈਆਂ ਮੰਡੀਆਂ ਲਈ ਇੱਕੋ ਰਿਪੋਰਟਿੰਗ ਮਿਤੀ ਅਤੇ ਸਮਾਨ ਕਿਸਮ ਦੇ ਭਾਅ ਰਿਕਾਰਡ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।";
 
+            return new PriceComparisonDto(commodityDto, Collections.emptyList(), summaryEn, summaryHi, summaryPa, null, null);
+        }
+
+        PriceRecordRepository.ComparisonCandidateProjection bestCandidate = candidates.get(0);
+        LocalDate commonDate = bestCandidate.getPriceDate();
+        String commonVariety = bestCandidate.getVariety();
+
+        List<PriceRecord> rawRecords = priceRecordRepository.findSpecificComparisonRecords(
+                commodityCode,
+                commonDate,
+                commonVariety,
+                effectiveMandiCodes,
+                specificMandisRequested
+        );
+
+        // Deduplicate per mandi deterministically by newest ID
+        List<PriceRecord> validRecordsForComparison = rawRecords.stream()
+                .collect(Collectors.toMap(
+                        PriceRecord::getMandiCode,
+                        r -> r,
+                        (r1, r2) -> (r1.getId() != null && r2.getId() != null && r1.getId() >= r2.getId()) ? r1 : r2
+                ))
+                .values().stream().toList();
+
+        if (validRecordsForComparison.isEmpty() || (specificMandisRequested && validRecordsForComparison.size() < mandiCodes.size())) {
+            String summaryEn = "Insufficient comparative data: The selected mandis do not share price records on a common reporting date.";
+            String summaryHi = "अपर्याप्त तुलनात्मक डेटा: चयनित मंडियों में एक ही रिपोर्टिंग तिथि पर मूल्य रिकॉर्ड उपलब्ध नहीं हैं।";
+            String summaryPa = "ਨਾਕਾਫ਼ੀ ਤੁਲਨਾਤਮਕ ਡਾਟਾ: ਚੁਣੀਆਂ ਗਈਆਂ ਮੰਡੀਆਂ ਲਈ ਇੱਕੋ ਰਿਪੋਰਟਿੰਗ ਮਿਤੀ ਉੱਤੇ ਭਾਅ ਰਿਕਾਰਡ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।";
             return new PriceComparisonDto(commodityDto, Collections.emptyList(), summaryEn, summaryHi, summaryPa, null, null);
         }
 
@@ -210,9 +162,12 @@ public class PriceRecordService {
             return Collections.emptyList();
         }
 
-        Map<String, Commodity> commodityMap = commodityRepository.findAll().stream()
+        Set<String> commCodes = records.stream().map(PriceRecord::getCommodityCode).collect(Collectors.toSet());
+        Set<String> mandiCodes = records.stream().map(PriceRecord::getMandiCode).collect(Collectors.toSet());
+
+        Map<String, Commodity> commodityMap = commodityRepository.findByCodeIn(commCodes).stream()
                 .collect(Collectors.toMap(Commodity::getCode, c -> c, (a, b) -> a));
-        Map<String, Mandi> mandiMap = mandiRepository.findAll().stream()
+        Map<String, Mandi> mandiMap = mandiRepository.findByCodeIn(mandiCodes).stream()
                 .collect(Collectors.toMap(Mandi::getCode, m -> m, (a, b) -> a));
 
         return records.stream().map(r -> {

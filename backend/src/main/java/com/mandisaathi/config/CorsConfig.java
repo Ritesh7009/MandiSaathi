@@ -41,7 +41,12 @@ public class CorsConfig {
                 "Authorization",
                 "Retry-After",
                 "X-Admin-Key",
-                "X-Tracking-Token"
+                "X-Tracking-Token",
+                "X-Total-Count",
+                "X-Total-Pages",
+                "X-Page-Number",
+                "X-Page-Size",
+                "X-Has-Next"
         ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
