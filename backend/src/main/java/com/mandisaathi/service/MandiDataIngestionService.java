@@ -10,7 +10,6 @@ import com.mandisaathi.dto.SyncStatusDto;
 import com.mandisaathi.entity.Commodity;
 import com.mandisaathi.entity.IngestionRun;
 import com.mandisaathi.entity.Mandi;
-import com.mandisaathi.entity.PriceRecord;
 import com.mandisaathi.repository.CommodityRepository;
 import com.mandisaathi.repository.IngestionRunRepository;
 import com.mandisaathi.repository.MandiRepository;
@@ -22,15 +21,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
-import java.math.BigDecimal;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -46,11 +40,14 @@ public class MandiDataIngestionService {
     private final MandiRepository mandiRepository;
     private final IngestionRunRepository ingestionRunRepository;
     private final ObjectMapper objectMapper;
+    private final DistributedSyncCoordinator syncCoordinator;
+    private final MandiPriceBatchPersistenceService batchPersistenceService;
 
     private final AtomicBoolean isSyncRunning = new AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicReference<Instant> lastCompletedSync = new java.util.concurrent.atomic.AtomicReference<>(null);
     private static final long MANUAL_SYNC_COOLDOWN_SECONDS = 10;
     private static final int MAX_PAGES_PER_SCOPE = 5;
+    private static final int DEFAULT_BATCH_SIZE = 50;
 
     @Value("${mandidata.priority-district:}")
     private String priorityDistrict;
@@ -58,11 +55,31 @@ public class MandiDataIngestionService {
     @Value("${mandidata.priority-state:}")
     private String priorityState;
 
-    private static final List<DateTimeFormatter> DATE_FORMATTERS = List.of(
-            DateTimeFormatter.ofPattern("dd/MM/yyyy"),
-            DateTimeFormatter.ofPattern("yyyy-MM-dd"),
-            DateTimeFormatter.ofPattern("dd-MM-yyyy")
-    );
+    @Value("${mandidata.batch-size:50}")
+    private int batchSize = DEFAULT_BATCH_SIZE;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public MandiDataIngestionService(
+            MandiDataProperties mandiDataProperties,
+            RestClient restClient,
+            PriceRecordRepository priceRecordRepository,
+            CommodityRepository commodityRepository,
+            MandiRepository mandiRepository,
+            IngestionRunRepository ingestionRunRepository,
+            ObjectMapper objectMapper,
+            DistributedSyncCoordinator syncCoordinator,
+            MandiPriceBatchPersistenceService batchPersistenceService
+    ) {
+        this.mandiDataProperties = mandiDataProperties;
+        this.restClient = restClient;
+        this.priceRecordRepository = priceRecordRepository;
+        this.commodityRepository = commodityRepository;
+        this.mandiRepository = mandiRepository;
+        this.ingestionRunRepository = ingestionRunRepository;
+        this.objectMapper = objectMapper;
+        this.syncCoordinator = syncCoordinator;
+        this.batchPersistenceService = batchPersistenceService;
+    }
 
     public MandiDataIngestionService(
             MandiDataProperties mandiDataProperties,
@@ -73,13 +90,10 @@ public class MandiDataIngestionService {
             IngestionRunRepository ingestionRunRepository,
             ObjectMapper objectMapper
     ) {
-        this.mandiDataProperties = mandiDataProperties;
-        this.restClient = restClient;
-        this.priceRecordRepository = priceRecordRepository;
-        this.commodityRepository = commodityRepository;
-        this.mandiRepository = mandiRepository;
-        this.ingestionRunRepository = ingestionRunRepository;
-        this.objectMapper = objectMapper;
+        this(mandiDataProperties, restClient, priceRecordRepository, commodityRepository, mandiRepository,
+                ingestionRunRepository, objectMapper,
+                new DistributedSyncCoordinator(null),
+                new MandiPriceBatchPersistenceService(priceRecordRepository, mandiRepository));
     }
 
     public String getStatus() {
@@ -96,7 +110,6 @@ public class MandiDataIngestionService {
         return isSyncRunning.get();
     }
 
-    @Transactional
     @Scheduled(cron = "${mandidata.cron:0 0 19 * * *}", zone = "${mandidata.zone:Asia/Kolkata}")
     public void runScheduledSync() {
         if (!mandiDataProperties.scheduleEnabled()) {
@@ -107,12 +120,10 @@ public class MandiDataIngestionService {
         ingestLatestMandiPrices("SCHEDULED_CRON");
     }
 
-    @Transactional
     public IngestionSummaryDto ingestLatestMandiPrices() {
         return ingestLatestMandiPrices("MANUAL_SYNC");
     }
 
-    @Transactional
     public IngestionSummaryDto ingestLatestMandiPrices(String triggeredBy) {
         if ("MANUAL_SYNC".equalsIgnoreCase(triggeredBy)) {
             Instant last = lastCompletedSync.get();
@@ -127,206 +138,144 @@ public class MandiDataIngestionService {
             }
         }
 
-        if (!isSyncRunning.compareAndSet(false, true)) {
-            log.warn("Ingestion skipped: another sync run is currently in progress");
+        // 1. Acquire distributed synchronization lock across multi-instance deployment
+        Optional<DistributedSyncCoordinator.DistributedSyncHandle> lockOpt = syncCoordinator.tryAcquireLock();
+        if (lockOpt.isEmpty()) {
+            log.warn("Ingestion skipped: another sync run is currently in progress across the cluster");
             return new IngestionSummaryDto(
                     0, 0, 0, 0,
                     "SKIPPED",
-                    "Ingestion already in progress",
+                    "Ingestion already in progress on another instance or thread",
                     Instant.now()
             );
         }
 
-        Instant startedAt = Instant.now();
-        IngestionRun run = new IngestionRun(startedAt, "IN_PROGRESS", triggeredBy);
-        try {
-            run = ingestionRunRepository.save(run);
-            if (!mandiDataProperties.isConfigured()) {
-                log.info("Mandi Data ingestion skipped: data.gov.in API key is not configured. Using verified seed data.");
-                String msg = mandiDataProperties.enabled()
-                        ? "The Agmarknet API key is missing. Existing price records remain available."
-                        : "Live Agmarknet ingestion is disabled. Existing price records remain available.";
-                run.setStatus("SKIPPED");
-                run.setMessage(msg);
-                run.setCompletedAt(Instant.now());
-                ingestionRunRepository.save(run);
-
-                return new IngestionSummaryDto(0, 0, 0, 0, getStatus(), msg, run.getCompletedAt());
-            }
-
-            ArrayNode recordsNode = objectMapper.createArrayNode();
-            List<String> scopeErrors = new ArrayList<>();
-            if (priorityDistrict != null && !priorityDistrict.isBlank()
-                    && priorityState != null && !priorityState.isBlank()) {
-                fetchScope(Map.of("state", priorityState, "district", priorityDistrict), recordsNode, scopeErrors);
-            }
-            fetchScope(Map.of(), recordsNode, scopeErrors);
-
-            if (recordsNode.isEmpty()) {
-                log.warn("data.gov.in API returned 0 records");
-                run.setStatus(scopeErrors.isEmpty() ? "NO_DATA" : "FAILED");
-                run.setTotalFetched(0);
-                run.setMessage(scopeErrors.isEmpty() ? "No records returned by Agmarknet." : "Agmarknet fetch failed.");
-                if (!scopeErrors.isEmpty()) run.setErrorDetails(sanitizeErrorMessage(String.join("; ", scopeErrors)));
-                run.setCompletedAt(Instant.now());
-                ingestionRunRepository.save(run);
-
-                return new IngestionSummaryDto(0, 0, 0, 0, run.getStatus(), run.getMessage(), run.getCompletedAt());
-            }
-
-            int totalFetched = recordsNode.size();
-            int inserted = 0;
-            int updated = 0;
-            int skipped = 0;
-
-            // Pre-load known commodities and mandis once per batch to avoid N+1 queries in the loop
-            List<Commodity> knownCommodities = commodityRepository.findAll();
-            List<Mandi> knownMandis = new ArrayList<>(mandiRepository.findAll());
-
-            for (JsonNode node : recordsNode) {
-                try {
-                    String rawCommodity = node.path("commodity").asText("").trim();
-                    String rawState = node.path("state").asText("").trim();
-                    String rawDistrict = node.path("district").asText("").trim();
-                    String rawMarket = node.path("market").asText("").trim();
-                    String rawDate = node.path("arrival_date").asText("").trim();
-
-                    String commCode = normalizeCommodityCode(rawCommodity, knownCommodities);
-                    if (commCode == null) {
-                        skipped++;
-                        continue;
-                    }
-
-                    LocalDate priceDate = parseDate(rawDate);
-                    if (priceDate == null) {
-                        log.debug("Skipping record due to unparseable or missing arrival_date: '{}'", rawDate);
-                        skipped++;
-                        continue;
-                    }
-
-                    BigDecimal minPrice = parsePrice(node.path("min_price").asText());
-                    BigDecimal maxPrice = parsePrice(node.path("max_price").asText());
-                    BigDecimal modalPrice = parsePrice(node.path("modal_price").asText());
-
-                    if (minPrice == null || maxPrice == null || modalPrice == null) {
-                        skipped++;
-                        continue;
-                    }
-
-                    // Strict validation: Reject non-positive prices
-                    if (minPrice.compareTo(BigDecimal.ZERO) <= 0 || modalPrice.compareTo(BigDecimal.ZERO) <= 0 || maxPrice.compareTo(BigDecimal.ZERO) <= 0) {
-                        log.debug("Skipping record due to non-positive prices: min={}, modal={}, max={}", minPrice, modalPrice, maxPrice);
-                        skipped++;
-                        continue;
-                    }
-
-                    // Strict validation: min <= modal <= max (Reject, do NOT silently mutate or swap)
-                    if (minPrice.compareTo(modalPrice) > 0 || modalPrice.compareTo(maxPrice) > 0) {
-                        log.debug("Skipping record due to inconsistent price relationships: min={} > modal={} or modal={} > max={}",
-                                minPrice, modalPrice, maxPrice);
-                        skipped++;
-                        continue;
-                    }
-
-                    String rawVariety = node.path("variety").asText("").trim();
-                    String variety = (rawVariety.isBlank() || rawVariety.equalsIgnoreCase("Other")) ? "Standard / FAQ" : rawVariety;
-
-                    // Resolve or register Mandi with complete identifiers using in-memory batch cache
-                    String mandiCode = resolveOrRegisterMandi(rawMarket, rawDistrict, rawState, knownMandis);
-                    if (mandiCode == null) {
-                        log.debug("Skipping record due to incomplete market identifiers: market='{}', district='{}', state='{}'",
-                                rawMarket, rawDistrict, rawState);
-                        skipped++;
-                        continue;
-                    }
-
-                    // Duplicate check considering commodity, mandi, date, variety
-                    Optional<PriceRecord> existing = priceRecordRepository
-                            .findByCommodityCodeAndMandiCodeAndPriceDateAndVariety(commCode, mandiCode, priceDate, variety);
-
-                    if (existing.isPresent()) {
-                        PriceRecord rec = existing.get();
-                        boolean wasDemoOrBaseline = "DEMO_BENCHMARK".equalsIgnoreCase(rec.getProvenanceType())
-                                || "SEEDED_BASELINE".equalsIgnoreCase(rec.getProvenanceType());
-
-                        rec.setMinPrice(minPrice);
-                        rec.setMaxPrice(maxPrice);
-                        rec.setModalPrice(modalPrice);
-                        rec.setDataSource("Agmarknet (data.gov.in API)");
-                        rec.setVariety(variety);
-                        rec.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
-                        rec.setVerified(true);
-                        priceRecordRepository.save(rec);
-
-                        if (wasDemoOrBaseline) {
-                            log.info("Superseded demonstration benchmark with official live Agmarknet filing for commodity {} at mandi {} on date {}",
-                                    commCode, mandiCode, priceDate);
-                        } else {
-                            log.debug("Updated official Agmarknet record for commodity {} at mandi {} on date {}",
-                                    commCode, mandiCode, priceDate);
-                        }
-                        updated++;
-                    } else {
-                        PriceRecord newRec = new PriceRecord();
-                        newRec.setCommodityCode(commCode);
-                        newRec.setMandiCode(mandiCode);
-                        newRec.setMinPrice(minPrice);
-                        newRec.setMaxPrice(maxPrice);
-                        newRec.setModalPrice(modalPrice);
-                        newRec.setPriceDate(priceDate);
-                        newRec.setUnit("QUINTAL");
-                        newRec.setDataSource("Agmarknet (data.gov.in API)");
-                        newRec.setVariety(variety);
-                        newRec.setProvenanceType(PriceRecord.PROVENANCE_OFFICIAL);
-                        newRec.setVerified(true);
-                        priceRecordRepository.save(newRec);
-                        inserted++;
-                    }
-                } catch (Exception recEx) {
-                    log.warn("Failed to ingest record: {}", recEx.getMessage());
-                    skipped++;
-                }
-            }
-
-            run.setTotalFetched(totalFetched);
-            run.setInsertedCount(inserted);
-            run.setUpdatedCount(updated);
-            run.setSkippedCount(skipped);
-            boolean partial = !scopeErrors.isEmpty();
-            run.setStatus(partial ? "PARTIAL" : "SUCCESS");
-            if (partial) run.setErrorDetails(sanitizeErrorMessage(String.join("; ", scopeErrors)));
-            String message = String.format("Agmarknet records: %d added, %d updated, %d skipped.",
-                    inserted, updated, skipped);
-            if (partial) message += " Some requests to Agmarknet failed.";
-            run.setMessage(message);
-            run.setCompletedAt(Instant.now());
-            ingestionRunRepository.save(run);
-
-            log.info("Agmarknet data ingestion finished. Total: {}, Inserted: {}, Updated: {}, Skipped: {}",
-                    totalFetched, inserted, updated, skipped);
-
-            return new IngestionSummaryDto(
-                    totalFetched, inserted, updated, skipped,
-                    partial ? "PARTIAL" : "CONNECTED",
-                    message,
-                    run.getCompletedAt()
-            );
-
-        } catch (Exception ex) {
-            String sanitizedErr = sanitizeErrorMessage(ex.getMessage());
-            log.error("Failed to ingest data from data.gov.in: {}", sanitizedErr);
-            run.setStatus("FAILED");
-            run.setMessage("Ingestion error: " + sanitizedErr);
-            run.setErrorDetails(sanitizedErr);
-            run.setCompletedAt(Instant.now());
-            ingestionRunRepository.save(run);
-
+        // 2. Prevent overlapping local threads on this node
+        if (!isSyncRunning.compareAndSet(false, true)) {
+            lockOpt.get().close();
+            log.warn("Ingestion skipped: another sync run is currently in progress on this node");
             return new IngestionSummaryDto(
                     0, 0, 0, 0,
-                    "FAILED",
-                    "Ingestion error: " + sanitizedErr,
-                    run.getCompletedAt()
+                    "SKIPPED",
+                    "Ingestion already in progress on this node",
+                    Instant.now()
             );
+        }
+
+        try (DistributedSyncCoordinator.DistributedSyncHandle lockHandle = lockOpt.get()) {
+            Instant startedAt = Instant.now();
+            IngestionRun run = new IngestionRun(startedAt, "IN_PROGRESS", triggeredBy);
+            try {
+                run = ingestionRunRepository.save(run);
+                if (!mandiDataProperties.isConfigured()) {
+                    log.info("Mandi Data ingestion skipped: data.gov.in API key is not configured. Using verified seed data.");
+                    String msg = mandiDataProperties.enabled()
+                            ? "The Agmarknet API key is missing. Existing price records remain available."
+                            : "Live Agmarknet ingestion is disabled. Existing price records remain available.";
+                    run.setStatus("SKIPPED");
+                    run.setMessage(msg);
+                    run.setCompletedAt(Instant.now());
+                    ingestionRunRepository.save(run);
+
+                    return new IngestionSummaryDto(0, 0, 0, 0, getStatus(), msg, run.getCompletedAt());
+                }
+
+                // 3. Network I/O occurs outside any database transaction
+                ArrayNode recordsNode = objectMapper.createArrayNode();
+                List<String> scopeErrors = new ArrayList<>();
+                if (priorityDistrict != null && !priorityDistrict.isBlank()
+                        && priorityState != null && !priorityState.isBlank()) {
+                    fetchScope(Map.of("state", priorityState, "district", priorityDistrict), recordsNode, scopeErrors);
+                }
+                fetchScope(Map.of(), recordsNode, scopeErrors);
+
+                if (recordsNode.isEmpty()) {
+                    log.warn("data.gov.in API returned 0 records");
+                    run.setStatus(scopeErrors.isEmpty() ? "NO_DATA" : "FAILED");
+                    run.setTotalFetched(0);
+                    run.setMessage(scopeErrors.isEmpty() ? "No records returned by Agmarknet." : "Agmarknet fetch failed.");
+                    if (!scopeErrors.isEmpty()) run.setErrorDetails(sanitizeErrorMessage(String.join("; ", scopeErrors)));
+                    run.setCompletedAt(Instant.now());
+                    ingestionRunRepository.save(run);
+
+                    return new IngestionSummaryDto(0, 0, 0, 0, run.getStatus(), run.getMessage(), run.getCompletedAt());
+                }
+
+                int totalFetched = recordsNode.size();
+                int inserted = 0;
+                int updated = 0;
+                int skipped = 0;
+
+                // Pre-load known catalogs for memory efficiency
+                List<Commodity> knownCommodities = commodityRepository.findAll();
+                List<Mandi> knownMandis = new ArrayList<>(mandiRepository.findAll());
+
+                List<JsonNode> allRecords = new ArrayList<>(totalFetched);
+                for (JsonNode node : recordsNode) {
+                    allRecords.add(node);
+                }
+
+                // 4. Bounded batch writes with isolated transactions per batch
+                int effectiveBatchSize = Math.max(1, batchSize);
+                for (int i = 0; i < allRecords.size(); i += effectiveBatchSize) {
+                    List<JsonNode> batch = allRecords.subList(i, Math.min(i + effectiveBatchSize, allRecords.size()));
+                    MandiPriceBatchPersistenceService.PaginationCheckpoint checkpoint =
+                            new MandiPriceBatchPersistenceService.PaginationCheckpoint(
+                                    "ALL_INDIA", (i / effectiveBatchSize) + 1, i + batch.size(), null);
+
+                    try {
+                        MandiPriceBatchPersistenceService.BatchPersistResult batchResult =
+                                batchPersistenceService.persistBatch(batch, knownCommodities, knownMandis, checkpoint);
+
+                        inserted += batchResult.inserted();
+                        updated += batchResult.updated();
+                        skipped += batchResult.skipped();
+                    } catch (Exception batchEx) {
+                        log.error("Batch persistence failed and rolled back cleanly: {}", batchEx.getMessage());
+                        scopeErrors.add("Batch " + ((i / effectiveBatchSize) + 1) + " write error: " + sanitizeErrorMessage(batchEx.getMessage()));
+                    }
+                }
+
+                run.setTotalFetched(totalFetched);
+                run.setInsertedCount(inserted);
+                run.setUpdatedCount(updated);
+                run.setSkippedCount(skipped);
+                boolean partial = !scopeErrors.isEmpty();
+                run.setStatus(partial ? "PARTIAL" : "SUCCESS");
+                if (partial) run.setErrorDetails(sanitizeErrorMessage(String.join("; ", scopeErrors)));
+                String message = String.format("Agmarknet records: %d added, %d updated, %d skipped.",
+                        inserted, updated, skipped);
+                if (partial) message += " Some requests to Agmarknet failed.";
+                run.setMessage(message);
+                run.setCompletedAt(Instant.now());
+                ingestionRunRepository.save(run);
+
+                log.info("Agmarknet data ingestion finished. Total: {}, Inserted: {}, Updated: {}, Skipped: {}",
+                        totalFetched, inserted, updated, skipped);
+
+                return new IngestionSummaryDto(
+                        totalFetched, inserted, updated, skipped,
+                        partial ? "PARTIAL" : "CONNECTED",
+                        message,
+                        run.getCompletedAt()
+                );
+
+            } catch (Exception ex) {
+                String sanitizedErr = sanitizeErrorMessage(ex.getMessage());
+                log.error("Failed to ingest data from data.gov.in: {}", sanitizedErr);
+                run.setStatus("FAILED");
+                run.setMessage("Ingestion error: " + sanitizedErr);
+                run.setErrorDetails(sanitizedErr);
+                run.setCompletedAt(Instant.now());
+                ingestionRunRepository.save(run);
+
+                return new IngestionSummaryDto(
+                        0, 0, 0, 0,
+                        "FAILED",
+                        "Ingestion error: " + sanitizedErr,
+                        run.getCompletedAt()
+                );
+            }
         } finally {
             lastCompletedSync.set(Instant.now());
             isSyncRunning.set(false);
@@ -426,134 +375,6 @@ public class MandiDataIngestionService {
                 run.getErrorDetails(),
                 run.getTriggeredBy()
         );
-    }
-
-    private String normalizeCommodityCode(String rawCommodity, List<Commodity> commodities) {
-        if (rawCommodity == null || rawCommodity.isBlank()) return null;
-        String lower = rawCommodity.toLowerCase(Locale.ROOT);
-
-        if (CommodityAliases.isCumin(rawCommodity)) {
-            return commodities.stream().anyMatch(c -> "CUMIN".equals(c.getCode())) ? "CUMIN" : null;
-        }
-        if (lower.contains("wheat") || lower.contains("gehun") || lower.contains("गेहूं") || lower.contains("गेहूँ") || lower.contains("ਕਣਕ")) return "WHEAT";
-        if (lower.contains("mustard") || lower.contains("sarson") || lower.contains("सरसों") || lower.contains("rapeseed")) return "MUSTARD";
-        if (lower.contains("paddy") || lower.contains("dhan") || lower.contains("rice") || lower.contains("धान") || lower.contains("ਝੋਨਾ")) return "PADDY";
-        if (lower.contains("onion") || lower.contains("pyaz") || lower.contains("प्याज") || lower.contains("ਗੰਢਾ")) return "ONION";
-        if (lower.contains("cotton") || lower.contains("kapas") || lower.contains("कपास") || lower.contains("ਨਰਮਾ")) return "COTTON";
-        if (lower.contains("maize") || lower.contains("makka") || lower.contains("मक्का") || lower.contains("ਮੱਕੀ")) return "MAIZE";
-
-        if (lower.contains("bengal gram") || lower.contains("chana")) return "CHANA";
-        if (lower.contains("soybean") || lower.contains("soyabean")) return "SOYBEAN";
-
-        // Match with known pre-loaded commodities
-        return commodities.stream()
-                .filter(c -> c.getNameEn().equalsIgnoreCase(rawCommodity) || c.getCode().equalsIgnoreCase(rawCommodity))
-                .map(Commodity::getCode)
-                .findFirst()
-                .orElse(null);
-    }
-
-    private static final Map<String, String> STATE_CODE_MAP = Map.ofEntries(
-            Map.entry("punjab", "PB"),
-            Map.entry("haryana", "HR"),
-            Map.entry("rajasthan", "RJ"),
-            Map.entry("uttar pradesh", "UP"),
-            Map.entry("delhi", "DL"),
-            Map.entry("nct of delhi", "DL"),
-            Map.entry("madhya pradesh", "MP"),
-            Map.entry("maharashtra", "MH"),
-            Map.entry("gujarat", "GJ"),
-            Map.entry("karnataka", "KA"),
-            Map.entry("bihar", "BR"),
-            Map.entry("west bengal", "WB"),
-            Map.entry("tamil nadu", "TN"),
-            Map.entry("andhra pradesh", "AP"),
-            Map.entry("telangana", "TS"),
-            Map.entry("kerala", "KL"),
-            Map.entry("odisha", "OR"),
-            Map.entry("assam", "AS"),
-            Map.entry("jharkhand", "JH"),
-            Map.entry("chhattisgarh", "CG"),
-            Map.entry("uttarakhand", "UK"),
-            Map.entry("himachal pradesh", "HP"),
-            Map.entry("jammu and kashmir", "JK"),
-            Map.entry("chandigarh", "CH")
-    );
-
-    private String resolveStateCode(String stateName) {
-        if (stateName == null || stateName.isBlank()) return "IN";
-        String normalized = stateName.trim().toLowerCase();
-        return STATE_CODE_MAP.getOrDefault(normalized,
-                normalized.length() >= 2 ? normalized.substring(0, 2).toUpperCase() : "IN");
-    }
-
-    private String resolveOrRegisterMandi(String market, String district, String state, List<Mandi> knownMandis) {
-        if (market == null || market.isBlank() ||
-            district == null || district.isBlank() ||
-            state == null || state.isBlank()) {
-            return null; // Reject incomplete identifiers
-        }
-
-        String normMarket = market.trim();
-        String normDistrict = district.trim();
-        String normState = state.trim();
-
-        String marketKey = normalizeMarketName(normMarket);
-        String districtKey = normalizeMarketName(normDistrict);
-        String stateKey = normalizeMarketName(normState);
-        Optional<Mandi> match = knownMandis.stream()
-                .filter(m -> normalizeMarketName(m.getNameEn()).equals(marketKey)
-                        && normalizeMarketName(m.getDistrict()).equals(districtKey)
-                        && normalizeMarketName(m.getState()).equals(stateKey))
-                .findFirst();
-        if (match.isPresent()) {
-            return match.get().getCode();
-        }
-
-        String identity = marketKey + "_" + districtKey + "_" + stateKey;
-        String suffix = "_"
-                + UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8)).toString().replace("-", "") + "_" + resolveStateCode(normState);
-        String code = marketKey.substring(0, Math.min(marketKey.length(), 64 - suffix.length())) + suffix;
-
-        Mandi newMandi = new Mandi();
-        newMandi.setCode(code);
-        newMandi.setNameEn(normMarket);
-        newMandi.setNameHi(normMarket);
-        newMandi.setState(normState);
-        newMandi.setDistrict(normDistrict);
-        newMandi.setActive(true);
-        Mandi saved = mandiRepository.save(newMandi);
-        knownMandis.add(saved);
-
-        return code;
-    }
-
-    private static String normalizeMarketName(String value) {
-        return value.trim().toUpperCase(Locale.ROOT)
-                .replaceFirst("\\s+MANDI$", "")
-                .replaceAll("[^\\p{L}\\p{N}]+", "_")
-                .replaceAll("^_+|_+$", "");
-    }
-
-    private LocalDate parseDate(String rawDate) {
-        if (rawDate == null || rawDate.isBlank()) return null;
-        String clean = rawDate.trim();
-        for (DateTimeFormatter dtf : DATE_FORMATTERS) {
-            try {
-                return LocalDate.parse(clean, dtf);
-            } catch (Exception ignored) {}
-        }
-        return null; // Reject invalid dates rather than substituting LocalDate.now()
-    }
-
-    private BigDecimal parsePrice(String raw) {
-        if (raw == null || raw.isBlank()) return null;
-        try {
-            String clean = raw.replaceAll("[^0-9.-]", "").trim();
-            return new BigDecimal(clean);
-        } catch (Exception ignored) {
-            return null;
-        }
     }
 
     private String sanitizeErrorMessage(String error) {
